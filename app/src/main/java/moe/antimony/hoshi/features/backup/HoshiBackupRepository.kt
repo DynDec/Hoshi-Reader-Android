@@ -7,12 +7,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.text.Normalizer
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -277,6 +280,7 @@ class HoshiBackupRepository @Inject constructor(
             try {
                 archiveFile.outputStream().use { output -> input.copyTo(output) }
                 unzipInto(archiveFile, tempRoot)
+                reconcileRestoredBookMetadata(tempRoot)
                 replaceDestinationWithRestoredFolder(target, tempRoot, destination)
             } catch (error: Throwable) {
                 tempRoot.deleteRecursively()
@@ -284,6 +288,53 @@ class HoshiBackupRepository @Inject constructor(
             } finally {
                 archiveFile.delete()
             }
+        }
+    }
+
+    private fun reconcileRestoredBookMetadata(restoredBooksRoot: File) {
+        val bookRoots = restoredBooksRoot.listFiles().orEmpty()
+            .filter(File::isDirectory)
+        val actualFolderNames = bookRoots.map(File::getName)
+        bookRoots.forEach { bookRoot ->
+            reconcileRestoredBookMetadataFile(bookRoot, actualFolderNames)
+        }
+    }
+
+    private fun reconcileRestoredBookMetadataFile(
+        bookRoot: File,
+        actualFolderNames: List<String>,
+    ) {
+        val metadataFile = bookRoot.resolve("metadata.json").takeIf(File::isFile) ?: return
+        val rawMetadata = metadataFile.readText()
+        val metadata = runCatching {
+            backupJson.parseToJsonElement(rawMetadata) as? JsonObject
+        }.getOrNull() ?: return
+        val actualFileNames = bookRoot.listFiles().orEmpty()
+            .filter(File::isFile)
+            .map(File::getName)
+        val updated = metadata.toMutableMap()
+
+        val recordedFolderName = metadata.stringValue("folder")
+        val resolvedFolderName = recordedFolderName?.let {
+            resolveRestoredPathComponent(it, actualFolderNames)
+        }
+        if (resolvedFolderName == bookRoot.name && recordedFolderName != bookRoot.name) {
+            updated["folder"] = JsonPrimitive(bookRoot.name)
+        }
+
+        metadata.stringValue("epub")
+            ?.let { resolveRestoredPathComponent(it, actualFileNames) }
+            ?.takeIf { it != metadata.stringValue("epub") }
+            ?.let { updated["epub"] = JsonPrimitive(it) }
+
+        metadata.stringValue("cover")
+            ?.let { resolveRestoredCoverPath(it, bookRoot.name, actualFolderNames, actualFileNames) }
+            ?.takeIf { it != metadata.stringValue("cover") }
+            ?.let { updated["cover"] = JsonPrimitive(it) }
+
+        val updatedMetadata = JsonObject(updated)
+        if (updatedMetadata != metadata) {
+            metadataFile.writeText(backupJson.encodeToString(JsonObject.serializer(), updatedMetadata))
         }
     }
 
@@ -500,6 +551,40 @@ private fun uniqueTtuBackupFolderName(
     }
     return candidate
 }
+
+internal fun resolveRestoredPathComponent(recordedName: String, actualNames: List<String>): String? {
+    if (!isSafePathComponent(recordedName)) return null
+    if (recordedName in actualNames) return recordedName
+    return actualNames
+        .filter { canonicallyEquals(it, recordedName) }
+        .singleOrNull()
+}
+
+private fun resolveRestoredCoverPath(
+    recordedPath: String,
+    actualFolderName: String,
+    actualFolderNames: List<String>,
+    actualFileNames: List<String>,
+): String? {
+    val segments = recordedPath.split('/')
+    if (segments.size != 3 || segments[0] != "Books") return null
+    val recordedFolderName = segments[1]
+    val resolvedFolderName = resolveRestoredPathComponent(recordedFolderName, actualFolderNames)
+    if (resolvedFolderName != actualFolderName) return null
+    val actualFileName = resolveRestoredPathComponent(segments[2], actualFileNames) ?: return null
+    return "Books/$actualFolderName/$actualFileName"
+}
+
+private fun JsonObject.stringValue(key: String): String? {
+    val primitive = this[key] as? JsonPrimitive ?: return null
+    return primitive.content.takeIf { primitive.isString }
+}
+
+private fun isSafePathComponent(value: String): Boolean =
+    value.isNotEmpty() && value != "." && value != ".." && '/' !in value && '\\' !in value && '\u0000' !in value
+
+private fun canonicallyEquals(first: String, second: String): Boolean =
+    Normalizer.normalize(first, Normalizer.Form.NFC) == Normalizer.normalize(second, Normalizer.Form.NFC)
 
 internal fun remapTtuRestoreEntryName(entryName: String): String {
     val isDirectory = entryName.endsWith('/')
