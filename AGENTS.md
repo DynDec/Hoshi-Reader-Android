@@ -38,7 +38,8 @@ Hoshi Reader Android 是 Hoshi Reader 的 Android/Kotlin/Jetpack Compose 原生�
   matchable/raw 计数和 matchable-character 判断入口；`reader-dom-text.js` 是 paginated/continuous
   共享的 live DOM ruby/text normalization 入口；`reader-media-semantics.js` 是三种 reader mode
   共享的 image setup 入口，包含 SVG image aspect-ratio 修正、large image block 标记、blur
-  wrapper、tap-to-native-image bridge 和 scoped setup。VN 可以用当前 screen scope 且不等待 image
+  wrapper、tap-to-native-image bridge 和 scoped setup；`reader-layout-semantics.js` 是三种 reader mode
+  在字体和源图片就绪后清理越界 publisher inline-block 和空 strut 的共享入口。VN 可以用当前 screen scope 且不等待 image
   load，但不要重新引入 VN 私有的同类 image setup。`reader-vn-content-stream.js` 和
   `reader-vn-range-map.js` 是 VN 专属 runtime primitive，分别拥有 VN source stream、ruby-aware
   text entry、结构 ID、standalone media unit，以及 VN 渲染屏幕的 raw/highlight range、matchable

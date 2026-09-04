@@ -1,9 +1,12 @@
 __HOSHI_READER_VIEWPORT_SCRIPT__
 __HOSHI_READER_TEXT_SEMANTICS_SCRIPT__
 __HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__
+__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__
 __HOSHI_READER_VN_CONTENT_STREAM_SCRIPT__
 __HOSHI_READER_VN_RANGE_MAP_SCRIPT__
 __HOSHI_READER_VN_SELECTION_PROJECTION_SCRIPT__
+
+var HOSHI_READER_IMAGE_WAIT_TIMEOUT_MS = 3000;
 
 window.hoshiReader = {
   revealSpeed: __HOSHI_VISUAL_NOVEL_REVEAL_SPEED__,
@@ -161,9 +164,10 @@ window.hoshiReader = {
     this.nodeStartOffsets = offsets;
     this.nodeStartRawOffsets = rawOffsets;
   },
-  waitForImages: function() {
-    var images = this.sourceRoot && this.sourceRoot.querySelectorAll
-      ? Array.from(this.sourceRoot.querySelectorAll('img'))
+  waitForImages: function(scope) {
+    var root = scope || this.sourceRoot;
+    var images = root && root.querySelectorAll
+      ? Array.from(root.querySelectorAll('img'))
       : [];
     var promises = images.map(function(img) {
       return new Promise(function(resolve) {
@@ -171,8 +175,25 @@ window.hoshiReader = {
           resolve();
           return;
         }
-        img.onload = function() { resolve(); };
-        img.onerror = function() { resolve(); };
+        if (img.loading === 'lazy') {
+          img.loading = 'eager';
+        }
+        var settled = false;
+        var timeoutId = null;
+        var finish = function() {
+          if (settled) return;
+          settled = true;
+          if (img.removeEventListener) {
+            img.removeEventListener('load', finish);
+            img.removeEventListener('error', finish);
+          }
+          if (timeoutId !== null) clearTimeout(timeoutId);
+          resolve();
+        };
+        img.addEventListener('load', finish, { once: true });
+        img.addEventListener('error', finish, { once: true });
+        timeoutId = setTimeout(finish, HOSHI_READER_IMAGE_WAIT_TIMEOUT_MS);
+        if (img.complete) finish();
       });
     });
     return Promise.all(promises);
@@ -182,10 +203,11 @@ window.hoshiReader = {
     window.hoshiReaderViewport.ensureDeviceViewport();
     this.readyPromise = Promise.resolve(document.fonts && document.fonts.ready)
       .then(() => {
-        this.detachChapterSource();
-        return this.waitForImages();
+        return this.waitForImages(document.body);
       })
       .then(() => {
+        window.hoshiReaderLayoutSemantics.sanitizeInlineBlocks(document, this.isVertical());
+        this.detachChapterSource();
         this.ensureStage();
         this.buildSourceIndexes();
         this.setSasayakiCueData(this.initialSasayakiCues);

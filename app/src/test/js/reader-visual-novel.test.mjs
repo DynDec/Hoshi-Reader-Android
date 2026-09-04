@@ -58,6 +58,10 @@ function readerSource() {
         .replaceAll('__HOSHI_READER_VIEWPORT_SCRIPT__', readerViewportSource())
         .replaceAll('__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__', readerTextSemanticsSource())
         .replaceAll('__HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__', readerMediaSemanticsSource())
+        .replaceAll(
+            '__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__',
+            'window.hoshiReaderLayoutSemantics = { sanitizeInlineBlocks: function() {} };',
+        )
         .replaceAll('__HOSHI_READER_VN_CONTENT_STREAM_SCRIPT__', readerVnContentStreamSource())
         .replaceAll('__HOSHI_READER_VN_RANGE_MAP_SCRIPT__', readerVnRangeMapSource())
         .replaceAll('__HOSHI_READER_VN_SELECTION_PROJECTION_SCRIPT__', readerVnSelectionProjectionSource())
@@ -80,6 +84,10 @@ function configuredReaderSource(options = {}) {
         .replaceAll('__HOSHI_READER_VIEWPORT_SCRIPT__', options.viewportScript ?? readerViewportSource())
         .replaceAll('__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__', options.textSemanticsScript ?? readerTextSemanticsSource())
         .replaceAll('__HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__', options.mediaSemanticsScript ?? readerMediaSemanticsSource())
+        .replaceAll(
+            '__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__',
+            options.layoutSemanticsScript ?? 'window.hoshiReaderLayoutSemantics = { sanitizeInlineBlocks: function() {} };',
+        )
         .replaceAll('__HOSHI_READER_VN_CONTENT_STREAM_SCRIPT__', options.contentStreamScript ?? readerVnContentStreamSource())
         .replaceAll('__HOSHI_READER_VN_RANGE_MAP_SCRIPT__', options.rangeMapScript ?? readerVnRangeMapSource())
         .replaceAll(
@@ -268,6 +276,11 @@ class TestElement extends TestNode {
         const listeners = this.listeners.get(type) ?? [];
         listeners.push(listener);
         this.listeners.set(type, listeners);
+    }
+
+    removeEventListener(type, listener) {
+        const listeners = this.listeners.get(type) ?? [];
+        this.listeners.set(type, listeners.filter((candidate) => candidate !== listener));
     }
 
     dispatchEvent(event) {
@@ -697,7 +710,7 @@ function buildDocument(body, options = {}) {
             screenInlineOverflowCharacters: options.screenInlineOverflowCharacters ?? 0,
             resetTextOffsetAtContentChildren: options.resetTextOffsetAtContentChildren ?? false,
         },
-        fonts: { ready: Promise.resolve() },
+        fonts: { ready: options.fontsReady ?? Promise.resolve() },
         readyState: 'loading',
         baseURI: 'https://example.invalid/chapter.xhtml',
         createDocumentFragment() {
@@ -933,6 +946,93 @@ function currentScreen(reader) {
 function sasayakiWrappers(reader) {
     return currentScreen(reader).querySelectorAll('.hoshi-sasayaki-cue');
 }
+
+test('visual novel initialization sanitizes attached source after fonts and images before building screens', async () => {
+    let resolveFonts;
+    let resolveImages;
+    const fontsReady = new Promise((resolve) => {
+        resolveFonts = resolve;
+    });
+    const imagesReady = new Promise((resolve) => {
+        resolveImages = resolve;
+    });
+    const layoutSemanticsScript = `
+      window.hoshiReaderLayoutSemantics = {
+        sanitizeInlineBlocks: function(scope, vertical) {
+          window.__events.push(scope === document && vertical ? 'sanitize-vertical' : 'sanitize-horizontal');
+        }
+      };
+    `;
+    const loaded = loadReader(bodyWith(p('本文。')), { fontsReady, layoutSemanticsScript });
+    const events = [];
+    loaded.window.__events = events;
+    loaded.reader.waitForImages = (scope) => {
+        events.push(scope === loaded.document.body ? 'images-body' : 'images-detached');
+        return imagesReady;
+    };
+    loaded.reader.detachChapterSource = () => {
+        events.push('detach');
+    };
+    loaded.reader.ensureStage = () => {
+        events.push('stage');
+    };
+    loaded.reader.buildSourceIndexes = () => {
+        events.push('indexes');
+    };
+    loaded.reader.setSasayakiCueData = () => {};
+    loaded.reader.buildScreens = () => {
+        events.push('screens');
+    };
+    loaded.reader.renderInitialScreen = () => {
+        events.push('render');
+    };
+    loaded.reader.notifyRestoreComplete = () => {
+        events.push('restore');
+    };
+
+    const initialization = loaded.reader.initialize();
+    await Promise.resolve();
+    assert.deepEqual(events, []);
+
+    resolveFonts();
+    for (let i = 0; i < 3; i += 1) await Promise.resolve();
+    assert.deepEqual(events, ['images-body']);
+
+    resolveImages();
+    await initialization;
+    assert.deepEqual(events, [
+        'images-body',
+        'sanitize-vertical',
+        'detach',
+        'stage',
+        'indexes',
+        'screens',
+        'render',
+        'restore',
+    ]);
+});
+
+test('visual novel initialization eagerly starts lazy source images and fails open when one stalls', async () => {
+    const lazyImage = image('images/lazy.jpg', { loading: 'lazy' });
+    lazyImage.complete = false;
+    lazyImage.loading = 'lazy';
+    const publisherOnload = () => {};
+    lazyImage.onload = publisherOnload;
+    const loaded = loadReader(bodyWith(p('本文。'), lazyImage));
+
+    const initialization = loaded.reader.initialize();
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+
+    assert.equal(lazyImage.loading, 'eager');
+    assert.equal(lazyImage.onload, publisherOnload);
+    const waitTimer = loaded.timers.find(Boolean);
+    assert.ok(waitTimer, 'a stalled source image should have a fail-open timeout');
+
+    waitTimer.callback();
+    await initialization;
+
+    assert.deepEqual(loaded.restoreMessages, ['restore-token']);
+});
 
 test('visual novel reader asset defines the expected public surface', () => {
     const body = bodyWith(p('本文。'));

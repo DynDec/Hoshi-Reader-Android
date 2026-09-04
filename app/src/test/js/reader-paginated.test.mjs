@@ -32,6 +32,10 @@ function readerSource(url, options = {}) {
         .replace('__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__', options.textSemanticsScript ?? readerTextSemanticsSource())
         .replace('__HOSHI_READER_DOM_TEXT_SCRIPT__', options.domTextScript ?? readerDomTextSource())
         .replace('__HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__', options.mediaSemanticsScript ?? readerMediaSemanticsSource())
+        .replace(
+            '__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__',
+            options.layoutSemanticsScript ?? 'window.hoshiReaderLayoutSemantics = { sanitizeInlineBlocks: function() {} };',
+        )
         .replaceAll('__HOSHI_RESTORE_TOKEN_LITERAL__', JSON.stringify('restore-token'))
         .replaceAll('__HOSHI_BOTTOM_OVERLAP_PX__', String(options.bottomOverlapPx ?? 0))
         .replaceAll('__HOSHI_VERTICAL_PADDING_BLOCK_RATIO__', '0')
@@ -407,7 +411,7 @@ function loadReader(body, sourceUrl = readerPaginatedUrl, options = {}) {
         body,
         head: documentHead,
         documentElement,
-        fonts: { ready: Promise.resolve() },
+        fonts: { ready: options.fontsReady ?? Promise.resolve() },
         readyState: 'loading',
         createDocumentFragment() {
             return new TestFragment();
@@ -702,12 +706,16 @@ test('paginated restoreProgress at chapter start avoids eager pagination metrics
     assert.equal(builtMetrics, 0);
 });
 
-test('reader initialization waits for image setup before offsets and restore scripts', async () => {
+test('reader initialization waits for fonts and images before sanitizing layout, offsets, and restore scripts', async () => {
     for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
         const body = new TestElement('body');
         body.appendChild(new TestText('本文'));
         const events = [];
+        let resolveFonts;
         let resolveImages;
+        const fontsReady = new Promise((resolve) => {
+            resolveFonts = resolve;
+        });
         const mediaSemanticsScript = `
           window.hoshiReaderMediaSemantics = {
             setupReaderImages: function() {
@@ -718,9 +726,18 @@ test('reader initialization waits for image setup before offsets and restore scr
             }
           };
         `;
+        const layoutSemanticsScript = `
+          window.hoshiReaderLayoutSemantics = {
+            sanitizeInlineBlocks: function(scope, vertical) {
+              window.__events.push(scope === document && vertical ? 'sanitize-vertical' : 'sanitize-horizontal');
+            }
+          };
+        `;
         const restoreScripts = "window.__events.push('restore'); window.hoshiReader.restoreProgress(0);";
         const { reader, window } = loadReader(body, sourceUrl, {
             mediaSemanticsScript,
+            layoutSemanticsScript,
+            fontsReady,
             restoreScripts,
             restoreMessages: [],
         });
@@ -736,11 +753,17 @@ test('reader initialization waits for image setup before offsets and restore scr
         assert.deepEqual(events, ['setup']);
 
         resolveImages();
-        for (let i = 0; i < 5; i += 1) {
+        for (let i = 0; i < 3; i += 1) {
+            await Promise.resolve();
+        }
+        assert.deepEqual(events, ['setup']);
+
+        resolveFonts();
+        for (let i = 0; i < 10; i += 1) {
             await Promise.resolve();
         }
 
-        assert.deepEqual(events.slice(0, 3), ['setup', 'offsets', 'restore']);
+        assert.deepEqual(events.slice(0, 4), ['setup', 'sanitize-vertical', 'offsets', 'restore']);
     }
 });
 
@@ -926,7 +949,7 @@ test('reader initialization completes when an image has already failed loading',
         };
 
         reader.initialize();
-        for (let i = 0; i < 5; i += 1) {
+        for (let i = 0; i < 10; i += 1) {
             await Promise.resolve();
         }
 

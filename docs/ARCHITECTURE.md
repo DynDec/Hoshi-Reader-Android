@@ -171,6 +171,11 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   bridging, and scoped setup. Paginated and continuous apply it to the chapter
   document and wait for image load/failure before restore; VN applies it to the
   current rendered screen without blocking screen rendering on image load.
+- Reader publisher-layout sanitation lives in `reader-layout-semantics.js` and
+  is consumed by paginated, continuous, and VN assets after fonts and source
+  images settle but before offsets, restore, or VN screen construction. It
+  converts oversized paragraph-bearing inline blocks into pageable blocks and
+  removes or clamps empty inline-block struts that exceed the logical viewport.
 - VN reading uses VN-specific reader-web runtime primitives for chapter content
   streams and rendered range mapping. `reader-vn-content-stream.js` owns source
   text/raw offsets, matchable offsets, ruby-aware text entries, structural IDs,

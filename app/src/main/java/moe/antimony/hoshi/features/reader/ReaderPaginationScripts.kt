@@ -113,6 +113,7 @@ internal object ReaderPaginationScripts {
             .replace("__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__", source.readerTextSemantics)
             .replace("__HOSHI_READER_DOM_TEXT_SCRIPT__", source.readerDomText)
             .replace("__HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__", source.readerMediaSemantics)
+            .replace("__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__", source.readerLayoutSemantics)
             .replace("__HOSHI_READER_VN_CONTENT_STREAM_SCRIPT__", source.readerVnContentStream)
             .replace("__HOSHI_READER_VN_RANGE_MAP_SCRIPT__", source.readerVnRangeMap)
             .replace("__HOSHI_READER_VN_SELECTION_PROJECTION_SCRIPT__", source.readerVnSelectionProjection)
@@ -158,6 +159,7 @@ private data class ReaderPaginationAssetSource(
     val readerTextSemantics: String,
     val readerDomText: String,
     val readerMediaSemantics: String,
+    val readerLayoutSemantics: String,
     val readerVnContentStream: String,
     val readerVnRangeMap: String,
     val readerVnSelectionProjection: String,
@@ -175,6 +177,7 @@ private data class ReaderPaginationAssetSource(
                     readerTextSemantics = assets.readerTextSemanticsJs,
                     readerDomText = assets.readerDomTextJs,
                     readerMediaSemantics = assets.readerMediaSemanticsJs,
+                    readerLayoutSemantics = assets.readerLayoutSemanticsJs,
                     readerVnContentStream = assets.readerVnContentStreamJs,
                     readerVnRangeMap = assets.readerVnRangeMapJs,
                     readerVnSelectionProjection = assets.readerVnSelectionProjectionJs,
@@ -197,6 +200,7 @@ private object SourceTreeReaderPaginationAssets {
             readerTextSemantics = readSourceAsset("hoshi-web/reader/reader-text-semantics.js"),
             readerDomText = readSourceAsset("hoshi-web/reader/reader-dom-text.js"),
             readerMediaSemantics = readSourceAsset("hoshi-web/reader/reader-media-semantics.js"),
+            readerLayoutSemantics = readSourceAsset("hoshi-web/reader/reader-layout-semantics.js"),
             readerVnContentStream = readSourceAsset("hoshi-web/reader/reader-vn-content-stream.js"),
             readerVnRangeMap = readSourceAsset("hoshi-web/reader/reader-vn-range-map.js"),
             readerVnSelectionProjection = readSourceAsset("hoshi-web/reader/reader-vn-selection-projection.js"),

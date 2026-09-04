@@ -20,6 +20,7 @@ class ReaderWebAssetsTest {
             "hoshi-web/reader/reader-text-semantics.js",
             "hoshi-web/reader/reader-dom-text.js",
             "hoshi-web/reader/reader-media-semantics.js",
+            "hoshi-web/reader/reader-layout-semantics.js",
             "hoshi-web/reader/reader-vn-content-stream.js",
             "hoshi-web/reader/reader-vn-range-map.js",
             "hoshi-web/reader/reader-vn-selection-projection.js",

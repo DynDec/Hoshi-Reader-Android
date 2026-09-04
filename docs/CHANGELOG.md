@@ -31,6 +31,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Fixed
 
+- Keep text and images reachable in every Reader mode when publisher CSS wraps
+  paragraphs or empty layout struts in oversized inline blocks.
 - Restore book files and covers from iOS Books backups when equivalent Unicode
   paths use different composed forms.
 - Import EPUB and TTU bookdata with multibyte titles that exceed Android's
