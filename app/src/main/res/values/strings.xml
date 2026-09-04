@@ -266,6 +266,8 @@
     <string name="dictionary_category_update_failed">Failed to update the dictionary category.</string>
     <string name="anki_categorize_dictionaries">Categorize dictionaries</string>
     <string name="dictionary_custom_css">Custom CSS</string>
+    <string name="dictionary_custom_css_reset_title">Reset Custom CSS?</string>
+    <string name="dictionary_custom_css_reset_message">This will clear your custom CSS.</string>
     <string name="dictionary_import_action">Import Dictionary</string>
     <string name="dictionary_delete_action">Delete Dictionary</string>
     <string name="dictionary_reorder_action">Reorder Dictionary</string>
