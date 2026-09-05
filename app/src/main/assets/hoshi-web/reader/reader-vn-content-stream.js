@@ -175,7 +175,11 @@
   }
 
   function isInlineGlyphImage(node) {
-    return hasClass(node, 'gaiji') || hasClass(node, 'gaiji-line') || hasClass(node, 'gaiji-wide');
+    return !!(
+      global.hoshiReaderMediaSemantics &&
+      global.hoshiReaderMediaSemantics.isGaijiImage &&
+      global.hoshiReaderMediaSemantics.isGaijiImage(node)
+    );
   }
 
   function isStandaloneImageNode(node, contextRoot) {

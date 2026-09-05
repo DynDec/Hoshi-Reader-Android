@@ -13,8 +13,7 @@ private val readerAttributeRegex = Regex(
 private val readerOpeningTagRegex = Regex("""<[A-Za-z][^>]*>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 private val readerBodyOpeningTagRegex = Regex("""<body\b[^>]*>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 private val readerGalleryExtensions = setOf("jpg", "jpeg", "png")
-private val readerInlineGlyphImageClasses = setOf("gaiji", "gaiji-line", "gaiji-wide")
-private const val CURRENT_READER_FACTS_VERSION = 1
+private const val CURRENT_READER_FACTS_VERSION = 2
 
 internal fun buildBookInfo(
     chapters: List<EpubChapter>,
@@ -110,7 +109,7 @@ private fun String.readerGalleryImagePaths(
             attributes["class"]
                 .orEmpty()
                 .split(Regex("""\s+"""))
-                .any { it.lowercase() in readerInlineGlyphImageClasses }
+                .any { it.contains("gaiji", ignoreCase = true) }
         ) {
             return@mapNotNull null
         }

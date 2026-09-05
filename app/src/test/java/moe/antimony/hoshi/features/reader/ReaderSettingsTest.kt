@@ -650,7 +650,7 @@ class ReaderSettingsTest {
         )
 
         assertEquals("#5f8fff", cssCustomProperty(contentCss, "--hoshi-text-color"))
-        listOf("img.gaiji", "img.gaiji-line", "img.gaiji-wide").forEach { selector ->
+        listOf("img[class*=\"gaiji\" i]", "img.hoshi-text-color-image").forEach { selector ->
             val declarations = cssDeclarationsForSelector(contentCss, selector)
             assertEquals(
                 "url(\"#hoshi-gaiji-text-color-filter\") !important",
