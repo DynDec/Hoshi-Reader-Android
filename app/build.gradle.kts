@@ -70,11 +70,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "moe.antimony.hoshi"
+        applicationId = "moe.requited.hoshi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10303
-        versionName = "1.3.3"
+        versionCode = 10304
+        versionName = "1.3.4"
         releaseVersionCode?.let { versionCode = it }
         releaseVersionName?.let { versionName = it }
 
@@ -104,6 +104,7 @@ android {
             ndk {
                 abiFilters += listOf("arm64-v8a", "x86_64")
             }
+
         }
         release {
             isMinifyEnabled = true

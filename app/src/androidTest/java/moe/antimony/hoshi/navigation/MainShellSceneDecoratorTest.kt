@@ -102,6 +102,7 @@ class MainShellSceneDecoratorTest {
                     AppRoute.MainRoute -> Text("Main content")
                     is AppRoute.ReaderRoute -> Text("Reader content")
                     is AppRoute.SettingsDetailRoute -> Text("Settings detail content")
+                    else -> {}
                 }
             }
         }
