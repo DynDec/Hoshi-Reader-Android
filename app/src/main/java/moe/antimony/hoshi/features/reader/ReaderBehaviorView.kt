@@ -109,6 +109,14 @@ fun ReaderBehaviorScreen(
                     )
                     BehaviorDivider()
                     BehaviorSwitchRow(
+                        label = stringResource(ReaderBehaviorRow.HideBookshelfProgress.labelRes),
+                        checked = settings.hideBookshelfProgress,
+                        onCheckedChange = {
+                            onSettingsChange(settings.copy(hideBookshelfProgress = it))
+                        },
+                    )
+                    BehaviorDivider()
+                    BehaviorSwitchRow(
                         label = stringResource(ReaderBehaviorRow.AutomaticallyCheckForUpdates.labelRes),
                         checked = loadedUpdateSettings.autoCheckUpdates,
                         onCheckedChange = { enabled ->
@@ -144,6 +152,7 @@ private enum class ReaderBehaviorRow(val labelRes: Int) {
     KeepScreenOn(R.string.reader_behavior_keep_screen_on),
     LockCurrentOrientation(R.string.reader_behavior_lock_current_orientation),
     OpenLastReadBookOnLaunch(R.string.reader_behavior_open_last_read_book_on_launch),
+    HideBookshelfProgress(R.string.reader_behavior_hide_bookshelf_progress),
     AutomaticallyCheckForUpdates(R.string.reader_behavior_auto_check_updates),
 }
 

@@ -326,6 +326,7 @@
     <string name="reader_behavior_keep_screen_on">Keep Screen On</string>
     <string name="reader_behavior_lock_current_orientation">Lock Current Orientation</string>
     <string name="reader_behavior_open_last_read_book_on_launch">Open Last Read Book on Launch</string>
+    <string name="reader_behavior_hide_bookshelf_progress">Hide Bookshelf Progress</string>
     <string name="reader_behavior_auto_check_updates">Automatically Check for Updates</string>
     <string name="reader_statistics_pause">Pause statistics</string>
     <string name="reader_statistics_start">Start statistics</string>

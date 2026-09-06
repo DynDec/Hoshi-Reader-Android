@@ -295,6 +295,7 @@ fun BookshelfView(
         coverSourcesById = uiState.coverSourcesById,
         remoteCoverSourcesById = uiState.remoteCoverSourcesById,
         coverMode = uiState.coverMode,
+        hideBookshelfProgress = readerSettings.hideBookshelfProgress,
         sortOption = uiState.sortOption,
         hasLoadedBooks = uiState.hasLoadedBooks,
         isLoading = uiState.isLoading,
@@ -764,6 +765,7 @@ private fun LazyGridScope.googleDriveSection(
     remoteBusyBookIds: Set<String>,
     remoteCoverSourcesById: Map<String, BookCoverSource>,
     coverMode: BookshelfCoverMode,
+    hideBookshelfProgress: Boolean,
     layoutSpec: MainShellLayoutSpec,
     contentWidthDp: Int,
     fileTaskBlocked: Boolean,
@@ -808,6 +810,7 @@ private fun LazyGridScope.googleDriveSection(
                     downloadProgress = remoteImportProgressById[entry.id],
                     coverSource = remoteCoverSourcesById[entry.id],
                     coverMode = coverMode,
+                    hideProgress = hideBookshelfProgress,
                     layoutSpec = layoutSpec,
                     enabled = presentation.allowsHitTesting && !fileTaskBlocked && entry.id !in remoteBusyBookIds,
                     onImport = { onImportRemoteBook(entry) },
@@ -868,6 +871,7 @@ private fun BooksTab(
     coverSourcesById: Map<String, BookCoverSource>,
     remoteCoverSourcesById: Map<String, BookCoverSource>,
     coverMode: BookshelfCoverMode,
+    hideBookshelfProgress: Boolean,
     sortOption: BookSortOption,
     hasLoadedBooks: Boolean,
     isLoading: Boolean,
@@ -1008,6 +1012,7 @@ private fun BooksTab(
                                     remoteBusyBookIds = remoteBusyBookIds,
                                     remoteCoverSourcesById = remoteCoverSourcesById,
                                     coverMode = coverMode,
+                                    hideBookshelfProgress = hideBookshelfProgress,
                                     layoutSpec = layoutSpec,
                                     contentWidthDp = contentWidthDp,
                                     fileTaskBlocked = fileTaskBlocked,
@@ -1056,6 +1061,7 @@ private fun BooksTab(
                                             progress = bookProgressById[entry.metadata.id] ?: 0.0,
                                             coverSource = coverSourcesById[entry.metadata.id],
                                             coverMode = coverMode,
+                                            hideProgress = hideBookshelfProgress,
                                             layoutSpec = layoutSpec,
                                             isSelecting = isSelecting,
                                             isSelected = entry.metadata.id in selectedBookIds,
@@ -1127,6 +1133,7 @@ private fun BooksTab(
                                 remoteBusyBookIds = remoteBusyBookIds,
                                 remoteCoverSourcesById = remoteCoverSourcesById,
                                 coverMode = coverMode,
+                                hideBookshelfProgress = hideBookshelfProgress,
                                 layoutSpec = layoutSpec,
                                 contentWidthDp = contentWidthDp,
                                 fileTaskBlocked = fileTaskBlocked,
@@ -1418,6 +1425,7 @@ private fun BookGridCell(
     progress: Double,
     coverSource: BookCoverSource?,
     coverMode: BookshelfCoverMode,
+    hideProgress: Boolean,
     layoutSpec: MainShellLayoutSpec,
     isSelecting: Boolean,
     isSelected: Boolean,
@@ -1478,11 +1486,15 @@ private fun BookGridCell(
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
-        ReadingProgressPill(
-            progress = progress,
-        )
-        Spacer(Modifier.height(6.dp))
+        if (!hideProgress) {
+            Spacer(Modifier.height(6.dp))
+            ReadingProgressPill(
+                progress = progress,
+            )
+            Spacer(Modifier.height(6.dp))
+        } else {
+            Spacer(Modifier.height(6.dp))
+        }
         Text(
             text = entry.displayTitle,
             style = layoutSpec.bookTitleTextStyle.toTextStyle(),
@@ -1501,6 +1513,7 @@ private fun RemoteBookGridCell(
     downloadProgress: Double?,
     coverSource: BookCoverSource?,
     coverMode: BookshelfCoverMode,
+    hideProgress: Boolean,
     layoutSpec: MainShellLayoutSpec,
     enabled: Boolean,
     onImport: () -> Unit,
@@ -1520,9 +1533,13 @@ private fun RemoteBookGridCell(
             coverSource = coverSource,
             coverMode = coverMode,
         )
-        Spacer(Modifier.height(6.dp))
-        ReadingProgressPill(progress = progress)
-        Spacer(Modifier.height(6.dp))
+        if (!hideProgress) {
+            Spacer(Modifier.height(6.dp))
+            ReadingProgressPill(progress = progress)
+            Spacer(Modifier.height(6.dp))
+        } else {
+            Spacer(Modifier.height(6.dp))
+        }
         Text(
             text = entry.title,
             style = layoutSpec.bookTitleTextStyle.toTextStyle(),

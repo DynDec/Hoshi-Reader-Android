@@ -10,8 +10,24 @@ val rustProjectDir = file("src/main/rust/hoshiepub")
 val uniffiOutDir = layout.buildDirectory.dir("generated/source/uniffi/main/kotlin").get().asFile
 val rustDebugJniLibsDir = layout.buildDirectory.dir("jniLibs/debug").get().asFile
 val rustReleaseJniLibsDir = layout.buildDirectory.dir("jniLibs/release").get().asFile
-val cargo = System.getenv("HOME") + "/.cargo/bin/cargo"
-val androidNdkHome = System.getenv("ANDROID_NDK_HOME") ?: "/opt/homebrew/share/android-ndk"
+
+val userHome = System.getProperty("user.home") ?: System.getenv("USERPROFILE") ?: ""
+val isWindows = System.getProperty("os.name").lowercase().contains("win")
+val cargoExeName = if (isWindows) "cargo.exe" else "cargo"
+val cargoFallback = file("$userHome/.cargo/bin/$cargoExeName").takeIf { it.exists() }?.absolutePath ?: cargoExeName
+val cargo = System.getenv("CARGO") ?: cargoFallback
+
+val targetNdkVersion = "29.0.14206865"
+val defaultNdkDir = listOfNotNull(
+    System.getenv("ANDROID_HOME"),
+    System.getenv("ANDROID_SDK_ROOT"),
+).firstOrNull()?.let { file("$it/ndk/$targetNdkVersion") }?.takeIf { it.exists() }?.absolutePath
+    ?: "C:\\Users\\User\\AppData\\Local\\Android\\Sdk\\ndk"
+
+val androidNdkHome = System.getenv("ANDROID_NDK_HOME")
+    ?: providers.gradleProperty("androidNdkHome").orNull
+    ?: defaultNdkDir
+
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_FILE").orNull
 val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
@@ -46,7 +62,7 @@ val hostLibExtension = when {
 
 android {
     namespace = "moe.antimony.hoshi"
-    ndkVersion = "29.0.14206865"
+    ndkVersion = targetNdkVersion
     compileSdk {
         version = release(36) {
             minorApiLevel = 1

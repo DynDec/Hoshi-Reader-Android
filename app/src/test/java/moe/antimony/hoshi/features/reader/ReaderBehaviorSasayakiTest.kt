@@ -16,6 +16,7 @@ class ReaderBehaviorSasayakiTest {
                 R.string.reader_behavior_keep_screen_on,
                 R.string.reader_behavior_lock_current_orientation,
                 R.string.reader_behavior_open_last_read_book_on_launch,
+                R.string.reader_behavior_hide_bookshelf_progress,
                 R.string.reader_behavior_auto_check_updates,
             ),
             readerBehaviorRows(),

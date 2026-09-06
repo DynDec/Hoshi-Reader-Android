@@ -9,8 +9,9 @@ name = "hoshiepub"
 
 [dependencies]
 rbook = { version = "0.7.10", default-features = false, features = ["threadsafe"] }
-uniffi = { version = "0.31", default-features = false }
 thiserror = "2"
+uniffi = { version = "0.28", features = ["cli"] }
+uniffi_bindgen = "0.28" # Match the version of uniffi you are using
 
 [features]
 bindgen = ["uniffi/cli"]

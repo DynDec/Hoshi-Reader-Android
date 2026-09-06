@@ -112,6 +112,7 @@ class ReaderSettingsRepositoryTest {
             assertFalse(settings.keepScreenOnWhileReading)
             assertFalse(settings.lockCurrentOrientation)
             assertFalse(settings.openLastReadBookOnLaunch)
+            assertFalse(settings.hideBookshelfProgress)
         }
     }
 
@@ -141,6 +142,7 @@ class ReaderSettingsRepositoryTest {
                 keepScreenOnWhileReading = true,
                 lockCurrentOrientation = true,
                 openLastReadBookOnLaunch = true,
+                hideBookshelfProgress = true,
             ),
         )
 
@@ -170,6 +172,7 @@ class ReaderSettingsRepositoryTest {
             assertTrue(migrated.keepScreenOnWhileReading)
             assertTrue(migrated.lockCurrentOrientation)
             assertTrue(migrated.openLastReadBookOnLaunch)
+            assertTrue(migrated.hideBookshelfProgress)
 
             repository.update { it.copy(fontSize = 31) }
             assertEquals(31, repository.settings.first().fontSize)
@@ -247,6 +250,7 @@ class ReaderSettingsRepositoryTest {
                     keepScreenOnWhileReading = true,
                     lockCurrentOrientation = true,
                     openLastReadBookOnLaunch = true,
+                    hideBookshelfProgress = true,
                 )
             }
 
@@ -315,6 +319,7 @@ class ReaderSettingsRepositoryTest {
             assertTrue(saved.keepScreenOnWhileReading)
             assertTrue(saved.lockCurrentOrientation)
             assertTrue(saved.openLastReadBookOnLaunch)
+            assertTrue(saved.hideBookshelfProgress)
         }
     }
 
@@ -377,6 +382,7 @@ class ReaderSettingsRepositoryTest {
                     volumeKeysNavigatePopupTerms = true,
                     lockCurrentOrientation = true,
                     openLastReadBookOnLaunch = true,
+                    hideBookshelfProgress = true,
                 )
             }
 
@@ -395,6 +401,7 @@ class ReaderSettingsRepositoryTest {
             assertTrue(inherited.volumeKeysNavigatePopupTerms)
             assertTrue(inherited.lockCurrentOrientation)
             assertTrue(inherited.openLastReadBookOnLaunch)
+            assertTrue(inherited.hideBookshelfProgress)
 
             repository.update {
                 it.copy(
@@ -410,6 +417,7 @@ class ReaderSettingsRepositoryTest {
                     volumeKeysNavigatePopupTerms = false,
                     lockCurrentOrientation = false,
                     openLastReadBookOnLaunch = false,
+                    hideBookshelfProgress = false,
                 )
             }
 
@@ -427,6 +435,7 @@ class ReaderSettingsRepositoryTest {
             assertFalse(japanese.volumeKeysNavigatePopupTerms)
             assertFalse(japanese.lockCurrentOrientation)
             assertFalse(japanese.openLastReadBookOnLaunch)
+            assertFalse(japanese.hideBookshelfProgress)
         }
     }
 

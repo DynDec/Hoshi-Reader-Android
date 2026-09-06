@@ -141,6 +141,7 @@ data class ReaderSettings(
     val keepScreenOnWhileReading: Boolean = false,
     val lockCurrentOrientation: Boolean = false,
     val openLastReadBookOnLaunch: Boolean = false,
+    val hideBookshelfProgress: Boolean = false,
 ) {
     val continuousMode: Boolean
         get() = viewMode == ReaderViewMode.Continuous
@@ -439,6 +440,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
         keepScreenOnWhileReading = preferences.getBoolean("keepScreenOnWhileReading", false),
         lockCurrentOrientation = preferences.getBoolean("lockCurrentOrientation", false),
         openLastReadBookOnLaunch = preferences.getBoolean("openLastReadBookOnLaunch", false),
+        hideBookshelfProgress = preferences.getBoolean("hideBookshelfProgress", false),
     )
 
     fun save(settings: ReaderSettings) {
@@ -512,6 +514,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .putBoolean("keepScreenOnWhileReading", settings.keepScreenOnWhileReading)
             .putBoolean("lockCurrentOrientation", settings.lockCurrentOrientation)
             .putBoolean("openLastReadBookOnLaunch", settings.openLastReadBookOnLaunch)
+            .putBoolean("hideBookshelfProgress", settings.hideBookshelfProgress)
             .apply()
     }
 }
@@ -670,6 +673,7 @@ class ReaderSettingsRepository(
             keepScreenOnWhileReading = this[KEY_KEEP_SCREEN_ON_WHILE_READING] ?: false,
             lockCurrentOrientation = this[KEY_LOCK_CURRENT_ORIENTATION] ?: false,
             openLastReadBookOnLaunch = this[KEY_OPEN_LAST_READ_BOOK_ON_LAUNCH] ?: false,
+            hideBookshelfProgress = this[KEY_HIDE_BOOKSHELF_PROGRESS] ?: false,
         )
 
     private fun MutablePreferences.writeReaderSettings(settings: ReaderSettings) {
@@ -745,6 +749,7 @@ class ReaderSettingsRepository(
         this[KEY_KEEP_SCREEN_ON_WHILE_READING] = settings.keepScreenOnWhileReading
         this[KEY_LOCK_CURRENT_ORIENTATION] = settings.lockCurrentOrientation
         this[KEY_OPEN_LAST_READ_BOOK_ON_LAUNCH] = settings.openLastReadBookOnLaunch
+        this[KEY_HIDE_BOOKSHELF_PROGRESS] = settings.hideBookshelfProgress
     }
 
     private fun MutablePreferences.writeGlobalReaderSettings(settings: ReaderSettings) {
@@ -761,6 +766,7 @@ class ReaderSettingsRepository(
         this[KEY_KEEP_SCREEN_ON_WHILE_READING] = settings.keepScreenOnWhileReading
         this[KEY_LOCK_CURRENT_ORIENTATION] = settings.lockCurrentOrientation
         this[KEY_OPEN_LAST_READ_BOOK_ON_LAUNCH] = settings.openLastReadBookOnLaunch
+        this[KEY_HIDE_BOOKSHELF_PROGRESS] = settings.hideBookshelfProgress
     }
 
     private suspend fun profileAppearanceSettingsOrMigrate(globalSettings: ReaderSettings): ProfileReaderAppearanceSettings =
@@ -869,6 +875,7 @@ class ReaderSettingsRepository(
         private val KEY_KEEP_SCREEN_ON_WHILE_READING = booleanPreferencesKey("keepScreenOnWhileReading")
         private val KEY_LOCK_CURRENT_ORIENTATION = booleanPreferencesKey("lockCurrentOrientation")
         private val KEY_OPEN_LAST_READ_BOOK_ON_LAUNCH = booleanPreferencesKey("openLastReadBookOnLaunch")
+        private val KEY_HIDE_BOOKSHELF_PROGRESS = booleanPreferencesKey("hideBookshelfProgress")
 
         private val json = Json {
             prettyPrint = true

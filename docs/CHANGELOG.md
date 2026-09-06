@@ -25,6 +25,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   in the font menu.
 - Add an optional Reader Behavior setting that uses the volume keys to jump
   between terms in the topmost lookup popup.
+- Add an optional Reader Behavior setting that hides the bookshelf progress
+  bar and percentage without changing progress inside the Reader.
 - Add `hoshi://search?text=...` deep links for opening lookup results in the
   existing popup overlay, with `mode=app` support for opening the Dictionary
   tab instead.
