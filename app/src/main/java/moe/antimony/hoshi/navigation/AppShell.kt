@@ -470,6 +470,7 @@ private fun TopLevelRouteContent(
             onOpenReader = onOpenReader,
             refreshKey = bookshelfRefreshKey,
             layoutSpec = layoutSpec,
+            hideBookshelfProgress = readerSettings.hideBookshelfProgress,
             modifier = Modifier.fillMaxSize(),
         )
         MainTab.Dictionary -> DictionarySearchView(

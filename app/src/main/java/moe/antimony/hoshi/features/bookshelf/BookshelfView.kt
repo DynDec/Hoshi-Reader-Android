@@ -156,6 +156,7 @@ fun BookshelfView(
     onOpenReader: (String) -> Unit,
     refreshKey: Int = 0,
     layoutSpec: MainShellLayoutSpec,
+    hideBookshelfProgress: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -295,7 +296,7 @@ fun BookshelfView(
         coverSourcesById = uiState.coverSourcesById,
         remoteCoverSourcesById = uiState.remoteCoverSourcesById,
         coverMode = uiState.coverMode,
-        hideBookshelfProgress = readerSettings.hideBookshelfProgress,
+        hideBookshelfProgress = hideBookshelfProgress,
         sortOption = uiState.sortOption,
         hasLoadedBooks = uiState.hasLoadedBooks,
         isLoading = uiState.isLoading,
