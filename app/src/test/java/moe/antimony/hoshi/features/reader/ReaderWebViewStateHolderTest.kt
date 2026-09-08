@@ -746,6 +746,44 @@ class ReaderWebViewStateHolderTest {
     }
 
     @Test
+    fun readerAppearanceRunsOnlyForFirstApplicationChangedAppearanceOrNewDocument() {
+        val baseKey = readerAppearanceUpdateKey(
+            ReaderSettings(),
+            systemDark = false,
+            sasayakiTextColor = 0xFF111111,
+            sasayakiBackgroundColor = 0xFFFFFFFF,
+        )
+        val changedKey = readerAppearanceUpdateKey(
+            ReaderSettings(eInkMode = true),
+            systemDark = false,
+            sasayakiTextColor = 0xFF111111,
+            sasayakiBackgroundColor = 0xFFFFFFFF,
+        )
+        val applied = ReaderAppliedAppearance(documentToken = "document-a", updateKey = baseKey)
+
+        assertTrue(shouldApplyReaderAppearance(null, "document-a", baseKey))
+        assertFalse(shouldApplyReaderAppearance(applied, "document-a", baseKey))
+        assertTrue(shouldApplyReaderAppearance(applied, "document-a", changedKey))
+        assertTrue(shouldApplyReaderAppearance(applied, "document-b", baseKey))
+    }
+
+    @Test
+    fun readerWebViewBackgroundIsOpaqueOnlyInEInkMode() {
+        assertEquals(0x00000000, readerWebViewBackgroundColor(ReaderSettings(), systemDark = false))
+        assertEquals(
+            0xFFFFFFFF.toInt(),
+            readerWebViewBackgroundColor(ReaderSettings(eInkMode = true), systemDark = false),
+        )
+        assertEquals(
+            0xFF000000.toInt(),
+            readerWebViewBackgroundColor(
+                ReaderSettings(eInkMode = true, theme = ReaderTheme.Dark),
+                systemDark = false,
+            ),
+        )
+    }
+
+    @Test
     fun focusModeTogglesWithoutReloadingTheReaderContent() {
         val holder = stateHolder(initialIndex = 1)
         holder.markWebViewRestored()
