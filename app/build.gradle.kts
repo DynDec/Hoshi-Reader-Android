@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -11,22 +13,60 @@ val uniffiOutDir = layout.buildDirectory.dir("generated/source/uniffi/main/kotli
 val rustDebugJniLibsDir = layout.buildDirectory.dir("jniLibs/debug").get().asFile
 val rustReleaseJniLibsDir = layout.buildDirectory.dir("jniLibs/release").get().asFile
 
-val userHome = System.getProperty("user.home") ?: System.getenv("USERPROFILE") ?: ""
 val isWindows = System.getProperty("os.name").lowercase().contains("win")
+val userHome = if (isWindows) {
+    System.getenv("USERPROFILE") ?: System.getProperty("user.home") ?: ""
+} else {
+    System.getProperty("user.home") ?: System.getenv("HOME") ?: ""
+}
 val cargoExeName = if (isWindows) "cargo.exe" else "cargo"
 val cargoFallback = file("$userHome/.cargo/bin/$cargoExeName").takeIf { it.exists() }?.absolutePath ?: cargoExeName
 val cargo = System.getenv("CARGO") ?: cargoFallback
 
 val targetNdkVersion = "29.0.14206865"
-val defaultNdkDir = listOfNotNull(
+val localSdkDir = rootProject.file("local.properties").takeIf { it.isFile }?.let { propertiesFile ->
+    Properties().apply {
+        propertiesFile.inputStream().use { input -> load(input) }
+    }.getProperty("sdk.dir")
+}
+val defaultSdkDirs = when {
+    isWindows -> listOfNotNull(
+        System.getenv("LOCALAPPDATA")?.let { file(it).resolve("Android/Sdk") },
+        file(userHome).resolve("AppData/Local/Android/Sdk"),
+    )
+    System.getProperty("os.name").lowercase().contains("mac") -> listOf(
+        file(userHome).resolve("Library/Android/sdk"),
+    )
+    else -> listOf(
+        file(userHome).resolve("Android/Sdk"),
+    )
+}
+val sdkDirCandidates = (
+    sequenceOf(
     System.getenv("ANDROID_HOME"),
     System.getenv("ANDROID_SDK_ROOT"),
-).firstOrNull()?.let { file("$it/ndk/$targetNdkVersion") }?.takeIf { it.exists() }?.absolutePath
-    ?: "C:\\Users\\User\\AppData\\Local\\Android\\Sdk\\ndk"
+        localSdkDir,
+    ).filterNotNull().map { file(it) } + defaultSdkDirs.asSequence()
+    )
+    .filter { it.isDirectory }
+    .distinctBy { it.absolutePath }
+    .toList()
+val defaultNdkDir = sdkDirCandidates.asSequence()
+    .map { it.resolve("ndk").resolve(targetNdkVersion) }
+    .firstOrNull { it.isDirectory }
+    ?.absolutePath
 
-val androidNdkHome = System.getenv("ANDROID_NDK_HOME")
-    ?: providers.gradleProperty("androidNdkHome").orNull
-    ?: defaultNdkDir
+val configuredNdkDir = sequenceOf(
+    System.getenv("ANDROID_NDK_HOME"),
+    providers.gradleProperty("androidNdkHome").orNull,
+).filterNotNull()
+    .map { file(it) }
+    .firstOrNull { it.isDirectory }
+    ?.absolutePath
+val androidNdkHome = configuredNdkDir ?: defaultNdkDir
+    ?: throw GradleException(
+        "Android NDK $targetNdkVersion was not found. Set ANDROID_NDK_HOME or androidNdkHome."
+    )
 
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_FILE").orNull
 val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
@@ -70,7 +110,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "moe.requited.hoshi"
+        applicationId = "moe.antimony.hoshi"
         minSdk = 26
         targetSdk = 36
         versionCode = 103041
