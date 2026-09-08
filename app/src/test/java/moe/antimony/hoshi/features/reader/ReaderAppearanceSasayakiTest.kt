@@ -91,7 +91,9 @@ class ReaderAppearanceSasayakiTest {
 
     @Test
     fun topSafeAreaSliderUsesTwoDpSteps() {
-        assertEquals(20, readerAppearanceTopSafeAreaSliderSteps())
+        assertEquals(26, readerAppearanceTopSafeAreaSliderSteps())
+        assertEquals(18, readerAppearanceTopSafeAreaFromSlider(17.2f))
+        assertEquals(18, readerAppearanceTopSafeAreaFromSlider(18f))
         assertEquals(30, readerAppearanceTopSafeAreaFromSlider(29.2f))
         assertEquals(30, readerAppearanceTopSafeAreaFromSlider(30f))
         assertEquals(40, readerAppearanceTopSafeAreaFromSlider(39.2f))

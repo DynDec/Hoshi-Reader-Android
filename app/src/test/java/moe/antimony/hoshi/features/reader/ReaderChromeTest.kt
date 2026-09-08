@@ -436,6 +436,17 @@ class ReaderChromeTest {
     }
 
     @Test
+    fun topStatisticsToggleScalesDownWithMinimumTopSafeAreaHeight() {
+        val metrics = readerTopChromeMetrics(topSafeAreaDp = ReaderTopSafeAreaMinDp)
+
+        assertEquals(18, metrics.topSafeAreaDp)
+        assertEquals(18, metrics.topSasayakiButtonSizeDp)
+        assertEquals(18, metrics.topStatisticsButtonSizeDp)
+        assertEquals(16, metrics.topSasayakiIconSizeDp)
+        assertEquals(16, metrics.topStatisticsIconSizeDp)
+    }
+
+    @Test
     fun bottomProgressBelongsToBottomChromeWhenProgressIsNotTop() {
         val state = ReaderChromeState(
             title = "屍人荘の殺人",

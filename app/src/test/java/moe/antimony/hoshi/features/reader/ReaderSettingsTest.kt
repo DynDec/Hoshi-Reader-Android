@@ -61,6 +61,9 @@ class ReaderSettingsTest {
 
     @Test
     fun topSafeAreaCoercesToConfiguredRangeAndStep() {
+        assertEquals(18, 17.coerceReaderTopSafeAreaDp())
+        assertEquals(18, 18.coerceReaderTopSafeAreaDp())
+        assertEquals(20, 19.coerceReaderTopSafeAreaDp())
         assertEquals(30, 29.coerceReaderTopSafeAreaDp())
         assertEquals(30, 30.coerceReaderTopSafeAreaDp())
         assertEquals(32, 31.coerceReaderTopSafeAreaDp())

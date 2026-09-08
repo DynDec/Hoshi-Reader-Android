@@ -332,7 +332,7 @@ fun readerTopChromeMetrics(
 }
 
 private fun readerTopQuickIconSizeDp(topSafeAreaDp: Int): Int =
-    (topSafeAreaDp / 2 + 7).coerceIn(22, 40)
+    (topSafeAreaDp / 2 + 7).coerceIn(16, 40)
 
 private fun readerTopJumpHistoryIconSizeDp(topSafeAreaDp: Int): Int =
     (topSafeAreaDp / 3 + 6).coerceIn(16, 28)

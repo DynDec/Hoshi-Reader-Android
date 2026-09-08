@@ -31,6 +31,11 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   existing popup overlay, with `mode=app` support for opening the Dictionary
   tab instead.
 
+### Changed
+
+- Lower the Reader Appearance top safe area minimum from 30dp to 18dp and
+  scale the top statistics toggle icon down with smaller values.
+
 ### Fixed
 
 - Ask for confirmation before resetting Dictionary custom CSS to prevent
