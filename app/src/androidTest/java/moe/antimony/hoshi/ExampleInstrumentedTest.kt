@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("moe.antimony.hoshi", appContext.packageName)
+        assertEquals("moe.requited.hoshi", appContext.packageName)
     }
 }

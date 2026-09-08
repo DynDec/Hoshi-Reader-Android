@@ -59,7 +59,7 @@ Reader WebView timing and JavaScript hotspots.
 
 ```bash
 SERIAL=<serial>
-PACKAGE=moe.antimony.hoshi.debug
+PACKAGE=moe.requited.hoshi.debug
 PID="$($ANDROID_HOME/platform-tools/adb -s "$SERIAL" shell pidof "$PACKAGE")"
 $ANDROID_HOME/platform-tools/adb -s "$SERIAL" forward \
   tcp:9222 "localabstract:webview_devtools_remote_$PID"

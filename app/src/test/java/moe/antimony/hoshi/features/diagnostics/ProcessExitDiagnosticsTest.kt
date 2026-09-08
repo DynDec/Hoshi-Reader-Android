@@ -10,7 +10,7 @@ class ProcessExitDiagnosticsTest {
     @Test
     fun shareTextIncludesAppDeviceAndRecentExitDetails() {
         val report = ProcessExitDiagnosticsReport(
-            packageName = "moe.antimony.hoshi.debug",
+            packageName = "moe.requited.hoshi.debug",
             versionName = "0.1.5",
             versionCode = 105,
             sdkInt = 35,
@@ -45,7 +45,7 @@ class ProcessExitDiagnosticsTest {
         val text = report.toShareText()
 
         assertTrue(text.contains("Hoshi Diagnostics"))
-        assertTrue(text.contains("Package: moe.antimony.hoshi.debug"))
+        assertTrue(text.contains("Package: moe.requited.hoshi.debug"))
         assertTrue(text.contains("Version: 0.1.5 (105)"))
         assertTrue(text.contains("Android SDK: 35"))
         assertTrue(text.contains("WebView: com.google.android.webview 125.0.6422.165"))
@@ -60,7 +60,7 @@ class ProcessExitDiagnosticsTest {
     @Test
     fun shareTextExplainsWhenCurrentWebViewPackageIsUnavailable() {
         val report = ProcessExitDiagnosticsReport(
-            packageName = "moe.antimony.hoshi.debug",
+            packageName = "moe.requited.hoshi.debug",
             versionName = "0.1.5",
             versionCode = 105,
             sdkInt = 35,
@@ -77,7 +77,7 @@ class ProcessExitDiagnosticsTest {
     @Test
     fun shareTextUsesAHelpfulUnsupportedMessageWhenExitHistoryIsUnavailable() {
         val report = ProcessExitDiagnosticsReport(
-            packageName = "moe.antimony.hoshi.debug",
+            packageName = "moe.requited.hoshi.debug",
             versionName = "0.1.5",
             versionCode = 105,
             sdkInt = 29,
@@ -97,7 +97,7 @@ class ProcessExitDiagnosticsTest {
         val omittedMiddle = "x".repeat(ProcessExitDiagnosticsReport.MAX_TRACE_CHARS + 500)
         val longTrace = tracePrefix + omittedMiddle + traceSuffix
         val report = ProcessExitDiagnosticsReport(
-            packageName = "moe.antimony.hoshi.debug",
+            packageName = "moe.requited.hoshi.debug",
             versionName = "0.1.5",
             versionCode = 105,
             sdkInt = 35,
@@ -126,7 +126,7 @@ class ProcessExitDiagnosticsTest {
     @Test
     fun shareTextOmitsUnreadableBinaryTracePayloads() {
         val report = ProcessExitDiagnosticsReport(
-            packageName = "moe.antimony.hoshi.debug",
+            packageName = "moe.requited.hoshi.debug",
             versionName = "0.1.5",
             versionCode = 105,
             sdkInt = 35,
@@ -165,7 +165,7 @@ class ProcessExitDiagnosticsTest {
             thread = Thread("main"),
             throwable = throwable,
             timestampMillis = 1_700_000_000_000,
-            packageName = "moe.antimony.hoshi.debug",
+            packageName = "moe.requited.hoshi.debug",
             versionName = "0.3.4",
             versionCode = 304,
             sdkInt = 35,

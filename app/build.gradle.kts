@@ -110,7 +110,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "moe.antimony.hoshi"
+        applicationId = "moe.requited.hoshi"
         minSdk = 26
         targetSdk = 36
         versionCode = 103041

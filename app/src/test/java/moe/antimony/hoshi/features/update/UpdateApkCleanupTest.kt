@@ -10,20 +10,20 @@ class UpdateApkCleanupTest {
         assertTrue(
             shouldDeleteUpdateApk(
                 archiveInfo = UpdateApkArchiveInfo(
-                    packageName = "moe.antimony.hoshi",
+                    packageName = "moe.requited.hoshi",
                     versionName = "0.6.1",
                 ),
-                currentPackageName = "moe.antimony.hoshi",
+                currentPackageName = "moe.requited.hoshi",
                 currentVersionName = "0.6.1",
             ),
         )
         assertFalse(
             shouldDeleteUpdateApk(
                 archiveInfo = UpdateApkArchiveInfo(
-                    packageName = "moe.antimony.hoshi",
+                    packageName = "moe.requited.hoshi",
                     versionName = "0.6.2",
                 ),
-                currentPackageName = "moe.antimony.hoshi",
+                currentPackageName = "moe.requited.hoshi",
                 currentVersionName = "0.6.1",
             ),
         )
@@ -33,14 +33,14 @@ class UpdateApkCleanupTest {
                     packageName = "com.example.other",
                     versionName = "0.6.1",
                 ),
-                currentPackageName = "moe.antimony.hoshi",
+                currentPackageName = "moe.requited.hoshi",
                 currentVersionName = "0.6.1",
             ),
         )
         assertFalse(
             shouldDeleteUpdateApk(
                 archiveInfo = null,
-                currentPackageName = "moe.antimony.hoshi",
+                currentPackageName = "moe.requited.hoshi",
                 currentVersionName = "0.6.1",
             ),
         )

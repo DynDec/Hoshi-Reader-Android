@@ -55,8 +55,8 @@ class AnkiFetchActionTest {
     @Test
     fun appSettingsIntentUsesPackageUriForThisApp() {
         assertEquals(
-            "package:moe.antimony.hoshi.debug",
-            ankiPermissionSettingsUri("moe.antimony.hoshi.debug"),
+            "package:moe.requited.hoshi.debug",
+            ankiPermissionSettingsUri("moe.requited.hoshi.debug"),
         )
     }
 }
