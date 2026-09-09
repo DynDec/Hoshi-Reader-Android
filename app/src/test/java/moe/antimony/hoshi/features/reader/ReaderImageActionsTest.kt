@@ -7,6 +7,12 @@ import org.junit.Test
 
 class ReaderImageActionsTest {
     @Test
+    fun contentTapsToggleFullscreenImageControls() {
+        assertFalse(readerFullscreenImageControlsVisibleAfterContentTap(visible = true))
+        assertTrue(readerFullscreenImageControlsVisibleAfterContentTap(visible = false))
+    }
+
+    @Test
     fun copyToastIsOnlyShownBeforeSystemClipboardFeedbackExists() {
         assertTrue(shouldShowReaderImageCopyToast(Build.VERSION_CODES.S_V2))
         assertFalse(shouldShowReaderImageCopyToast(Build.VERSION_CODES.TIRAMISU))

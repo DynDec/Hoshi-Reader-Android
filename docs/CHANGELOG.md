@@ -8,6 +8,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Add single-tap visibility toggling with fade transitions for fullscreen Reader
+  image copy, save, share, and close controls.
 - Add Show, Blur, and Hide privacy modes for bookshelf covers, plus deterministic
   title and author artwork when a book has no visible cover.
 - Warn users before enabling AnkiConnect that most setups can create cards

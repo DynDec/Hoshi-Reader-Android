@@ -1,5 +1,6 @@
 package moe.antimony.hoshi.features.reader
 
+import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -12,12 +13,17 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -43,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,6 +98,10 @@ internal fun ReaderFullscreenImageOverlay(
         )
     }
     BackHandler(onBack = onDismiss)
+    var controlsVisible by remember(image.sourceUrl) { mutableStateOf(true) }
+    val onContentTap = {
+        controlsVisible = readerFullscreenImageControlsVisibleAfterContentTap(controlsVisible)
+    }
     Box(
         modifier = modifier
             .background(backgroundColor),
@@ -99,16 +110,21 @@ internal fun ReaderFullscreenImageOverlay(
             ReaderFullscreenSvgImage(
                 image = image,
                 resourceBridge = resourceBridge,
+                onContentTap = onContentTap,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
             ReaderFullscreenRasterImage(
                 image = image,
                 panAllowance = panAllowance,
+                onContentTap = onContentTap,
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        Row(
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .zIndex(1f)
@@ -116,29 +132,32 @@ internal fun ReaderFullscreenImageOverlay(
                     top = topSafeAreaPadding + 20.dp,
                     end = 12.dp,
                 ),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            ReaderFullscreenImageButton(
-                icon = Icons.Rounded.ContentCopy,
-                contentDescription = stringResource(R.string.action_copy),
-                onClick = { copyReaderImage(context, image) },
-            )
-            ReaderFullscreenImageButton(
-                icon = Icons.Rounded.Download,
-                contentDescription = stringResource(R.string.action_save),
-                onClick = { saveReaderImage(context, image) },
-            )
-            ReaderFullscreenImageButton(
-                icon = Icons.Rounded.Share,
-                contentDescription = stringResource(R.string.action_share),
-                onClick = { shareReaderImage(context, image) },
-            )
-            ReaderFullscreenImageButton(
-                icon = Icons.Rounded.Close,
-                contentDescription = stringResource(R.string.action_close),
-                onClick = onDismiss,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ReaderFullscreenImageButton(
+                    icon = Icons.Rounded.ContentCopy,
+                    contentDescription = stringResource(R.string.action_copy),
+                    onClick = { copyReaderImage(context, image) },
+                )
+                ReaderFullscreenImageButton(
+                    icon = Icons.Rounded.Download,
+                    contentDescription = stringResource(R.string.action_save),
+                    onClick = { saveReaderImage(context, image) },
+                )
+                ReaderFullscreenImageButton(
+                    icon = Icons.Rounded.Share,
+                    contentDescription = stringResource(R.string.action_share),
+                    onClick = { shareReaderImage(context, image) },
+                )
+                ReaderFullscreenImageButton(
+                    icon = Icons.Rounded.Close,
+                    contentDescription = stringResource(R.string.action_close),
+                    onClick = onDismiss,
+                )
+            }
         }
     }
 }
@@ -147,8 +166,10 @@ internal fun ReaderFullscreenImageOverlay(
 private fun ReaderFullscreenRasterImage(
     image: ReaderFullscreenImage,
     panAllowance: ReaderFullscreenImagePanAllowance,
+    onContentTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val currentOnContentTap = rememberUpdatedState(onContentTap)
     val bitmap = remember(image.resource.data) {
         BitmapFactory.decodeByteArray(image.resource.data, 0, image.resource.data.size)
     }
@@ -168,6 +189,7 @@ private fun ReaderFullscreenRasterImage(
             }
             .pointerInput(image.sourceUrl, viewport, fittedImage, panAllowance) {
                 detectTapGestures(
+                    onTap = { currentOnContentTap.value() },
                     onDoubleTap = { centroid ->
                         if (transform.scale > ReaderFullscreenImageTransform.MIN_SCALE) {
                             transform = ReaderFullscreenImageTransform()
@@ -216,14 +238,29 @@ private fun ReaderFullscreenRasterImage(
 }
 
 @Composable
+@SuppressLint("ClickableViewAccessibility")
 private fun ReaderFullscreenSvgImage(
     image: ReaderFullscreenImage,
     resourceBridge: ReaderWebResourceBridge,
+    onContentTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val currentOnContentTap = rememberUpdatedState(onContentTap)
+    val currentResourceBridge = rememberUpdatedState(resourceBridge)
     AndroidView(
         modifier = modifier,
         factory = { context ->
+            val gestureDetector = GestureDetector(
+                context,
+                object : GestureDetector.SimpleOnGestureListener() {
+                    override fun onDown(event: MotionEvent): Boolean = true
+
+                    override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
+                        currentOnContentTap.value()
+                        return true
+                    }
+                },
+            )
             WebView(context).apply {
                 applyHoshiWebViewSecurityDefaults()
                 settings.builtInZoomControls = true
@@ -232,27 +269,36 @@ private fun ReaderFullscreenSvgImage(
                 setBackgroundColor(AndroidColor.TRANSPARENT)
                 webViewClient = object : WebViewClient() {
                     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-                        request.url?.toString()?.let(resourceBridge::resourceForUrl)?.toWebResourceResponse()
+                        request.url?.toString()?.let { url ->
+                            currentResourceBridge.value.resourceForUrl(url)
+                        }?.toWebResourceResponse()
+                }
+                setOnTouchListener { _, event ->
+                    gestureDetector.onTouchEvent(event)
+                    false
                 }
             }
         },
         update = { webView ->
-            val escapedSource = image.sourceUrl.htmlAttributeEscaped()
-            val html = """
-                <!doctype html>
-                <html>
-                <head>
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-                  <style>
-                    html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
-                    body { display: flex; align-items: center; justify-content: center; }
-                    img { max-width: 100vw; max-height: 100vh; width: auto; height: auto; object-fit: contain; }
-                  </style>
-                </head>
-                <body><img src="$escapedSource" /></body>
-                </html>
-            """.trimIndent()
-            webView.loadDataWithBaseURL("https://appassets.androidplatform.net/", html, "text/html", "UTF-8", null)
+            if (webView.tag != image.sourceUrl) {
+                webView.tag = image.sourceUrl
+                val escapedSource = image.sourceUrl.htmlAttributeEscaped()
+                val html = """
+                    <!doctype html>
+                    <html>
+                    <head>
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                      <style>
+                        html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+                        body { display: flex; align-items: center; justify-content: center; }
+                        img { max-width: 100vw; max-height: 100vh; width: auto; height: auto; object-fit: contain; }
+                      </style>
+                    </head>
+                    <body><img src="$escapedSource" /></body>
+                    </html>
+                """.trimIndent()
+                webView.loadDataWithBaseURL("https://appassets.androidplatform.net/", html, "text/html", "UTF-8", null)
+            }
         },
     )
 }
@@ -371,3 +417,5 @@ private fun String.htmlAttributeEscaped(): String =
         .replace("\"", "&quot;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
+
+internal fun readerFullscreenImageControlsVisibleAfterContentTap(visible: Boolean): Boolean = !visible
