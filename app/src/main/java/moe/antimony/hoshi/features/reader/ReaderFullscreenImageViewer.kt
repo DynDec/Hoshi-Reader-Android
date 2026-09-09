@@ -98,7 +98,9 @@ internal fun ReaderFullscreenImageOverlay(
         )
     }
     BackHandler(onBack = onDismiss)
-    var controlsVisible by remember(image.sourceUrl) { mutableStateOf(true) }
+    var controlsVisible by remember(image.sourceUrl) {
+        mutableStateOf(readerFullscreenImageControlsInitiallyVisible())
+    }
     val onContentTap = {
         controlsVisible = readerFullscreenImageControlsVisibleAfterContentTap(controlsVisible)
     }
@@ -395,6 +397,8 @@ private fun readerImageShareFile(context: Context, image: ReaderFullscreenImage)
 
 internal fun shouldShowReaderImageCopyToast(sdkInt: Int = Build.VERSION.SDK_INT): Boolean =
     sdkInt < Build.VERSION_CODES.TIRAMISU
+
+internal fun readerFullscreenImageControlsInitiallyVisible(): Boolean = false
 
 private fun readerImageExtension(sourceUrl: String, mediaType: String): String {
     val pathExtension = runCatching {

@@ -7,9 +7,15 @@ import org.junit.Test
 
 class ReaderImageActionsTest {
     @Test
-    fun contentTapsToggleFullscreenImageControls() {
-        assertFalse(readerFullscreenImageControlsVisibleAfterContentTap(visible = true))
-        assertTrue(readerFullscreenImageControlsVisibleAfterContentTap(visible = false))
+    fun contentTapsRevealHiddenFullscreenImageControlsThenToggle() {
+        var visible = readerFullscreenImageControlsInitiallyVisible()
+        assertFalse(visible)
+
+        visible = readerFullscreenImageControlsVisibleAfterContentTap(visible)
+        assertTrue(visible)
+
+        visible = readerFullscreenImageControlsVisibleAfterContentTap(visible)
+        assertFalse(visible)
     }
 
     @Test
