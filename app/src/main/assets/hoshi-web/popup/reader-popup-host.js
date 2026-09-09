@@ -10,18 +10,6 @@
     let idleRootRecord = null;
     let rootHighlight = null;
     let sasayakiHighlight = null;
-    let renderedRootHighlightSignature = null;
-    let renderedSasayakiHighlightSignature = null;
-
-    function setStyleIfChanged(style, name, value) {
-        if (style[name] === value) return;
-        style[name] = value;
-    }
-
-    function setDatasetIfChanged(element, name, value) {
-        if (element.dataset[name] === value) return;
-        element.dataset[name] = value;
-    }
 
     function ensureLayer() {
         let layer = document.getElementById(LAYER_ID);
@@ -104,21 +92,7 @@
         return bar;
     }
 
-    function popupControlsSignature(payload) {
-        return JSON.stringify({
-            actionBarVisible: !!payload.actionBarVisible,
-            backCount: historyCount(payload, 'backCount'),
-            forwardCount: historyCount(payload, 'forwardCount'),
-            sasayakiVisible: !!payload.sasayakiVisible,
-            sasayakiIsPlaying: !!payload.sasayakiIsPlaying,
-            sasayakiWasPaused: !!payload.sasayakiWasPaused,
-        });
-    }
-
-    function renderControls(record) {
-        const { shell, iframe, payload } = record;
-        const signature = popupControlsSignature(payload);
-        if (record.controlsSignature === signature) return;
+    function renderControls(shell, payload, iframe) {
         shell.querySelectorAll('.hoshi-reader-popup-bar').forEach(node => node.remove());
         if (payload.actionBarVisible) {
             shell.insertBefore(
@@ -131,7 +105,6 @@
                 iframe,
             );
         }
-        record.controlsSignature = signature;
         if (payload.sasayakiVisible) {
             shell.insertBefore(
                 buildBar('hoshi-reader-popup-bar hoshi-reader-popup-sasayaki-bar', [
@@ -146,13 +119,13 @@
 
     function applyShellStyle(shell, payload) {
         const frame = payload.frame;
-        setStyleIfChanged(shell.style, 'left', `${frame.left}px`);
-        setStyleIfChanged(shell.style, 'top', `${frame.top}px`);
-        setStyleIfChanged(shell.style, 'width', `${frame.width}px`);
-        setStyleIfChanged(shell.style, 'height', `${frame.height}px`);
-        setDatasetIfChanged(shell, 'popupId', payload.id);
-        setDatasetIfChanged(shell, 'darkMode', String(!!payload.darkMode));
-        setDatasetIfChanged(shell, 'eInkMode', String(!!payload.eInkMode));
+        shell.style.left = `${frame.left}px`;
+        shell.style.top = `${frame.top}px`;
+        shell.style.width = `${frame.width}px`;
+        shell.style.height = `${frame.height}px`;
+        shell.dataset.popupId = payload.id;
+        shell.dataset.darkMode = String(!!payload.darkMode);
+        shell.dataset.eInkMode = String(!!payload.eInkMode);
     }
 
     function iframeRenderMessage(payload) {
@@ -195,13 +168,12 @@
     }
 
     function setContentReady(record, ready) {
-        if (record.contentReady === ready && record.shell.dataset.contentReady === String(ready)) return;
         record.contentReady = ready;
         record.shell.dataset.contentReady = String(ready);
+        syncRootReveal();
     }
 
     function setRevealReady(record, ready) {
-        if (record.revealReady === ready && record.shell.dataset.revealReady === String(ready)) return;
         record.revealReady = ready;
         record.shell.dataset.revealReady = String(ready);
     }
@@ -218,16 +190,7 @@
         iframe.className = 'hoshi-reader-popup-iframe';
         iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
         shell.dataset.revealReady = 'false';
-        const record = {
-            shell,
-            iframe,
-            payload,
-            contentReady: false,
-            revealReady: false,
-            loaded: false,
-            root: false,
-            controlsSignature: null,
-        };
+        const record = { shell, iframe, payload, contentReady: false, revealReady: false, loaded: false, root: false };
         iframe.addEventListener('load', () => {
             record.loaded = true;
             if (record.payload) {
@@ -298,9 +261,10 @@
         }
         record.clearSelectionSignal = payload.clearSelectionSignal;
         applyShellStyle(record.shell, payload);
-        renderControls(record);
-        setStyleIfChanged(record.iframe.style, 'top', `${frameContentTop(payload)}px`);
-        setStyleIfChanged(record.iframe.style, 'height', `calc(100% - ${frameContentTop(payload)}px)`);
+        renderControls(record.shell, payload, record.iframe);
+        record.iframe.style.top = `${frameContentTop(payload)}px`;
+        record.iframe.style.height = `calc(100% - ${frameContentTop(payload)}px)`;
+        syncRootReveal();
         if (record.iframe.src !== payload.iframeUrl) {
             setContentReady(record, false);
             setRevealReady(record, false);
@@ -321,7 +285,6 @@
         record.shell.dataset.popupId = '';
         setRevealReady(record, false);
         record.shell.querySelectorAll('.hoshi-reader-popup-bar').forEach(node => node.remove());
-        record.controlsSignature = null;
         record.iframe.style.top = '0px';
         record.iframe.style.height = '100%';
         idleRootRecord = record;
@@ -436,52 +399,51 @@
         sasayakiHighlight = payload || null;
         const existingLayer = document.getElementById(LAYER_ID)?.querySelector('.hoshi-reader-sasayaki-highlight-layer');
         if (!hasSasayakiHighlight() || !readerEInkMode()) {
-            if (renderedSasayakiHighlightSignature !== 'hidden') {
-                existingLayer?.replaceChildren();
-                renderedSasayakiHighlightSignature = 'hidden';
-            }
+            existingLayer?.replaceChildren();
             cleanupLayerIfIdle();
             return;
         }
+        const layer = ensureSasayakiHighlightLayer();
         const verticalWriting = sasayakiHighlight.verticalWriting ?? readerVerticalWriting();
         const color = readerEInkLineColor(!!sasayakiHighlight.darkMode);
         const rects = highlightBoxRects(
             sasayakiHighlight.rects.filter(rect => rect && rect.width > 0 && rect.height > 0),
             verticalWriting,
-        ).map(snapHighlightRect);
-        const signature = JSON.stringify({ verticalWriting, color, rects });
-        if (renderedSasayakiHighlightSignature === signature) return;
-        const layer = ensureSasayakiHighlightLayer();
+        );
         layer.replaceChildren();
         rects.forEach((rect) => {
+            const snapped = snapHighlightRect(rect);
             const lineSize = highlightLineSize();
             if (verticalWriting) {
                 appendAbsoluteLine(
                     layer,
                     'hoshi-reader-sasayaki-highlight-line',
-                    rect.x + Math.max(0, rect.width - lineSize),
-                    rect.y,
+                    snapped.x + Math.max(0, snapped.width - lineSize),
+                    snapped.y,
                     lineSize,
-                    rect.height,
+                    snapped.height,
                     color,
                 );
             } else {
                 appendAbsoluteLine(
                     layer,
                     'hoshi-reader-sasayaki-highlight-line',
-                    rect.x,
-                    rect.y + Math.max(0, rect.height - lineSize),
-                    rect.width,
+                    snapped.x,
+                    snapped.y + Math.max(0, snapped.height - lineSize),
+                    snapped.width,
                     lineSize,
                     color,
                 );
             }
         });
-        renderedSasayakiHighlightSignature = signature;
     }
 
     function clearSasayakiHighlight() {
-        renderSasayakiHighlight(null);
+        sasayakiHighlight = null;
+        document.getElementById(LAYER_ID)
+            ?.querySelector('.hoshi-reader-sasayaki-highlight-layer')
+            ?.replaceChildren();
+        cleanupLayerIfIdle();
     }
 
     function rectRangesOverlap(aStart, aEnd, bStart, bEnd, tolerance) {
@@ -603,14 +565,13 @@
 
     function renderRootHighlight(visible) {
         if (!visible || !rootHighlight || rootHighlight.pending || !Array.isArray(rootHighlight.rects)) {
-            if (renderedRootHighlightSignature !== 'hidden') {
-                document.getElementById(LAYER_ID)
-                    ?.querySelector('.hoshi-reader-selection-highlight-layer')
-                    ?.replaceChildren();
-                renderedRootHighlightSignature = 'hidden';
-            }
+            document.getElementById(LAYER_ID)
+                ?.querySelector('.hoshi-reader-selection-highlight-layer')
+                ?.replaceChildren();
             return;
         }
+        const layer = ensureHighlightLayer();
+        layer.replaceChildren();
         const color = rootHighlight.eInkMode
             ? (rootHighlight.darkMode ? '#fff' : '#000')
             : (rootHighlight.darkMode ? 'rgba(255, 255, 255, 0.32)' : 'rgba(160, 160, 160, 0.32)');
@@ -618,15 +579,6 @@
             rootHighlight.rects.filter(rect => rect && rect.width > 0 && rect.height > 0),
         );
         const boxEdges = rootHighlight.eInkMode ? rootHighlightBoxEdges(rects) : [];
-        const signature = JSON.stringify({
-            color,
-            eInkMode: !!rootHighlight.eInkMode,
-            rects: rootHighlight.eInkMode ? rects.map(snapHighlightRect) : rects,
-            boxEdges,
-        });
-        if (renderedRootHighlightSignature === signature) return;
-        const layer = ensureHighlightLayer();
-        layer.replaceChildren();
         for (let index = 0; index < rects.length; index++) {
             const rect = rects[index];
             const item = document.createElement('div');
@@ -642,7 +594,6 @@
             }
             layer.appendChild(item);
         }
-        renderedRootHighlightSignature = signature;
     }
 
     function syncRootReveal() {
@@ -730,7 +681,6 @@
         const record = frames.get(popupId);
         if (data.name === 'contentReady' && record) {
             setContentReady(record, true);
-            syncRootReveal();
         }
         const body = data.name === 'textSelected' ? adjustSelectionBody(popupId, data.body) : data.body;
         postNative({

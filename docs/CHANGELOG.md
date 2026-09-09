@@ -38,8 +38,6 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Fixed
 
-- Reduce broad refresh artifacts on e-ink displays by avoiding redundant Reader
-  appearance updates and popup highlight redraws.
 - Ask for confirmation before resetting Dictionary custom CSS to prevent
   accidental clearing.
 - Keep text and images reachable in every Reader mode when publisher CSS wraps

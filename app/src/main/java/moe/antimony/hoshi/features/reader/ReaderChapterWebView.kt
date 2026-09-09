@@ -158,10 +158,6 @@ internal fun ChapterWebView(
     val readerAppearanceScript = remember(appearanceUpdateKey) {
         readerAppearanceScript(appearanceUpdateKey)
     }
-    val nativeBackgroundColor = readerWebViewBackgroundColor(readerSettings, systemDark)
-    val currentAppearanceUpdateKey = rememberUpdatedState(appearanceUpdateKey)
-    val currentReaderAppearanceScript = rememberUpdatedState(readerAppearanceScript)
-    val currentNativeBackgroundColor = rememberUpdatedState(nativeBackgroundColor)
     val readerSetupReloadKey = remember(
         chapterPosition.progress,
         chapterFragment,
@@ -246,30 +242,6 @@ internal fun ChapterWebView(
         if (webView.tag != restoreToken) return@LaunchedEffect
         webView.applyReaderSasayakiCues(restoreToken, cuesJson)
     }
-    fun createReaderWebViewClient(
-        setupScript: String,
-        setupRestoreToken: String,
-        setupAppearanceUpdateKey: ReaderAppearanceUpdateKey,
-        setupNativeBackgroundColor: Int,
-    ): EpubWebViewClient = EpubWebViewClient(
-        book = book,
-        fontManager = fontManager,
-        onInternalLink = onInternalLink,
-        popupResourceHandler = { currentReaderPopupResourceHandler.value },
-    ) { view ->
-        view.evaluateReaderSetupScript(
-            source = setupScript,
-            restoreToken = setupRestoreToken,
-            appearanceUpdateKey = setupAppearanceUpdateKey,
-            nativeBackgroundColor = setupNativeBackgroundColor,
-        )
-        view.applyReaderAppearanceIfNeeded(
-            documentToken = setupRestoreToken,
-            appearanceUpdateKey = currentAppearanceUpdateKey.value,
-            source = currentReaderAppearanceScript.value,
-            nativeBackgroundColor = currentNativeBackgroundColor.value,
-        )
-    }
     AndroidView(
         modifier = modifier
             .onSizeChanged(onReaderViewportSizeChanged)
@@ -283,7 +255,7 @@ internal fun ChapterWebView(
                     currentOnHighlightCreated.value(color, id, creation)
                 }
                 hideForReaderRestore()
-                setBackgroundColor(nativeBackgroundColor)
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 addJavascriptInterface(
                     ReaderSelectionBridge(this) { selection, selectionRects ->
                         currentOnTextSelected.value(selection, selectionRects)
@@ -303,12 +275,17 @@ internal fun ChapterWebView(
                     "HoshiReaderImage",
                 )
                 ReaderLookupPopupWebBridge.install(this, readerPopupBridgeHolder)
-                webViewClient = createReaderWebViewClient(
-                    setupScript = readerSetupScript,
-                    setupRestoreToken = restoreToken,
-                    setupAppearanceUpdateKey = appearanceUpdateKey,
-                    setupNativeBackgroundColor = nativeBackgroundColor,
-                )
+                webViewClient = EpubWebViewClient(
+                    book = book,
+                    fontManager = fontManager,
+                    onInternalLink = onInternalLink,
+                    popupResourceHandler = { currentReaderPopupResourceHandler.value },
+                ) { view ->
+                    view.evaluateReaderSetupScript(
+                        source = readerSetupScript,
+                        restoreToken = restoreToken,
+                    )
+                }
                 readerWebView = this
                 onWebViewReady(this)
             }
@@ -476,12 +453,7 @@ internal fun ChapterWebView(
                     )
                 }
             }
-            webView.applyReaderAppearanceIfNeeded(
-                documentToken = restoreToken,
-                appearanceUpdateKey = appearanceUpdateKey,
-                source = readerAppearanceScript,
-                nativeBackgroundColor = nativeBackgroundColor,
-            )
+            webView.evaluateJavascript(readerAppearanceScript, null)
             if (!readerWebViewReadyToLoad(webViewViewportSize)) return@AndroidView
             if (webView.tag != restoreToken) {
                 if (!currentIsWebViewRestoring.value) {
@@ -490,12 +462,17 @@ internal fun ChapterWebView(
                 }
                 webView.tag = restoreToken
                 webView.hideForReaderRestore()
-                webView.webViewClient = createReaderWebViewClient(
-                    setupScript = readerSetupScript,
-                    setupRestoreToken = restoreToken,
-                    setupAppearanceUpdateKey = appearanceUpdateKey,
-                    setupNativeBackgroundColor = nativeBackgroundColor,
-                )
+                webView.webViewClient = EpubWebViewClient(
+                    book = book,
+                    fontManager = fontManager,
+                    onInternalLink = onInternalLink,
+                    popupResourceHandler = { currentReaderPopupResourceHandler.value },
+                ) { view ->
+                    view.evaluateReaderSetupScript(
+                        source = readerSetupScript,
+                        restoreToken = restoreToken,
+                    )
+                }
                 webView.loadUrl(baseUrl)
             }
         },
@@ -562,20 +539,6 @@ internal data class ReaderAppearanceUpdateKey(
     val sasayakiTextColorCss: String,
     val sasayakiBackgroundColorCss: String,
 )
-
-internal data class ReaderAppliedAppearance(
-    val documentToken: String,
-    val updateKey: ReaderAppearanceUpdateKey,
-)
-
-internal fun shouldApplyReaderAppearance(
-    applied: ReaderAppliedAppearance?,
-    documentToken: String,
-    updateKey: ReaderAppearanceUpdateKey,
-): Boolean = applied != ReaderAppliedAppearance(documentToken, updateKey)
-
-internal fun readerWebViewBackgroundColor(settings: ReaderSettings, systemDark: Boolean): Int =
-    if (settings.eInkMode) settings.backgroundColor(systemDark).toInt() else AndroidColor.TRANSPARENT
 
 internal fun readerAppearanceUpdateKey(
     settings: ReaderSettings,
@@ -991,34 +954,16 @@ private fun readerAppearanceScript(
     val sasayakiBackground = readerJavaScriptStringLiteral(appearanceUpdateKey.sasayakiBackgroundColorCss)
     return """
         (function() {
-          var root = document.documentElement;
-          var style = root.style;
-          var highlightPresentationChanged = false;
-          function setPropertyIfChanged(name, value, affectsHighlight) {
-            if (style.getPropertyValue(name) === value) return false;
-            style.setProperty(name, value);
-            if (affectsHighlight) highlightPresentationChanged = true;
-            return true;
-          }
-          setPropertyIfChanged('--hoshi-background-color', $backgroundColor, false);
-          setPropertyIfChanged('--hoshi-text-color', $textColor, false);
-          setPropertyIfChanged('--hoshi-eink-line-color', $eInkLineColor, true);
-          setPropertyIfChanged('--hoshi-reader-eink-mode', $eInkMode, true);
-          var nextEInkMode = $eInkMode === '1' ? 'true' : 'false';
-          if (root.dataset.hoshiReaderEinkMode !== nextEInkMode) {
-            root.dataset.hoshiReaderEinkMode = nextEInkMode;
-            highlightPresentationChanged = true;
-          }
-          setPropertyIfChanged('--hoshi-reader-vertical-writing', $verticalWriting, true);
-          if (window.__hoshiReaderRevealSpeed !== $visualNovelRevealSpeed) {
-            window.__hoshiReaderRevealSpeed = $visualNovelRevealSpeed;
-            window.hoshiReader?.setRevealSpeed?.($visualNovelRevealSpeed);
-          }
-          setPropertyIfChanged('--hoshi-sasayaki-text-color', $sasayakiText, true);
-          setPropertyIfChanged('--hoshi-sasayaki-background-color', $sasayakiBackground, true);
-          if (highlightPresentationChanged) {
-            window.hoshiReader?.refreshSasayakiCuePresentation?.();
-          }
+          document.documentElement.style.setProperty('--hoshi-background-color', $backgroundColor);
+          document.documentElement.style.setProperty('--hoshi-text-color', $textColor);
+          document.documentElement.style.setProperty('--hoshi-eink-line-color', $eInkLineColor);
+          document.documentElement.style.setProperty('--hoshi-reader-eink-mode', $eInkMode);
+          document.documentElement.dataset.hoshiReaderEinkMode = $eInkMode === '1' ? 'true' : 'false';
+          document.documentElement.style.setProperty('--hoshi-reader-vertical-writing', $verticalWriting);
+          window.hoshiReader?.setRevealSpeed?.($visualNovelRevealSpeed);
+          document.documentElement.style.setProperty('--hoshi-sasayaki-text-color', $sasayakiText);
+          document.documentElement.style.setProperty('--hoshi-sasayaki-background-color', $sasayakiBackground);
+          window.hoshiReader?.refreshSasayakiCuePresentation?.();
         })();
     """.trimIndent()
 }
@@ -1394,27 +1339,9 @@ private fun WebView.showAfterReaderRestore(restoreCompletion: ReaderRestoreCompl
 private fun WebView.evaluateReaderSetupScript(
     source: String,
     restoreToken: String,
-    appearanceUpdateKey: ReaderAppearanceUpdateKey,
-    nativeBackgroundColor: Int,
 ) {
     readerAppliedSasayakiCues.remove(this)
-    setBackgroundColor(nativeBackgroundColor)
-    readerAppliedAppearances[this] = ReaderAppliedAppearance(restoreToken, appearanceUpdateKey)
     evaluateJavascript(source, null)
-}
-
-private fun WebView.applyReaderAppearanceIfNeeded(
-    documentToken: String,
-    appearanceUpdateKey: ReaderAppearanceUpdateKey,
-    source: String,
-    nativeBackgroundColor: Int,
-): Boolean {
-    val applied = readerAppliedAppearances[this]
-    if (!shouldApplyReaderAppearance(applied, documentToken, appearanceUpdateKey)) return false
-    setBackgroundColor(nativeBackgroundColor)
-    readerAppliedAppearances[this] = ReaderAppliedAppearance(documentToken, appearanceUpdateKey)
-    evaluateJavascript(source, null)
-    return true
 }
 
 private fun WebView.applyReaderSasayakiCues(loadKey: String, cuesJson: String) {
@@ -1429,7 +1356,6 @@ private fun releaseReaderWebView(webView: HoshiReaderWebView) {
     readerPendingProgressSaveCallbacks.remove(webView)?.let(webView::removeCallbacks)
     readerRestoreGenerations.remove(webView)
     readerAppliedSasayakiCues.remove(webView)
-    readerAppliedAppearances.remove(webView)
     readerPageTurnProgressRequestIds.remove(webView)
     webView.releaseForDestroy()
     webView.setOnTouchListener(null)
@@ -1449,7 +1375,6 @@ private data class ReaderAppliedSasayakiCues(
 
 private val readerRestoreGenerations = WeakHashMap<WebView, Long>()
 private val readerAppliedSasayakiCues = WeakHashMap<WebView, ReaderAppliedSasayakiCues>()
-private val readerAppliedAppearances = WeakHashMap<WebView, ReaderAppliedAppearance>()
 private val readerPendingProgressSaveCallbacks = WeakHashMap<WebView, Runnable>()
 private val readerPageTurnProgressRequestIds = WeakHashMap<WebView, Long>()
 private var readerPageTurnProgressRequestId = 0L
