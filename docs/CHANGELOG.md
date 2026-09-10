@@ -49,13 +49,18 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   paragraphs or empty layout struts in oversized inline blocks.
 - Restore book files and covers from iOS Books backups when equivalent Unicode
   paths use different composed forms.
+- Match Sasayaki subtitles immediately after selecting an SRT, including unique
+  cues immediately before the stable starting sequence, combined-volume EPUBs,
+  and large text gaps, without requiring Search Window tuning or a separate
+  Match action.
 - Import EPUB and TTU bookdata with multibyte titles that exceed Android's
   filename byte limit while preserving the complete visible title and cleaning
   temporary EPUB data after failed imports.
-- Keep wide inline gaiji at the publisher's text-relative size, render inline
-  gaiji strokes with the active Reader text color while blending away their
-  image backgrounds in standard and custom themes, and exclude gaiji from
-  image navigation.
+- Keep wide inline gaiji at the publisher's text-relative size, recognize any
+  publisher class containing `gaiji`, and render gaiji plus transparent
+  monochrome images embedded in text with the active Reader text color while
+  blending away their image backgrounds in standard and custom themes and
+  excluding gaiji from image navigation.
 - Use EPUB fallback text for failed inline gaiji images, while retaining a
   broken-image marker and its inline space when no fallback text is available.
 - Open EPUB pages that use paired XHTML viewport metadata instead of remaining

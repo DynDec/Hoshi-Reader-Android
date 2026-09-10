@@ -3,17 +3,20 @@
 
   var SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
   var GAIJI_TEXT_COLOR_FILTER_ID = 'hoshi-gaiji-text-color-filter';
+  var TEXT_COLOR_IMAGE_CLASS = 'hoshi-text-color-image';
+  var MAX_COLOR_SAMPLE_PIXELS = 262144;
 
   function documentForNode(node) {
     return (node && node.ownerDocument) || global.document || (typeof document !== 'undefined' ? document : null);
   }
 
   function isGaijiImage(img) {
-    return !!(img && img.classList && (
-      img.classList.contains('gaiji') ||
-      img.classList.contains('gaiji-line') ||
-      img.classList.contains('gaiji-wide')
-    ));
+    if (!img) return false;
+    var className = img.getAttribute ? img.getAttribute('class') : '';
+    if (!className) className = img.className;
+    return String(className || '')
+      .split(/\s+/)
+      .some(function(token) { return token.toLowerCase().indexOf('gaiji') >= 0; });
   }
 
   function isLargeImage(img) {
@@ -82,6 +85,55 @@
       operator: 'in'
     });
     doc.documentElement.appendChild(svg);
+  }
+
+  function isEmbeddedInText(img) {
+    if (!img || !img.closest) return false;
+    var container = img.closest('p, li, dt, dd, blockquote');
+    return !!(container && /\S/.test(String(container.textContent || '')));
+  }
+
+  function isTransparentMonochromeImage(img) {
+    if (!isEmbeddedInText(img)) return false;
+    var width = Number(img.naturalWidth) || 0;
+    var height = Number(img.naturalHeight) || 0;
+    var doc = documentForNode(img);
+    if (!width || !height || !doc || !doc.createElement) return false;
+
+    try {
+      var scale = Math.min(1, Math.sqrt(MAX_COLOR_SAMPLE_PIXELS / (width * height)));
+      var canvas = doc.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      var context = canvas.getContext && canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) return false;
+      context.drawImage(img, 0, 0, canvas.width, canvas.height);
+      var pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      var pixelCount = canvas.width * canvas.height;
+      var visibleCount = 0;
+      var transparentCount = 0;
+      for (var index = 0; index < pixels.length; index += 4) {
+        var alpha = pixels[index + 3];
+        if (alpha <= 16) {
+          transparentCount += 1;
+          continue;
+        }
+        visibleCount += 1;
+        var red = pixels[index];
+        var green = pixels[index + 1];
+        var blue = pixels[index + 2];
+        if (Math.max(red, green, blue) - Math.min(red, green, blue) > 12) return false;
+      }
+      return visibleCount > 0 && transparentCount >= Math.ceil(pixelCount * 0.05);
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  function markTextColorImage(img) {
+    if (isGaijiImage(img) || isTransparentMonochromeImage(img)) {
+      img.classList.add(TEXT_COLOR_IMAGE_CLASS);
+    }
   }
 
   function replaceFailedGaiji(img) {
@@ -165,6 +217,7 @@
 
   function setupImage(img, options, resolve) {
     var mark = function() {
+      markTextColorImage(img);
       if (!isGaijiImage(img) && isLargeImage(img)) {
         img.classList.add('block-img');
         setupReaderImage(img, imageSource(img), {
@@ -211,6 +264,7 @@
   }
 
   global.hoshiReaderMediaSemantics = {
+    isGaijiImage: isGaijiImage,
     setupReaderImage: setupReaderImage,
     setupReaderImages: setupReaderImages
   };

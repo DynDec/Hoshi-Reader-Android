@@ -47,6 +47,10 @@ class TestElement {
         return this.parentNode?.nodeType === 1 ? this.parentNode : null;
     }
 
+    get textContent() {
+        return this.childNodes.map((child) => child.textContent ?? '').join('');
+    }
+
     appendChild(child) {
         child.parentNode?.removeChild(child);
         child.parentNode = this;
@@ -115,6 +119,18 @@ class TestElement {
     }
 }
 
+class TestText {
+    constructor(value) {
+        this.nodeType = 3;
+        this.nodeValue = value;
+        this.parentNode = null;
+    }
+
+    get textContent() {
+        return this.nodeValue;
+    }
+}
+
 function image(attributes = {}) {
     const img = new TestElement('img', attributes);
     img.complete = true;
@@ -130,6 +146,23 @@ function loadMediaSemanticsContext() {
         baseURI: 'https://example.invalid/chapter.xhtml',
         documentElement,
         createElement(tagName) {
+            if (tagName.toLowerCase() === 'canvas') {
+                let source = null;
+                return {
+                    width: 0,
+                    height: 0,
+                    getContext() {
+                        return {
+                            drawImage(img) {
+                                source = img;
+                            },
+                            getImageData() {
+                                return { data: source?.testPixels ?? new Uint8ClampedArray() };
+                            },
+                        };
+                    },
+                };
+            }
             const element = new TestElement(tagName);
             element.ownerDocument = document;
             return element;
@@ -307,6 +340,60 @@ test('shared media setup keeps large gaiji-wide images inline', async () => {
 
     assert.equal(gaijiWide.classList.contains('block-img'), false);
     assert.deepEqual(messages, []);
+});
+
+test('shared media setup treats every class token containing gaiji as gaiji', async () => {
+    const media = loadMediaSemantics();
+    const root = new TestElement('p');
+    const gaijiVariant = image({ class: 'ornament publisher-GaIjI-tall', src: 'images/glyph.png' });
+    gaijiVariant.naturalWidth = 128;
+    gaijiVariant.naturalHeight = 512;
+    root.appendChild(gaijiVariant);
+
+    await media.setupReaderImages(root, { blurImages: false });
+
+    assert.equal(gaijiVariant.classList.contains('block-img'), false);
+    assert.equal(gaijiVariant.classList.contains('hoshi-text-color-image'), true);
+});
+
+test('shared media setup tints transparent monochrome images embedded in text only', async () => {
+    const media = loadMediaSemantics();
+    const root = new TestElement('section');
+    const paragraph = new TestElement('p');
+    const glyph = image({ class: 'width-1em', src: 'images/00030.png' });
+    glyph.naturalWidth = 2;
+    glyph.naturalHeight = 2;
+    glyph.testPixels = new Uint8ClampedArray([
+        0, 0, 0, 255,
+        0, 0, 0, 0,
+        64, 64, 64, 255,
+        0, 0, 0, 0,
+    ]);
+    const colored = image({ class: 'width-1em', src: 'images/colored.png' });
+    colored.naturalWidth = 2;
+    colored.naturalHeight = 2;
+    colored.testPixels = new Uint8ClampedArray([
+        255, 0, 0, 255,
+        0, 0, 0, 0,
+        255, 0, 0, 255,
+        0, 0, 0, 0,
+    ]);
+    const standalone = image({ src: 'images/standalone.png' });
+    standalone.naturalWidth = 2;
+    standalone.naturalHeight = 2;
+    standalone.testPixels = glyph.testPixels;
+    paragraph.appendChild(new TestText('前'));
+    paragraph.appendChild(glyph);
+    paragraph.appendChild(colored);
+    paragraph.appendChild(new TestText('後'));
+    root.appendChild(paragraph);
+    root.appendChild(standalone);
+
+    await media.setupReaderImages(root, { blurImages: false });
+
+    assert.equal(glyph.classList.contains('hoshi-text-color-image'), true);
+    assert.equal(colored.classList.contains('hoshi-text-color-image'), false);
+    assert.equal(standalone.classList.contains('hoshi-text-color-image'), false);
 });
 
 test('shared media setup waits for pending images when requested', async () => {

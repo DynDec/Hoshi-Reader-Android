@@ -166,11 +166,13 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   `reader-dom-text.js`; the mode assets keep thin public wrapper methods so
   existing reader commands and tests continue to call the same surface.
 - Reader image setup semantics live in `reader-media-semantics.js` and are
-  consumed by paginated, continuous, and VN assets for SVG image aspect-ratio
-  correction, large image block marking, blur wrappers, native image tap
-  bridging, and scoped setup. Paginated and continuous apply it to the chapter
-  document and wait for image load/failure before restore; VN applies it to the
-  current rendered screen without blocking screen rendering on image load.
+  consumed by paginated, continuous, and VN assets for shared gaiji class
+  recognition, transparent monochrome inline-image tinting, SVG image
+  aspect-ratio correction, large image block marking, blur wrappers, native
+  image tap bridging, and scoped setup. Paginated and continuous apply it to
+  the chapter document and wait for image load/failure before restore; VN
+  applies it to the current rendered screen without blocking screen rendering
+  on image load.
 - Reader publisher-layout sanitation lives in `reader-layout-semantics.js` and
   is consumed by paginated, continuous, and VN assets after fonts and source
   images settle but before offsets, restore, or VN screen construction. It

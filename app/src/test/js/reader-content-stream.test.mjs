@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const readerTextSemanticsUrl = new URL('../../main/assets/hoshi-web/reader/reader-text-semantics.js', import.meta.url);
+const readerMediaSemanticsUrl = new URL('../../main/assets/hoshi-web/reader/reader-media-semantics.js', import.meta.url);
 const readerVnContentStreamUrl = new URL('../../main/assets/hoshi-web/reader/reader-vn-content-stream.js', import.meta.url);
 
 class TestNode {
@@ -79,6 +80,7 @@ function text(value) {
 function loadContentStreamModule() {
     const source = [
         fs.readFileSync(readerTextSemanticsUrl, 'utf8'),
+        fs.readFileSync(readerMediaSemanticsUrl, 'utf8'),
         fs.readFileSync(readerVnContentStreamUrl, 'utf8'),
     ].join('\n');
     const window = {};
@@ -405,6 +407,18 @@ test('content stream keeps large gaiji-wide images inline', () => {
     gaijiWide.naturalWidth = 303;
     gaijiWide.naturalHeight = 128;
     const paragraph = el('p', {}, ['前', gaijiWide, '後']);
+
+    const stream = loadContentStreamModule().create(paragraph);
+
+    assert.equal(stream.containsStandaloneMedia(paragraph), false);
+    assert.equal(stream.mediaUnits().length, 0);
+});
+
+test('content stream keeps every class token containing gaiji inline', () => {
+    const gaijiVariant = el('img', { class: 'ornament publisher-GaIjI-tall', src: 'glyph.png' });
+    gaijiVariant.naturalWidth = 128;
+    gaijiVariant.naturalHeight = 512;
+    const paragraph = el('p', {}, ['前', gaijiVariant, '後']);
 
     const stream = loadContentStreamModule().create(paragraph);
 

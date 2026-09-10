@@ -27,9 +27,8 @@ img.block-img {
     -webkit-column-break-inside: avoid !important;
     object-fit: contain !important;
 }
-img.gaiji,
-img.gaiji-line,
-img.gaiji-wide {
+img[class*="gaiji" i],
+img.hoshi-text-color-image {
     filter: url("#hoshi-gaiji-text-color-filter") !important;
     mix-blend-mode: normal !important;
 }
