@@ -349,7 +349,7 @@ fun ReaderWebView(
         statisticsState = statisticsTracker?.state
     }
     fun startStatisticsForProgressChangeIfNeeded() {
-        if (effectiveSettings.statisticsAutostartMode == StatisticsAutostartMode.PageTurn) {
+        if (effectiveSettings.statisticsAutostartOnPageTurn) {
             statisticsTracker?.startForPageTurnIfNeeded(currentDisplayedCharacter())
             syncStatisticsState()
         }
@@ -466,8 +466,8 @@ fun ReaderWebView(
         )
         syncStatisticsState()
     }
-    LaunchedEffect(statisticsTracker, effectiveSettings.statisticsAutostartMode) {
-        if (effectiveSettings.enableStatistics && effectiveSettings.statisticsAutostartMode == StatisticsAutostartMode.On) {
+    LaunchedEffect(statisticsTracker, effectiveSettings.statisticsAutostartOnBookOpen) {
+        if (effectiveSettings.enableStatistics && effectiveSettings.statisticsAutostartOnBookOpen) {
             statisticsTracker?.start(currentDisplayedCharacter())
             syncStatisticsState()
         }

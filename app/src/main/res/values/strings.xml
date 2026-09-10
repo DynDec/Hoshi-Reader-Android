@@ -372,11 +372,9 @@
     <string name="reader_statistics_reading_speed">Reading Speed:</string>
     <string name="reader_statistics_reading_time">Reading Time:</string>
     <string name="reader_statistics_show_tab">Show Statistics tab</string>
-    <string name="reader_statistics_autostart">Autostart</string>
+    <string name="reader_statistics_autostart_on_book_open">Start on Book Open</string>
+    <string name="reader_statistics_autostart_on_page_turn">Start on Page Turn</string>
     <string name="reader_statistics_reset_time">Reset Time</string>
-    <string name="reader_statistics_autostart_off" comment="Reader statistics autostart setting value; intentionally matches other off labels.">Off</string>
-    <string name="reader_statistics_autostart_page_turn">Page Turn</string>
-    <string name="reader_statistics_autostart_on">On</string>
     <string name="reader_statistics_sync_behaviour">Sync Behaviour</string>
     <string name="reader_statistics_sync_mode_merge">Merge</string>
     <string name="reader_statistics_sync_mode_replace">Replace</string>

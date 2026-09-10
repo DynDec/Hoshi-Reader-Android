@@ -29,6 +29,11 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   existing popup overlay, with `mode=app` support for opening the Dictionary
   tab instead.
 
+### Changed
+
+- Split Reader statistics autostart into independent Book Open and Page Turn
+  options that can be enabled together.
+
 ### Fixed
 
 - Ask for confirmation before resetting Dictionary custom CSS to prevent

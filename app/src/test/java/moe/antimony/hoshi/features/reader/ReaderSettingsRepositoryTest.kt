@@ -1,6 +1,12 @@
 package moe.antimony.hoshi.features.reader
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -10,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -73,7 +80,8 @@ class ReaderSettingsRepositoryTest {
             assertFalse(settings.blurImages)
             assertFalse(settings.enableStatistics)
             assertTrue(settings.showStatisticsTab)
-            assertEquals(StatisticsAutostartMode.Off, settings.statisticsAutostartMode)
+            assertFalse(settings.statisticsAutostartOnBookOpen)
+            assertFalse(settings.statisticsAutostartOnPageTurn)
             assertEquals(0, settings.statisticsResetMinutes)
             assertFalse(settings.showStatisticsToggle)
             assertFalse(settings.showReadingSpeed)
@@ -112,6 +120,80 @@ class ReaderSettingsRepositoryTest {
             assertFalse(settings.keepScreenOnWhileReading)
             assertFalse(settings.lockCurrentOrientation)
             assertFalse(settings.openLastReadBookOnLaunch)
+        }
+    }
+
+    @Test
+    fun legacyDataStoreAutostartModesMigrateWithoutChangingBehavior() = runBlocking {
+        val cases = listOf(
+            null to (false to false),
+            "Off" to (false to false),
+            "On" to (true to false),
+            "Page Turn" to (false to true),
+            "Unexpected" to (false to false),
+        )
+
+        cases.forEachIndexed { index, (rawValue, expected) ->
+            repository(fileName = "reader-settings-$index.preferences_pb").use { repository ->
+                repository.editPreferences {
+                    this[booleanPreferencesKey("readerSettingsMigratedFromSharedPreferences")] = true
+                    rawValue?.let { this[stringPreferencesKey("statisticsAutostartMode")] = it }
+                }
+
+                val migrated = repository.settings.first()
+                val stored = repository.preferences()
+
+                assertEquals(expected.first, migrated.statisticsAutostartOnBookOpen)
+                assertEquals(expected.second, migrated.statisticsAutostartOnPageTurn)
+                assertEquals(expected.first, stored[booleanPreferencesKey("statisticsAutostartOnBookOpen")])
+                assertEquals(expected.second, stored[booleanPreferencesKey("statisticsAutostartOnPageTurn")])
+                assertNull(stored[stringPreferencesKey("statisticsAutostartMode")])
+            }
+        }
+    }
+
+    @Test
+    fun existingAutostartTriggerWinsWhileMissingTriggerMigratesFromLegacyMode() = runBlocking {
+        repository().use { repository ->
+            repository.editPreferences {
+                this[booleanPreferencesKey("readerSettingsMigratedFromSharedPreferences")] = true
+                this[stringPreferencesKey("statisticsAutostartMode")] = "Page Turn"
+                this[booleanPreferencesKey("statisticsAutostartOnBookOpen")] = true
+            }
+
+            val migrated = repository.settings.first()
+            val stored = repository.preferences()
+
+            assertTrue(migrated.statisticsAutostartOnBookOpen)
+            assertTrue(migrated.statisticsAutostartOnPageTurn)
+            assertEquals(true, stored[booleanPreferencesKey("statisticsAutostartOnBookOpen")])
+            assertEquals(true, stored[booleanPreferencesKey("statisticsAutostartOnPageTurn")])
+            assertNull(stored[stringPreferencesKey("statisticsAutostartMode")])
+        }
+    }
+
+    @Test
+    fun persistsEveryStatisticsAutostartTriggerCombination() = runBlocking {
+        repository().use { repository ->
+            val combinations = listOf(
+                false to false,
+                true to false,
+                false to true,
+                true to true,
+            )
+
+            combinations.forEach { (onBookOpen, onPageTurn) ->
+                repository.update {
+                    it.copy(
+                        statisticsAutostartOnBookOpen = onBookOpen,
+                        statisticsAutostartOnPageTurn = onPageTurn,
+                    )
+                }
+
+                val saved = repository.settings.first()
+                assertEquals(onBookOpen, saved.statisticsAutostartOnBookOpen)
+                assertEquals(onPageTurn, saved.statisticsAutostartOnPageTurn)
+            }
         }
     }
 
@@ -209,7 +291,8 @@ class ReaderSettingsRepositoryTest {
                     blurImages = true,
                     enableStatistics = true,
                     showStatisticsTab = false,
-                    statisticsAutostartMode = StatisticsAutostartMode.PageTurn,
+                    statisticsAutostartOnBookOpen = true,
+                    statisticsAutostartOnPageTurn = true,
                     showStatisticsToggle = true,
                     showReadingSpeed = true,
                     showReadingTime = true,
@@ -277,7 +360,8 @@ class ReaderSettingsRepositoryTest {
             assertTrue(saved.blurImages)
             assertTrue(saved.enableStatistics)
             assertFalse(saved.showStatisticsTab)
-            assertEquals(StatisticsAutostartMode.PageTurn, saved.statisticsAutostartMode)
+            assertTrue(saved.statisticsAutostartOnBookOpen)
+            assertTrue(saved.statisticsAutostartOnPageTurn)
             assertTrue(saved.showStatisticsToggle)
             assertTrue(saved.showReadingSpeed)
             assertTrue(saved.showReadingTime)
@@ -434,11 +518,12 @@ class ReaderSettingsRepositoryTest {
         legacySource: ReaderSettingsLegacySource? = null,
         profileRepository: ProfileRepository? = null,
         ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
+        fileName: String = "reader-settings.preferences_pb",
     ): RepositoryHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
         val dataStore = PreferenceDataStoreFactory.create(
             scope = scope,
-            produceFile = { tempFolder.newFile("reader-settings.preferences_pb") },
+            produceFile = { tempFolder.newFile(fileName) },
         )
         return RepositoryHandle(
             repository = ReaderSettingsRepository(
@@ -447,12 +532,14 @@ class ReaderSettingsRepositoryTest {
                 profileRepository = profileRepository,
                 ioDispatcher = ioDispatcher,
             ),
+            dataStore = dataStore,
             scope = scope,
         )
     }
 
     private class RepositoryHandle(
         private val repository: ReaderSettingsRepository,
+        private val dataStore: DataStore<Preferences>,
         private val scope: CoroutineScope,
     ) : AutoCloseable {
         val settings: Flow<ReaderSettings>
@@ -461,6 +548,12 @@ class ReaderSettingsRepositoryTest {
         suspend fun update(transform: (ReaderSettings) -> ReaderSettings) {
             repository.update(transform)
         }
+
+        suspend fun editPreferences(transform: suspend MutablePreferences.() -> Unit) {
+            dataStore.edit { preferences -> preferences.transform() }
+        }
+
+        suspend fun preferences(): Preferences = dataStore.data.first()
 
         override fun close() {
             scope.cancel()

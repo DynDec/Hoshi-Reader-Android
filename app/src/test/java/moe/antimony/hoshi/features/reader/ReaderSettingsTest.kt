@@ -45,7 +45,8 @@ class ReaderSettingsTest {
         assertFalse(settings.blurImages)
         assertFalse(settings.enableStatistics)
         assertTrue(settings.showStatisticsTab)
-        assertEquals(StatisticsAutostartMode.Off, settings.statisticsAutostartMode)
+        assertFalse(settings.statisticsAutostartOnBookOpen)
+        assertFalse(settings.statisticsAutostartOnPageTurn)
         assertFalse(settings.showStatisticsToggle)
         assertFalse(settings.showReadingSpeed)
         assertFalse(settings.showReadingTime)
@@ -76,10 +77,21 @@ class ReaderSettingsTest {
     }
 
     @Test
-    fun statisticsAutostartModesUseIosRawLabels() {
-        assertEquals("Off", StatisticsAutostartMode.Off.rawValue)
-        assertEquals("Page Turn", StatisticsAutostartMode.PageTurn.rawValue)
-        assertEquals("On", StatisticsAutostartMode.On.rawValue)
+    fun legacyStatisticsAutostartModesMapToIndependentTriggers() {
+        val cases = listOf(
+            null to (false to false),
+            "Off" to (false to false),
+            "On" to (true to false),
+            "Page Turn" to (false to true),
+            "Unexpected" to (false to false),
+        )
+
+        cases.forEach { (rawValue, expected) ->
+            val migrated = migrateLegacyStatisticsAutostart(rawValue)
+
+            assertEquals(expected.first, migrated.onBookOpen)
+            assertEquals(expected.second, migrated.onPageTurn)
+        }
     }
 
     @Test

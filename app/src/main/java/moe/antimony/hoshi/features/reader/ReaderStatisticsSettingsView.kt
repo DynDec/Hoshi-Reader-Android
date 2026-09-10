@@ -62,7 +62,6 @@ fun ReaderStatisticsSettingsView(
 ) {
     val appContainer = LocalHoshiUiDependencies.current
     val syncSettings = appContainer.syncSettingsRepository.settings.collectAsLoadedSettings()
-    var autostartMenuExpanded by remember { mutableStateOf(false) }
     var syncModeMenuExpanded by remember { mutableStateOf(false) }
     var showResetTimePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -136,27 +135,31 @@ fun ReaderStatisticsSettingsView(
                         StatisticsSettingsDivider()
                         ListItem(
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            headlineContent = { Text(stringResource(R.string.reader_statistics_autostart)) },
+                            headlineContent = {
+                                Text(stringResource(R.string.reader_statistics_autostart_on_book_open))
+                            },
                             trailingContent = {
-                                Box {
-                                    TextButton(onClick = { autostartMenuExpanded = true }) {
-                                        Text(stringResource(settings.statisticsAutostartMode.labelRes))
-                                    }
-                                    DropdownMenu(
-                                        expanded = autostartMenuExpanded,
-                                        onDismissRequest = { autostartMenuExpanded = false },
-                                    ) {
-                                        StatisticsAutostartMode.entries.forEach { mode ->
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(mode.labelRes)) },
-                                                onClick = {
-                                                    autostartMenuExpanded = false
-                                                    onSettingsChange(settings.copy(statisticsAutostartMode = mode))
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
+                                Switch(
+                                    checked = settings.statisticsAutostartOnBookOpen,
+                                    onCheckedChange = {
+                                        onSettingsChange(settings.copy(statisticsAutostartOnBookOpen = it))
+                                    },
+                                )
+                            },
+                        )
+                        StatisticsSettingsDivider()
+                        ListItem(
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            headlineContent = {
+                                Text(stringResource(R.string.reader_statistics_autostart_on_page_turn))
+                            },
+                            trailingContent = {
+                                Switch(
+                                    checked = settings.statisticsAutostartOnPageTurn,
+                                    onCheckedChange = {
+                                        onSettingsChange(settings.copy(statisticsAutostartOnPageTurn = it))
+                                    },
+                                )
                             },
                         )
                         StatisticsSettingsDivider()

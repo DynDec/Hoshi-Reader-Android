@@ -370,11 +370,9 @@
     <string name="reader_statistics_reading_speed">阅读速度：</string>
     <string name="reader_statistics_reading_time">阅读时间：</string>
     <string name="reader_statistics_show_tab">显示统计标签页</string>
-    <string name="reader_statistics_autostart">自动开始</string>
+    <string name="reader_statistics_autostart_on_book_open">打开书籍时自动开始</string>
+    <string name="reader_statistics_autostart_on_page_turn">翻页时自动开始</string>
     <string name="reader_statistics_reset_time">重置时间</string>
-    <string name="reader_statistics_autostart_off" comment="Reader statistics autostart setting value; intentionally matches other off labels.">关闭</string>
-    <string name="reader_statistics_autostart_page_turn">翻页时</string>
-    <string name="reader_statistics_autostart_on">开启</string>
     <string name="reader_statistics_sync_behaviour">同步行为</string>
     <string name="reader_statistics_sync_mode_merge">合并</string>
     <string name="reader_statistics_sync_mode_replace">替换</string>
