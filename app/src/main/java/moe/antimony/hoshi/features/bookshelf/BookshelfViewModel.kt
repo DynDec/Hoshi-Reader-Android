@@ -855,8 +855,8 @@ private fun PendingBookImport.failureDisplayName(): String =
 
 private fun SyncResult.bookshelfMessage(): UiText? =
     when (this) {
-        is SyncResult.Exported -> UiText.Resource(R.string.bookshelf_synced_to_ttu_format, title, characterCount)
-        is SyncResult.Imported -> UiText.Resource(R.string.bookshelf_synced_from_ttu_format, title, characterCount)
+        is SyncResult.Exported -> UiText.Resource(R.string.bookshelf_exported_to_ttu_format, title)
+        is SyncResult.Imported -> UiText.Resource(R.string.bookshelf_imported_from_ttu_format, title)
         is SyncResult.Synced -> UiText.Resource(R.string.bookshelf_already_synced_format, title)
         SyncResult.Skipped -> null
     }

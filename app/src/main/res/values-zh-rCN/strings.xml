@@ -159,8 +159,8 @@
     <string name="bookshelf_remote_book_import_failed">无法从 Google Drive 导入书籍。</string>
     <string name="bookshelf_remote_book_delete_failed">无法从 Google Drive 删除书籍。</string>
     <string name="bookshelf_syncing">正在同步...</string>
-    <string name="bookshelf_synced_to_ttu_format">已将 %1$s 同步到 ッツ\n%2$d 个字符</string>
-    <string name="bookshelf_synced_from_ttu_format">已从 ッツ 同步 %1$s\n%2$d 个字符</string>
+    <string name="bookshelf_exported_to_ttu_format">已将 %1$s 导出到 ッツ。</string>
+    <string name="bookshelf_imported_from_ttu_format">已从 ッツ 导入 %1$s。</string>
     <string name="bookshelf_already_synced_format">%1$s 已同步</string>
     <string name="bookshelf_delete_book_title_format" comment="Delete confirmation, intentionally matching imported-font and profile delete confirmation formats.">删除“%1$s”？</string>
     <string name="bookshelf_delete_remote_book">从 Google Drive 删除</string>

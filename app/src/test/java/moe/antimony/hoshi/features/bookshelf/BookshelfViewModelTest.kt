@@ -1019,6 +1019,50 @@ class BookshelfViewModelTest {
     }
 
     @Test
+    fun syncBookPublishesImportCompletionWithoutCharacterCount() {
+        val entry = bookEntry("book-a")
+        val viewModel = BookshelfViewModel(
+            FakeBookshelfRepository(
+                entries = listOf(entry),
+                syncResult = SyncResult.Imported("book-a", characterCount = 123),
+            ),
+            testScope(),
+        )
+
+        viewModel.syncBook(
+            entry = entry,
+            direction = SyncDirection.ImportFromTtu,
+            syncStats = false,
+            statsSyncMode = StatisticsSyncMode.Merge,
+            syncAudioBook = false,
+        )
+
+        assertEquals("Imported book-a from ッツ.", viewModel.uiState.value.statusMessage.testString())
+    }
+
+    @Test
+    fun syncBookPublishesExportCompletionWithoutCharacterCount() {
+        val entry = bookEntry("book-a")
+        val viewModel = BookshelfViewModel(
+            FakeBookshelfRepository(
+                entries = listOf(entry),
+                syncResult = SyncResult.Exported("book-a", characterCount = 456),
+            ),
+            testScope(),
+        )
+
+        viewModel.syncBook(
+            entry = entry,
+            direction = SyncDirection.ExportToTtu,
+            syncStats = false,
+            statsSyncMode = StatisticsSyncMode.Merge,
+            syncAudioBook = false,
+        )
+
+        assertEquals("Exported book-a to ッツ.", viewModel.uiState.value.statusMessage.testString())
+    }
+
+    @Test
     fun manualSyncKeepsLoadedShelfMountedWithoutReloadingBooksLikeIos() {
         val entry = bookEntry("book-a")
         val continueSync = CompletableDeferred<Unit>()
@@ -1383,6 +1427,8 @@ private fun UiText?.testString(): String? =
             R.string.bookshelf_scanning_folder -> "Scanning folder..."
             R.string.bookshelf_no_epub_files_found -> "No EPUB files found."
             R.string.bookshelf_syncing -> "Syncing..."
+            R.string.bookshelf_exported_to_ttu_format -> "Exported ${args[0]} to ッツ."
+            R.string.bookshelf_imported_from_ttu_format -> "Imported ${args[0]} from ッツ."
             R.string.bookshelf_already_synced_format -> "${args[0]} is already synced"
             R.string.bookshelf_exported_epub_format -> "Exported ${args[0]}."
             R.string.bookshelf_remote_books_load_failed -> "Failed to fetch books from Google Drive."

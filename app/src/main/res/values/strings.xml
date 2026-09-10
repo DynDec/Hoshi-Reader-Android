@@ -161,8 +161,8 @@
     <string name="bookshelf_remote_book_import_failed">Failed to import book from Google Drive.</string>
     <string name="bookshelf_remote_book_delete_failed">Failed to delete book from Google Drive.</string>
     <string name="bookshelf_syncing">Syncing...</string>
-    <string name="bookshelf_synced_to_ttu_format">Synced %1$s to ッツ\n%2$d characters</string>
-    <string name="bookshelf_synced_from_ttu_format">Synced %1$s from ッツ\n%2$d characters</string>
+    <string name="bookshelf_exported_to_ttu_format">Exported %1$s to ッツ.</string>
+    <string name="bookshelf_imported_from_ttu_format">Imported %1$s from ッツ.</string>
     <string name="bookshelf_already_synced_format">%1$s is already synced</string>
     <string name="bookshelf_delete_book_title_format" comment="Delete confirmation, intentionally matching imported-font and profile delete confirmation formats.">Delete \"%1$s\"?</string>
     <string name="bookshelf_delete_remote_book">Delete from Google Drive</string>
