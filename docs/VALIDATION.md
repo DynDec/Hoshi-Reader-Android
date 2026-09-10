@@ -381,10 +381,17 @@ Validate relevant sync/update/Sasayaki changes with:
   prompts, user-triggered install, same-version APK cleanup, and split APK
   updates on arm64-v8a and armeabi-v7a targets.
 - Sasayaki defaults, reader toggle visibility, auto-scroll, auto-pause on
-  lookup, subtitle cue matching, lookup taps on active cue text in normal and
-  E-ink VN rendering, skip controls across reader/sheet/system media controls,
+  lookup, subtitle cue matching that starts immediately after selecting a valid
+  SRT without a separate Match action, lookup taps on active cue text in normal
+  and E-ink VN rendering, skip controls across reader/sheet/system media controls,
   volume-key seek, safe-area playback controls, and e-ink cue/lookup overlays
-  when those areas change.
+  when those areas change. For subtitle matcher changes, include a
+  combined-volume EPUB with separate per-volume SRT files: both volumes should
+  align automatically, repeated text in the other volume must not capture the
+  starting cue sequence, unique cues immediately before the selected starting
+  sequence should be recovered while repeated prefix text remains unmatched,
+  and a large local text gap should recover only from a coherent later cue
+  sequence.
 - Sasayaki linked and copied Ogg Opus playback with `testdata/opus_test.opus`.
   Confirm its title and artist metadata, all 22 `CHAPTERnnn` chapter entries,
   current-chapter centering without first flashing the default list position
