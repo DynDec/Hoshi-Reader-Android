@@ -44,6 +44,7 @@ internal const val ReaderBottomSafeAreaDefaultDp = 18
 internal const val ReaderBottomSafeAreaMinDp = ReaderBottomSafeAreaDefaultDp
 internal const val ReaderBottomSafeAreaMaxDp = 72
 internal const val ReaderBottomSafeAreaStepDp = 2
+internal const val ReaderBorderlessSafeAreaDp = 8
 internal const val ReaderPageSwipeThresholdDefaultPx = 72
 internal const val ReaderPageSwipeThresholdMinPx = 0
 internal const val ReaderPageSwipeThresholdMaxPx = 360
@@ -164,10 +165,10 @@ data class ReaderSettings(
         get() = if (removeVerticalBorders) 0 else verticalPadding
 
     val effectiveTopSafeAreaDp: Int
-        get() = if (removeVerticalBorders) 0 else topSafeAreaDp.coerceReaderTopSafeAreaDp()
+        get() = if (removeVerticalBorders) ReaderBorderlessSafeAreaDp else topSafeAreaDp.coerceReaderTopSafeAreaDp()
 
     val effectiveBottomSafeAreaDp: Int
-        get() = if (removeVerticalBorders) 0 else bottomSafeAreaDp.coerceReaderBottomSafeAreaDp()
+        get() = if (removeVerticalBorders) ReaderBorderlessSafeAreaDp else bottomSafeAreaDp.coerceReaderBottomSafeAreaDp()
 
     val imageHeightViewportRatio: Double
         get() = (100 - effectiveVerticalPadding).coerceAtLeast(1) / 100.0

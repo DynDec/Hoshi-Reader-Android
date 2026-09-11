@@ -208,7 +208,7 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun removingVerticalBordersUsesZeroReaderInsetsAndHidesBorderChrome() {
+    fun removingVerticalBordersUsesEightDpReaderInsetsAndHidesBorderChrome() {
         val compact = ReaderSettings(
             removeVerticalBorders = true,
             topSafeAreaDp = 40,
@@ -216,11 +216,11 @@ class ReaderChromeTest {
         )
 
         assertEquals(
-            ReaderContentChromeInsets(topDp = 0, bottomDp = 0),
+            ReaderContentChromeInsets(topDp = 8, bottomDp = 8),
             readerContentChromeInsets(settings = compact),
         )
-        assertEquals(0, readerTopChromeMetrics(compact.effectiveTopSafeAreaDp).topSafeAreaDp)
-        assertEquals(0, readerBottomChromeMetrics(compact.effectiveBottomSafeAreaDp).bottomSafeAreaDp)
+        assertEquals(8, readerTopChromeMetrics(compact.effectiveTopSafeAreaDp).topSafeAreaDp)
+        assertEquals(8, readerBottomChromeMetrics(compact.effectiveBottomSafeAreaDp).bottomSafeAreaDp)
 
         val focusVisibility = readerChromeVisibility(
             focusMode = true,

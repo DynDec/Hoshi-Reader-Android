@@ -341,8 +341,8 @@ class ReaderSettingsRepositoryTest {
             assertEquals(40, compact.topSafeAreaDp)
             assertEquals(44, compact.bottomSafeAreaDp)
             assertEquals(0, compact.effectiveVerticalPadding)
-            assertEquals(0, compact.effectiveTopSafeAreaDp)
-            assertEquals(0, compact.effectiveBottomSafeAreaDp)
+            assertEquals(8, compact.effectiveTopSafeAreaDp)
+            assertEquals(8, compact.effectiveBottomSafeAreaDp)
 
             repository.update { it.copy(removeVerticalBorders = false) }
 
