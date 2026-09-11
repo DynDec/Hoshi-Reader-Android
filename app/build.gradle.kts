@@ -113,8 +113,8 @@ android {
         applicationId = "moe.requited.hoshi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 104040
-        versionName = "1.4.4"
+        versionCode = 104042
+        versionName = "1.4.4.2"
         releaseVersionCode?.let { versionCode = it }
         releaseVersionName?.let { versionName = it }
 
