@@ -289,7 +289,9 @@ fun readerChromeVisibility(
 ): ReaderChromeVisibility =
     ReaderChromeVisibility(
         showTitleAndProgress = !focusMode,
-        showBottomChrome = !focusMode && !removeVerticalBorders,
+        // Keep the bottom row available for the in-reader back and menu actions;
+        // border removal only suppresses the auxiliary shortcut icons.
+        showBottomChrome = !focusMode,
         showStatisticsToggle = !removeVerticalBorders && focusMode && hasStatisticsToggle,
         showSasayakiToggle = !removeVerticalBorders && focusMode && hasSasayakiToggle,
         showBackJump = !removeVerticalBorders && focusMode && hasBackJump,

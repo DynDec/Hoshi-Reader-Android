@@ -389,7 +389,6 @@ internal fun BoxScope.ReaderBottomChrome(
     metrics: ReaderBottomChromeMetrics,
     modifier: Modifier = Modifier,
 ) {
-    if (settings.removeVerticalBorders) return
     val bubbleMetrics = readerInfoBubbleMetrics()
     val progressLineHeight = with(LocalDensity.current) {
         MaterialTheme.typography.labelMedium.lineHeight.toDp()
@@ -495,7 +494,7 @@ internal fun BoxScope.ReaderBottomChrome(
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (!settings.removeVerticalBorders && settings.showReaderBackButton) {
+                if (settings.showReaderBackButton) {
                     ReaderGlassButton(colors = colors, metrics = metrics, onClick = onClose) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -506,15 +505,13 @@ internal fun BoxScope.ReaderBottomChrome(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                if (!settings.removeVerticalBorders) {
-                    ReaderGlassButton(colors = colors, metrics = metrics, onClick = onMenu) {
-                        Icon(
-                            imageVector = Icons.Rounded.Tune,
-                            contentDescription = stringResource(R.string.reader_menu),
-                            modifier = Modifier.size(metrics.secondaryIconSizeDp.dp),
-                            tint = Color(colors.buttonContent),
-                        )
-                    }
+                ReaderGlassButton(colors = colors, metrics = metrics, onClick = onMenu) {
+                    Icon(
+                        imageVector = Icons.Rounded.Tune,
+                        contentDescription = stringResource(R.string.reader_menu),
+                        modifier = Modifier.size(metrics.secondaryIconSizeDp.dp),
+                        tint = Color(colors.buttonContent),
+                    )
                 }
             }
         }

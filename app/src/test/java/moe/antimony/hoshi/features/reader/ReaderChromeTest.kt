@@ -222,7 +222,7 @@ class ReaderChromeTest {
         assertEquals(0, readerTopChromeMetrics(compact.effectiveTopSafeAreaDp).topSafeAreaDp)
         assertEquals(0, readerBottomChromeMetrics(compact.effectiveBottomSafeAreaDp).bottomSafeAreaDp)
 
-        val visibility = readerChromeVisibility(
+        val focusVisibility = readerChromeVisibility(
             focusMode = true,
             hasStatisticsToggle = true,
             hasSasayakiToggle = true,
@@ -230,11 +230,23 @@ class ReaderChromeTest {
             hasForwardJump = true,
             removeVerticalBorders = compact.removeVerticalBorders,
         )
-        assertFalse(visibility.showBottomChrome)
-        assertFalse(visibility.showStatisticsToggle)
-        assertFalse(visibility.showSasayakiToggle)
-        assertFalse(visibility.showBackJump)
-        assertFalse(visibility.showForwardJump)
+        assertFalse(focusVisibility.showBottomChrome)
+        assertFalse(focusVisibility.showStatisticsToggle)
+        assertFalse(focusVisibility.showSasayakiToggle)
+        assertFalse(focusVisibility.showBackJump)
+        assertFalse(focusVisibility.showForwardJump)
+
+        val normalVisibility = readerChromeVisibility(
+            focusMode = false,
+            hasStatisticsToggle = true,
+            hasSasayakiToggle = true,
+            hasBackJump = true,
+            hasForwardJump = true,
+            removeVerticalBorders = compact.removeVerticalBorders,
+        )
+        // The in-reader back and menu buttons stay available in normal mode;
+        // only the auxiliary border shortcuts are suppressed.
+        assertTrue(normalVisibility.showBottomChrome)
     }
 
     @Test
