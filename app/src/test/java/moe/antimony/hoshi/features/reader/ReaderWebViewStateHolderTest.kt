@@ -558,6 +558,36 @@ class ReaderWebViewStateHolderTest {
     }
 
     @Test
+    fun removingVerticalBordersReloadsAtDisplayedPositionAndRestoresNormalSettings() {
+        val holder = stateHolder(initialIndex = 1)
+        holder.markWebViewRestored()
+        holder.recordDisplayedProgress(0.35)
+        val previousEpoch = holder.webViewRestoreEpoch
+        val configured = ReaderSettings(
+            verticalPadding = 12,
+            topSafeAreaDp = 40,
+            bottomSafeAreaDp = 44,
+        )
+
+        holder.syncSettings(configured.copy(removeVerticalBorders = true))
+
+        assertEquals(ReaderChapterPosition(index = 1, progress = 0.35), holder.readerPosition.loadPosition)
+        assertTrue(holder.isWebViewRestoring)
+        assertEquals(previousEpoch + 1, holder.webViewRestoreEpoch)
+        assertEquals(0, holder.effectiveSettings.effectiveVerticalPadding)
+        assertEquals(0, holder.effectiveSettings.effectiveTopSafeAreaDp)
+        assertEquals(0, holder.effectiveSettings.effectiveBottomSafeAreaDp)
+
+        holder.markWebViewRestored()
+        holder.syncSettings(configured.copy(removeVerticalBorders = false))
+
+        assertEquals(ReaderChapterPosition(index = 1, progress = 0.35), holder.readerPosition.loadPosition)
+        assertEquals(12, holder.effectiveSettings.effectiveVerticalPadding)
+        assertEquals(40, holder.effectiveSettings.effectiveTopSafeAreaDp)
+        assertEquals(44, holder.effectiveSettings.effectiveBottomSafeAreaDp)
+    }
+
+    @Test
     fun syncedChromeOnlySettingsDoNotReloadWebView() {
         val holder = stateHolder(initialIndex = 1)
         holder.markWebViewRestored()

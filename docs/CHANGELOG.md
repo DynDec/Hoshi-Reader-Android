@@ -8,6 +8,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Add a Reader Appearance Layout toggle to remove vertical borders, zeroing the
+  reader's effective vertical padding and safe areas while hiding border
+  shortcuts and restoring the user's normal layout when disabled.
 - Start fullscreen Reader image copy, save, share, and close controls hidden;
   reveal them on a single content tap, then continue toggling their visibility
   with fade transitions on subsequent taps.

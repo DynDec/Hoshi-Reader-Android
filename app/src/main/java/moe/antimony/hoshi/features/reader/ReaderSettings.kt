@@ -107,6 +107,7 @@ data class ReaderSettings(
     val pageSwipeThresholdPx: Int = ReaderPageSwipeThresholdDefaultPx,
     val horizontalPadding: Int = 5,
     val verticalPadding: Int = 0,
+    val removeVerticalBorders: Boolean = false,
     val topSafeAreaDp: Int = ReaderTopSafeAreaDefaultDp,
     val bottomSafeAreaDp: Int = ReaderBottomSafeAreaDefaultDp,
     val avoidPageBreak: Boolean = false,
@@ -155,8 +156,21 @@ data class ReaderSettings(
     val imageWidthViewportRatio: Double
         get() = (100 - horizontalPadding).coerceAtLeast(1) / 100.0
 
+    /**
+     * The configured padding is retained while the border-removal mode is active so
+     * disabling it restores the user's normal layout immediately.
+     */
+    val effectiveVerticalPadding: Int
+        get() = if (removeVerticalBorders) 0 else verticalPadding
+
+    val effectiveTopSafeAreaDp: Int
+        get() = if (removeVerticalBorders) 0 else topSafeAreaDp.coerceReaderTopSafeAreaDp()
+
+    val effectiveBottomSafeAreaDp: Int
+        get() = if (removeVerticalBorders) 0 else bottomSafeAreaDp.coerceReaderBottomSafeAreaDp()
+
     val imageHeightViewportRatio: Double
-        get() = (100 - verticalPadding).coerceAtLeast(1) / 100.0
+        get() = (100 - effectiveVerticalPadding).coerceAtLeast(1) / 100.0
 
     val continuousViewportHorizontalPaddingRatio: Double
         get() = if (continuousMode && verticalWriting) {
@@ -167,7 +181,7 @@ data class ReaderSettings(
 
     val continuousViewportVerticalPaddingRatio: Double
         get() = if (continuousMode && !verticalWriting) {
-            verticalPadding.coerceAtLeast(0) / 200.0
+            effectiveVerticalPadding.coerceAtLeast(0) / 200.0
         } else {
             0.0
         }
@@ -175,13 +189,13 @@ data class ReaderSettings(
     val columnGapCss: String
         get() {
             if (verticalWriting) {
-                return "calc(var(--hoshi-vertical-padding-gap, ${verticalPadding}vh) + ${bottomOverlapPx}px)"
+                return "calc(var(--hoshi-vertical-padding-gap, ${effectiveVerticalPadding}vh) + ${bottomOverlapPx}px)"
             }
             return "${horizontalPadding}vw"
         }
 
     val verticalPaddingBlockCss: String
-        get() = "var(--hoshi-vertical-padding-block, ${(verticalPadding / 2.0).cssNumber()}vh)"
+        get() = "var(--hoshi-vertical-padding-block, ${(effectiveVerticalPadding / 2.0).cssNumber()}vh)"
 
     val pagePaddingCss: String
         get() = "$verticalPaddingBlockCss ${(horizontalPadding / 2.0).cssNumber()}vw"
@@ -404,6 +418,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
         ).coerceReaderPageSwipeThresholdPx(),
         horizontalPadding = preferences.getInt("layoutHorizontalPadding", 5),
         verticalPadding = preferences.getInt("layoutVerticalPadding", 0),
+        removeVerticalBorders = preferences.getBoolean("removeVerticalBorders", false),
         topSafeAreaDp = preferences.getInt("readerTopSafeAreaDp", ReaderTopSafeAreaDefaultDp)
             .coerceReaderTopSafeAreaDp(),
         bottomSafeAreaDp = preferences.getInt("readerBottomSafeAreaDp", ReaderBottomSafeAreaDefaultDp)
@@ -480,6 +495,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .putInt("pageSwipeThresholdPx", settings.pageSwipeThresholdPx.coerceReaderPageSwipeThresholdPx())
             .putInt("layoutHorizontalPadding", settings.horizontalPadding)
             .putInt("layoutVerticalPadding", settings.verticalPadding)
+            .putBoolean("removeVerticalBorders", settings.removeVerticalBorders)
             .putInt("readerTopSafeAreaDp", settings.topSafeAreaDp.coerceReaderTopSafeAreaDp())
             .putInt("readerBottomSafeAreaDp", settings.bottomSafeAreaDp.coerceReaderBottomSafeAreaDp())
             .putBoolean("avoidPageBreak", settings.avoidPageBreak)
@@ -637,6 +653,7 @@ class ReaderSettingsRepository(
             ).coerceReaderPageSwipeThresholdPx(),
             horizontalPadding = this[KEY_HORIZONTAL_PADDING] ?: 5,
             verticalPadding = this[KEY_VERTICAL_PADDING] ?: 0,
+            removeVerticalBorders = this[KEY_REMOVE_VERTICAL_BORDERS] ?: false,
             topSafeAreaDp = (this[KEY_TOP_SAFE_AREA_DP] ?: ReaderTopSafeAreaDefaultDp)
                 .coerceReaderTopSafeAreaDp(),
             bottomSafeAreaDp = (this[KEY_BOTTOM_SAFE_AREA_DP] ?: ReaderBottomSafeAreaDefaultDp)
@@ -715,6 +732,7 @@ class ReaderSettingsRepository(
         this[KEY_PAGE_SWIPE_THRESHOLD_PX] = settings.pageSwipeThresholdPx.coerceReaderPageSwipeThresholdPx()
         this[KEY_HORIZONTAL_PADDING] = settings.horizontalPadding
         this[KEY_VERTICAL_PADDING] = settings.verticalPadding
+        this[KEY_REMOVE_VERTICAL_BORDERS] = settings.removeVerticalBorders
         this[KEY_TOP_SAFE_AREA_DP] = settings.topSafeAreaDp.coerceReaderTopSafeAreaDp()
         this[KEY_BOTTOM_SAFE_AREA_DP] = settings.bottomSafeAreaDp.coerceReaderBottomSafeAreaDp()
         this[KEY_AVOID_PAGE_BREAK] = settings.avoidPageBreak
@@ -841,6 +859,7 @@ class ReaderSettingsRepository(
         private val KEY_PAGE_SWIPE_THRESHOLD_PX = intPreferencesKey("pageSwipeThresholdPx")
         private val KEY_HORIZONTAL_PADDING = intPreferencesKey("layoutHorizontalPadding")
         private val KEY_VERTICAL_PADDING = intPreferencesKey("layoutVerticalPadding")
+        private val KEY_REMOVE_VERTICAL_BORDERS = booleanPreferencesKey("removeVerticalBorders")
         private val KEY_TOP_SAFE_AREA_DP = intPreferencesKey("readerTopSafeAreaDp")
         private val KEY_BOTTOM_SAFE_AREA_DP = intPreferencesKey("readerBottomSafeAreaDp")
         private val KEY_AVOID_PAGE_BREAK = booleanPreferencesKey("avoidPageBreak")
@@ -917,6 +936,7 @@ private data class ProfileReaderAppearanceSettings(
     val pageSwipeThresholdPx: Int = ReaderPageSwipeThresholdDefaultPx,
     val horizontalPadding: Int = 5,
     val verticalPadding: Int = 0,
+    val removeVerticalBorders: Boolean = false,
     val topSafeAreaDp: Int = ReaderTopSafeAreaDefaultDp,
     val bottomSafeAreaDp: Int = ReaderBottomSafeAreaDefaultDp,
     val avoidPageBreak: Boolean = false,
@@ -978,6 +998,7 @@ private fun ReaderSettings.toProfileAppearanceSettings(): ProfileReaderAppearanc
         pageSwipeThresholdPx = pageSwipeThresholdPx.coerceReaderPageSwipeThresholdPx(),
         horizontalPadding = horizontalPadding,
         verticalPadding = verticalPadding,
+        removeVerticalBorders = removeVerticalBorders,
         topSafeAreaDp = topSafeAreaDp.coerceReaderTopSafeAreaDp(),
         bottomSafeAreaDp = bottomSafeAreaDp.coerceReaderBottomSafeAreaDp(),
         avoidPageBreak = avoidPageBreak,
@@ -1042,6 +1063,7 @@ private fun ReaderSettings.withProfileAppearance(appearance: ProfileReaderAppear
         pageSwipeThresholdPx = appearance.pageSwipeThresholdPx.coerceReaderPageSwipeThresholdPx(),
         horizontalPadding = appearance.horizontalPadding,
         verticalPadding = appearance.verticalPadding,
+        removeVerticalBorders = appearance.removeVerticalBorders,
         topSafeAreaDp = appearance.topSafeAreaDp.coerceReaderTopSafeAreaDp(),
         bottomSafeAreaDp = appearance.bottomSafeAreaDp.coerceReaderBottomSafeAreaDp(),
         avoidPageBreak = appearance.avoidPageBreak,

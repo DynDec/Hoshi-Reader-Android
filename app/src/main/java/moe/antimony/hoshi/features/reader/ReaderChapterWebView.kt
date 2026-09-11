@@ -934,8 +934,8 @@ internal fun readerViewportCssLayout(
         pageHeightPx = pageHeight,
         visibleHeightPx = height,
         pageWidthPx = width,
-        verticalPaddingBlockPx = height * (settings.verticalPadding / 200.0),
-        verticalPaddingGapPx = height * (settings.verticalPadding / 100.0),
+        verticalPaddingBlockPx = height * (settings.effectiveVerticalPadding / 200.0),
+        verticalPaddingGapPx = height * (settings.effectiveVerticalPadding / 100.0),
         imageMaxWidthPx = imageMaxWidth,
         imageMaxHeightPx = max(1, floor(height * generatedLayout.imageHeightViewportRatio).toInt()),
     )

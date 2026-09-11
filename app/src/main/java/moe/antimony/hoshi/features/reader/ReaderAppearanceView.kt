@@ -584,6 +584,12 @@ private fun ReaderAppearanceContent(
                         palette = palette,
                     )
                     AppearanceDivider(palette)
+                    SwitchRow(
+                        label = stringResource(R.string.reader_appearance_remove_vertical_borders),
+                        checked = settings.removeVerticalBorders,
+                        onCheckedChange = { onSettingsChange(settings.copy(removeVerticalBorders = it)) },
+                    )
+                    AppearanceDivider(palette)
                     SliderRow(
                         label = stringResource(R.string.reader_appearance_top_safe_area),
                         value = "${settings.topSafeAreaDp.coerceReaderTopSafeAreaDp()}dp",

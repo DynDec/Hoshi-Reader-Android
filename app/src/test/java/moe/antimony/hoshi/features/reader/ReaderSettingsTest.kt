@@ -72,6 +72,27 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun removingVerticalBordersUsesZeroEffectiveInsetsAndRestoresConfiguredValues() {
+        val configured = ReaderSettings(
+            verticalPadding = 12,
+            topSafeAreaDp = 40,
+            bottomSafeAreaDp = 46,
+        )
+
+        val compact = configured.copy(removeVerticalBorders = true)
+
+        assertEquals(12, compact.verticalPadding)
+        assertEquals(40, compact.topSafeAreaDp)
+        assertEquals(46, compact.bottomSafeAreaDp)
+        assertEquals(0, compact.effectiveVerticalPadding)
+        assertEquals(0, compact.effectiveTopSafeAreaDp)
+        assertEquals(0, compact.effectiveBottomSafeAreaDp)
+        assertEquals(12, compact.copy(removeVerticalBorders = false).effectiveVerticalPadding)
+        assertEquals(40, compact.copy(removeVerticalBorders = false).effectiveTopSafeAreaDp)
+        assertEquals(46, compact.copy(removeVerticalBorders = false).effectiveBottomSafeAreaDp)
+    }
+
+    @Test
     fun pageSwipeThresholdKeepsLegacyDefaultAndAllowsDisabledValue() {
         assertEquals(0, (-1).coerceReaderPageSwipeThresholdPx())
         assertEquals(0, 0.coerceReaderPageSwipeThresholdPx())

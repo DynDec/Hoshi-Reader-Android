@@ -449,6 +449,7 @@
     <string name="reader_appearance_page_swipe_disabled" comment="Paginated and VN Reader swipe-threshold value; intentionally matches other off labels.">Off</string>
     <string name="reader_appearance_horizontal_padding">Horizontal Padding</string>
     <string name="reader_appearance_vertical_padding">Vertical Padding</string>
+    <string name="reader_appearance_remove_vertical_borders">Remove Vertical Borders</string>
     <string name="reader_appearance_top_safe_area">Top Safe Area</string>
     <string name="reader_appearance_bottom_safe_area">Bottom Safe Area</string>
     <string name="reader_appearance_avoid_page_break">Avoid Page Break</string>

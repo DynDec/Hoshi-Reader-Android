@@ -237,9 +237,10 @@ fun readerContentChromeInsets(
     topSystemInsetDp: Int = 0,
 ): ReaderContentChromeInsets =
     ReaderContentChromeInsets(
-        topDp = (settings?.topSafeAreaDp ?: ReaderTopSafeAreaDefaultDp).coerceReaderTopSafeAreaDp() +
-            ReaderWebViewTopPaddingDp,
-        bottomDp = (settings?.bottomSafeAreaDp ?: ReaderBottomSafeAreaDefaultDp).coerceReaderBottomSafeAreaDp(),
+        topDp = (settings?.effectiveTopSafeAreaDp ?: ReaderTopSafeAreaDefaultDp.coerceReaderTopSafeAreaDp()) +
+            if (settings?.removeVerticalBorders == true) 0 else ReaderWebViewTopPaddingDp,
+        bottomDp = settings?.effectiveBottomSafeAreaDp
+            ?: ReaderBottomSafeAreaDefaultDp.coerceReaderBottomSafeAreaDp(),
     )
 
 fun readerTopInfoOverlayPaddingDp(
@@ -252,7 +253,7 @@ fun readerTopInfoOverlayPaddingDp(
     } else {
         maxOf(
             if (topSystemInsetDp > 0) topSystemInsetDp else ReaderTopInfoFallbackPaddingDp,
-            settings.topSafeAreaDp.coerceReaderTopSafeAreaDp(),
+            settings.effectiveTopSafeAreaDp,
         )
     }
 
@@ -284,14 +285,15 @@ fun readerChromeVisibility(
     hasSasayakiToggle: Boolean,
     hasBackJump: Boolean,
     hasForwardJump: Boolean,
+    removeVerticalBorders: Boolean = false,
 ): ReaderChromeVisibility =
     ReaderChromeVisibility(
         showTitleAndProgress = !focusMode,
-        showBottomChrome = !focusMode,
-        showStatisticsToggle = focusMode && hasStatisticsToggle,
-        showSasayakiToggle = focusMode && hasSasayakiToggle,
-        showBackJump = focusMode && hasBackJump,
-        showForwardJump = focusMode && hasForwardJump,
+        showBottomChrome = !focusMode && !removeVerticalBorders,
+        showStatisticsToggle = !removeVerticalBorders && focusMode && hasStatisticsToggle,
+        showSasayakiToggle = !removeVerticalBorders && focusMode && hasSasayakiToggle,
+        showBackJump = !removeVerticalBorders && focusMode && hasBackJump,
+        showForwardJump = !removeVerticalBorders && focusMode && hasForwardJump,
     )
 
 fun readerBottomChromeMetrics(
@@ -303,7 +305,9 @@ fun readerBottomChromeMetrics(
         secondaryIconSizeDp = 28,
         horizontalPaddingDp = 22,
         bottomPaddingDp = 2,
-        bottomSafeAreaDp = bottomSafeAreaDp.coerceReaderBottomSafeAreaDp(),
+        // Zero is an intentional value for the border-removal mode; regular
+        // values continue to use the configured safe-area range and two-dp step.
+        bottomSafeAreaDp = if (bottomSafeAreaDp == 0) 0 else bottomSafeAreaDp.coerceReaderBottomSafeAreaDp(),
         menuButtonGapDp = ReaderMenuButtonGapDp,
         trailingButtonSpacingDp = 8,
         menuWidthDp = 204,
@@ -317,7 +321,9 @@ fun readerBottomChromeMetrics(
 fun readerTopChromeMetrics(
     topSafeAreaDp: Int = ReaderTopSafeAreaDefaultDp,
 ): ReaderTopChromeMetrics {
-    val safeAreaDp = topSafeAreaDp.coerceReaderTopSafeAreaDp()
+    // Zero is an intentional value for the border-removal mode; regular values
+    // continue to use the configured safe-area range and two-dp step.
+    val safeAreaDp = if (topSafeAreaDp == 0) 0 else topSafeAreaDp.coerceReaderTopSafeAreaDp()
     val iconSizeDp = readerTopQuickIconSizeDp(safeAreaDp)
     return ReaderTopChromeMetrics(
         topSafeAreaDp = safeAreaDp,
@@ -351,9 +357,10 @@ fun readerSasayakiBottomPlaybackControls(
     settings: moe.antimony.hoshi.features.sasayaki.SasayakiSettings,
     hasAudio: Boolean,
     metrics: ReaderBottomChromeMetrics,
+    removeVerticalBorders: Boolean = false,
 ): ReaderSasayakiBottomPlaybackControls =
     ReaderSasayakiBottomPlaybackControls(
-        visible = settings.enabled && settings.showReaderBottomPlaybackControls && hasAudio,
+        visible = !removeVerticalBorders && settings.enabled && settings.showReaderBottomPlaybackControls && hasAudio,
         rowHeightDp = metrics.bottomSafeAreaDp,
         buttonWidthDp = readerSasayakiBottomPlaybackButtonWidthDp(metrics.bottomSafeAreaDp),
         iconSizeDp = readerSasayakiBottomPlaybackIconSizeDp(metrics.bottomSafeAreaDp),

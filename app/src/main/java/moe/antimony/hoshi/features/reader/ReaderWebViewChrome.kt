@@ -80,10 +80,11 @@ internal fun ReaderTopInfo(
 ) {
     val progress = state.progressText(settings, progressDisplay)
     val showProgressInTopInfo = readerShowsProgressInTopBubble(settings)
-    val showBackJump = visibility.showBackJump && state.backTargetCharacter != null && onJumpBack != null
-    val showForwardJump = visibility.showForwardJump && state.forwardTargetCharacter != null && onJumpForward != null
-    val showStatisticsToggle = visibility.showStatisticsToggle && onStatisticsToggle != null
-    val showSasayakiToggle = visibility.showSasayakiToggle && onSasayakiToggle != null
+    val showBorderShortcuts = !settings.removeVerticalBorders
+    val showBackJump = showBorderShortcuts && visibility.showBackJump && state.backTargetCharacter != null && onJumpBack != null
+    val showForwardJump = showBorderShortcuts && visibility.showForwardJump && state.forwardTargetCharacter != null && onJumpForward != null
+    val showStatisticsToggle = showBorderShortcuts && visibility.showStatisticsToggle && onStatisticsToggle != null
+    val showSasayakiToggle = showBorderShortcuts && visibility.showSasayakiToggle && onSasayakiToggle != null
     if ((!visibility.showTitleAndProgress || !settings.showTitle) &&
         !showStatisticsToggle &&
         !showBackJump &&
@@ -388,6 +389,7 @@ internal fun BoxScope.ReaderBottomChrome(
     metrics: ReaderBottomChromeMetrics,
     modifier: Modifier = Modifier,
 ) {
+    if (settings.removeVerticalBorders) return
     val bubbleMetrics = readerInfoBubbleMetrics()
     val progressLineHeight = with(LocalDensity.current) {
         MaterialTheme.typography.labelMedium.lineHeight.toDp()
@@ -493,7 +495,7 @@ internal fun BoxScope.ReaderBottomChrome(
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (settings.showReaderBackButton) {
+                if (!settings.removeVerticalBorders && settings.showReaderBackButton) {
                     ReaderGlassButton(colors = colors, metrics = metrics, onClick = onClose) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -504,13 +506,15 @@ internal fun BoxScope.ReaderBottomChrome(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                ReaderGlassButton(colors = colors, metrics = metrics, onClick = onMenu) {
-                    Icon(
-                        imageVector = Icons.Rounded.Tune,
-                        contentDescription = stringResource(R.string.reader_menu),
-                        modifier = Modifier.size(metrics.secondaryIconSizeDp.dp),
-                        tint = Color(colors.buttonContent),
-                    )
+                if (!settings.removeVerticalBorders) {
+                    ReaderGlassButton(colors = colors, metrics = metrics, onClick = onMenu) {
+                        Icon(
+                            imageVector = Icons.Rounded.Tune,
+                            contentDescription = stringResource(R.string.reader_menu),
+                            modifier = Modifier.size(metrics.secondaryIconSizeDp.dp),
+                            tint = Color(colors.buttonContent),
+                        )
+                    }
                 }
             }
         }

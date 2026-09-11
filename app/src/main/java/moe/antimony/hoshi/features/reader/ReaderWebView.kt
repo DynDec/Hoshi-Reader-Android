@@ -1567,8 +1567,8 @@ fun ReaderWebView(
         }
     }
 
-    val topChromeMetrics = readerTopChromeMetrics(effectiveSettings.topSafeAreaDp)
-    val bottomChromeMetrics = readerBottomChromeMetrics(effectiveSettings.bottomSafeAreaDp)
+    val topChromeMetrics = readerTopChromeMetrics(effectiveSettings.effectiveTopSafeAreaDp)
+    val bottomChromeMetrics = readerBottomChromeMetrics(effectiveSettings.effectiveBottomSafeAreaDp)
     val currentStatusBarPadding = rememberCurrentStatusBarPadding()
     val stableStatusBarPadding = rememberStableStatusBarPadding()
     val stableNavigationBarPadding = rememberStableNavigationBarPadding()
@@ -1578,6 +1578,7 @@ fun ReaderWebView(
         settings = sasayakiSettings,
         hasAudio = sasayakiPlayer?.hasAudio == true,
         metrics = bottomChromeMetrics,
+        removeVerticalBorders = effectiveSettings.removeVerticalBorders,
     )
     val sasayakiBottomSkipButtonActions = readerSasayakiBottomSkipButtonActions(
         verticalWriting = effectiveSettings.verticalWriting,
@@ -1633,6 +1634,7 @@ fun ReaderWebView(
         hasSasayakiToggle = onSasayakiTopToggle != null,
         hasBackJump = stateHolder.backTargetPosition != null,
         hasForwardJump = stateHolder.forwardTargetPosition != null,
+        removeVerticalBorders = effectiveSettings.removeVerticalBorders,
     )
     val topInfoVisibility = chromeVisibility.copy(
         showTitleAndProgress = chromeVisibility.showTitleAndProgress &&

@@ -208,6 +208,49 @@ class ReaderChromeTest {
     }
 
     @Test
+    fun removingVerticalBordersUsesZeroReaderInsetsAndHidesBorderChrome() {
+        val compact = ReaderSettings(
+            removeVerticalBorders = true,
+            topSafeAreaDp = 40,
+            bottomSafeAreaDp = 46,
+        )
+
+        assertEquals(
+            ReaderContentChromeInsets(topDp = 0, bottomDp = 0),
+            readerContentChromeInsets(settings = compact),
+        )
+        assertEquals(0, readerTopChromeMetrics(compact.effectiveTopSafeAreaDp).topSafeAreaDp)
+        assertEquals(0, readerBottomChromeMetrics(compact.effectiveBottomSafeAreaDp).bottomSafeAreaDp)
+
+        val visibility = readerChromeVisibility(
+            focusMode = true,
+            hasStatisticsToggle = true,
+            hasSasayakiToggle = true,
+            hasBackJump = true,
+            hasForwardJump = true,
+            removeVerticalBorders = compact.removeVerticalBorders,
+        )
+        assertFalse(visibility.showBottomChrome)
+        assertFalse(visibility.showStatisticsToggle)
+        assertFalse(visibility.showSasayakiToggle)
+        assertFalse(visibility.showBackJump)
+        assertFalse(visibility.showForwardJump)
+    }
+
+    @Test
+    fun removingVerticalBordersHidesSasayakiBottomPlaybackControls() {
+        val controls = readerSasayakiBottomPlaybackControls(
+            settings = SasayakiSettings(showReaderBottomPlaybackControls = true),
+            hasAudio = true,
+            metrics = readerBottomChromeMetrics(0),
+            removeVerticalBorders = true,
+        )
+
+        assertFalse(controls.visible)
+        assertEquals(0, controls.rowHeightDp)
+    }
+
+    @Test
     fun topTitleBubbleUsesStableStatusAreaPaddingBeforeInsetsAnimateIn() {
         assertEquals(52, readerTopInfoOverlayPaddingDp(topSystemInsetDp = 0, focusMode = false))
         assertEquals(44, readerTopInfoOverlayPaddingDp(topSystemInsetDp = 44, focusMode = false))

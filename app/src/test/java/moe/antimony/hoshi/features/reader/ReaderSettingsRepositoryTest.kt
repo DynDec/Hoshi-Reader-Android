@@ -324,6 +324,40 @@ class ReaderSettingsRepositoryTest {
     }
 
     @Test
+    fun removeVerticalBordersPersistsModeWithoutOverwritingNormalInsets() = runBlocking {
+        repository().use { repository ->
+            repository.update {
+                it.copy(
+                    verticalPadding = 6,
+                    topSafeAreaDp = 40,
+                    bottomSafeAreaDp = 44,
+                    removeVerticalBorders = true,
+                )
+            }
+
+            val compact = repository.settings.first()
+            assertTrue(compact.removeVerticalBorders)
+            assertEquals(6, compact.verticalPadding)
+            assertEquals(40, compact.topSafeAreaDp)
+            assertEquals(44, compact.bottomSafeAreaDp)
+            assertEquals(0, compact.effectiveVerticalPadding)
+            assertEquals(0, compact.effectiveTopSafeAreaDp)
+            assertEquals(0, compact.effectiveBottomSafeAreaDp)
+
+            repository.update { it.copy(removeVerticalBorders = false) }
+
+            val restored = repository.settings.first()
+            assertFalse(restored.removeVerticalBorders)
+            assertEquals(6, restored.verticalPadding)
+            assertEquals(40, restored.topSafeAreaDp)
+            assertEquals(44, restored.bottomSafeAreaDp)
+            assertEquals(6, restored.effectiveVerticalPadding)
+            assertEquals(40, restored.effectiveTopSafeAreaDp)
+            assertEquals(44, restored.effectiveBottomSafeAreaDp)
+        }
+    }
+
+    @Test
     fun popupScalePersistsUpToTwoPointZero() = runBlocking {
         repository().use { repository ->
             repository.update { it.copy(popupScale = 2.0) }
