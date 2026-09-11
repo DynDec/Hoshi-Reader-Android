@@ -205,7 +205,10 @@ fun readerChromeLayout(
 ): ReaderChromeLayout {
     val progress = state.progressText(settings, progressDisplay)
     val statistics = state.statisticsText(settings, progressDisplay)
-    val showProgressInBottomBar = !settings.alwaysShowProgress && !settings.showProgressTop && progress.isNotBlank()
+    val showProgressInBottomBar = !settings.removeVerticalBorders &&
+        !settings.alwaysShowProgress &&
+        !settings.showProgressTop &&
+        progress.isNotBlank()
     val showStatisticsInBottomBar = statistics.isNotBlank()
     return ReaderChromeLayout(
         showProgressInBottomBar = showProgressInBottomBar,
@@ -225,7 +228,11 @@ fun readerBottomSafeProgressText(
     settings: ReaderSettings,
     focusMode: Boolean = false,
     progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
-): String = if (settings.alwaysShowProgress) state.progressText(settings, progressDisplay) else ""
+): String = if (!settings.removeVerticalBorders && settings.alwaysShowProgress) {
+    state.progressText(settings, progressDisplay)
+} else {
+    ""
+}
 
 @Suppress("UNUSED_PARAMETER")
 fun readerContentChromeInsets(

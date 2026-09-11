@@ -532,6 +532,36 @@ class ReaderChromeTest {
     }
 
     @Test
+    fun borderlessModeHidesBottomProgressWithoutChangingProgressPreferences() {
+        val state = ReaderChromeState(
+            title = "屍人荘の殺人",
+            currentCharacter = 355,
+            totalCharacters = 169325,
+            chapterCurrentCharacter = 12,
+            chapterTotalCharacters = 40,
+        )
+        val normalSettings = ReaderSettings(
+            showProgress = true,
+            showChapterProgress = true,
+            alwaysShowProgress = true,
+        )
+        val borderlessSettings = normalSettings.copy(removeVerticalBorders = true)
+
+        assertEquals("355 / 169325 0.21% (12 / 40 30.00%)", readerBottomSafeProgressText(state, normalSettings))
+        assertEquals("", readerBottomSafeProgressText(state, borderlessSettings))
+        assertFalse(
+            readerChromeLayout(
+                state,
+                borderlessSettings.copy(alwaysShowProgress = false, showProgressTop = false),
+            ).showProgressInBottomBar,
+        )
+        assertTrue(borderlessSettings.showProgress)
+        assertTrue(borderlessSettings.showChapterProgress)
+
+        assertEquals("355 / 169325 0.21% (12 / 40 30.00%)", readerBottomSafeProgressText(state, borderlessSettings.copy(removeVerticalBorders = false)))
+    }
+
+    @Test
     fun alwaysShowProgressPersistsThroughFocusModeWithoutBottomChromeDuplicate() {
         val state = ReaderChromeState(
             title = "屍人荘の殺人",
