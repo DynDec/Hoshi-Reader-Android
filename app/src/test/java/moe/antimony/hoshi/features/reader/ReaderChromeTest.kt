@@ -251,15 +251,19 @@ class ReaderChromeTest {
 
     @Test
     fun removingVerticalBordersHidesSasayakiBottomPlaybackControls() {
+        val compact = ReaderSettings(
+            removeVerticalBorders = true,
+            bottomSafeAreaDp = 46,
+        )
         val controls = readerSasayakiBottomPlaybackControls(
             settings = SasayakiSettings(showReaderBottomPlaybackControls = true),
             hasAudio = true,
-            metrics = readerBottomChromeMetrics(0),
-            removeVerticalBorders = true,
+            metrics = readerBottomChromeMetrics(compact.effectiveBottomSafeAreaDp),
+            removeVerticalBorders = compact.removeVerticalBorders,
         )
 
         assertFalse(controls.visible)
-        assertEquals(0, controls.rowHeightDp)
+        assertEquals(8, controls.rowHeightDp)
     }
 
     @Test
