@@ -130,13 +130,20 @@ class ProfileRepository internal constructor(
         }
     }
 
-    fun activateForBook(metadata: BookMetadata): HoshiProfile = synchronized(lock) {
-        val forced = metadata.profileId?.let { storedIndex.profiles.firstOrNull { profile -> profile.id == it } }
-        val automatic = storedIndex.toProfileState(loadedProfileId = null).automaticBookProfile(metadata.bookLanguage)
-        val profile = forced ?: automatic
-        loadedProfileId = profile.id
-        publishLocked()
-        profile
+    suspend fun activateForBook(metadata: BookMetadata): HoshiProfile = withContext(ioDispatcher) {
+        synchronized(lock) {
+            val forced = metadata.profileId?.let { storedIndex.profiles.firstOrNull { profile -> profile.id == it } }
+            val automatic = storedIndex.toProfileState(loadedProfileId = null)
+                .automaticBookProfile(metadata.bookLanguage)
+            val profile = forced ?: automatic
+            if (storedIndex.globalActiveProfileId != profile.id) {
+                storedIndex = storedIndex.copy(globalActiveProfileId = profile.id).normalized()
+                persistIndexLocked()
+            }
+            loadedProfileId = profile.id
+            publishLocked()
+            profile
+        }
     }
 
     fun clearLoadedProfile() = synchronized(lock) {

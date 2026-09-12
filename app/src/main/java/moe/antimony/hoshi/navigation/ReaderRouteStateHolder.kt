@@ -107,8 +107,8 @@ internal sealed interface ReaderRouteLoadState {
     ) : ReaderRouteLoadState
 }
 
-internal fun ReaderRouteLoadState.publishProfileActivation(
-    activateForBook: (BookMetadata) -> Unit,
+internal suspend fun ReaderRouteLoadState.publishProfileActivation(
+    activateForBook: suspend (BookMetadata) -> Unit,
     clearLoadedProfile: () -> Unit,
 ) {
     when (this) {

@@ -40,6 +40,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Changed
 
+- Synchronize the active profile with the profile selected for the last
+  successfully opened book, using the book's explicit profile, language-primary
+  profile, or the existing active profile as the fallback.
 - Lower the Reader Appearance top safe area minimum from 30dp to 18dp and
   scale the top statistics toggle icon down with smaller values.
 - Identify book sync completion dialogs as imports or exports without showing a

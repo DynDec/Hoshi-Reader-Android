@@ -18,10 +18,12 @@ class ReaderRouteProfileActivationTest {
         var activatedMetadata: BookMetadata? = null
         var clearCount = 0
 
-        readerReadyState(profileId = "profile-en").publishProfileActivation(
-            activateForBook = { metadata -> activatedMetadata = metadata },
-            clearLoadedProfile = { clearCount += 1 },
-        )
+        runBlocking {
+            readerReadyState(profileId = "profile-en").publishProfileActivation(
+                activateForBook = { metadata -> activatedMetadata = metadata },
+                clearLoadedProfile = { clearCount += 1 },
+            )
+        }
 
         assertEquals("profile-en", activatedMetadata?.profileId)
         assertEquals(0, clearCount)
@@ -32,12 +34,34 @@ class ReaderRouteProfileActivationTest {
         var activatedMetadata: BookMetadata? = null
         var clearCount = 0
 
-        ReaderRouteLoadState.Error("Book not found.").publishProfileActivation(
-            activateForBook = { metadata -> activatedMetadata = metadata },
-            clearLoadedProfile = { clearCount += 1 },
-        )
+        runBlocking {
+            ReaderRouteLoadState.Error("Book not found.").publishProfileActivation(
+                activateForBook = { metadata -> activatedMetadata = metadata },
+                clearLoadedProfile = { clearCount += 1 },
+            )
+        }
 
         assertNull(activatedMetadata)
+        assertEquals(1, clearCount)
+    }
+
+    @Test
+    fun readerRenderErrorDoesNotActivateProfile() = runBlocking {
+        var activationCount = 0
+        var clearCount = 0
+
+        val renderState = ReaderRouteLoadState.Error("Failed to open EPUB.")
+            .activateProfileAndPrepareRender(
+                activateForBook = {
+                    activationCount += 1
+                    ContentLanguageProfile.Japanese
+                },
+                clearLoadedProfile = { clearCount += 1 },
+                loadReaderSettings = { ReaderSettings() },
+            )
+
+        assertEquals(ReaderRouteRenderState.Error("Failed to open EPUB."), renderState)
+        assertEquals(0, activationCount)
         assertEquals(1, clearCount)
     }
 

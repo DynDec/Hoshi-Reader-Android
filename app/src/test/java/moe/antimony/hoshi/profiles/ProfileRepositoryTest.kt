@@ -29,9 +29,10 @@ class ProfileRepositoryTest {
             repository.renameProfile(english.id, "English Mining")
             repository.setPrimaryProfile("en", english.id)
             repository.activateGlobal(english.id)
+            repository.activateForBook(bookMetadata(profileId = english.id))
             repository.deleteProfile(english.id)
 
-            assertTrue(ioDispatcher.dispatchCount >= beforeMutations + 5)
+            assertTrue(ioDispatcher.dispatchCount >= beforeMutations + 6)
         }
     }
 
@@ -79,7 +80,13 @@ class ProfileRepositoryTest {
         repository.activateForBook(bookMetadata(bookLanguage = "en-US"))
 
         assertEquals(english.id, repository.state.value.effectiveProfile.id)
+        assertEquals(english.id, repository.state.value.globalActiveProfileId)
+        assertEquals(english.id, repository.state.value.loadedProfileId)
         assertEquals(ContentLanguageProfile.English, repository.state.value.effectiveContentLanguageProfile)
+
+        repository.clearLoadedProfile()
+        assertEquals(english.id, repository.state.value.globalActiveProfileId)
+        assertEquals(english.id, repository.state.value.effectiveProfile.id)
     }
 
     @Test
@@ -183,12 +190,52 @@ class ProfileRepositoryTest {
 
         repository.activateForBook(bookMetadata(bookLanguage = "en-US"))
         assertEquals(english.id, repository.state.value.effectiveProfile.id)
+        assertEquals(english.id, repository.state.value.globalActiveProfileId)
 
         repository.activateForBook(bookMetadata(profileId = repository.state.value.defaultProfileId, bookLanguage = "en-US"))
         assertEquals(repository.state.value.defaultProfileId, repository.state.value.effectiveProfile.id)
+        assertEquals(repository.state.value.defaultProfileId, repository.state.value.globalActiveProfileId)
+
+        repository.activateForBook(bookMetadata(profileId = "deleted-profile", bookLanguage = "en-US"))
+        assertEquals(english.id, repository.state.value.effectiveProfile.id)
+        assertEquals(english.id, repository.state.value.globalActiveProfileId)
+
+        repository.activateForBook(bookMetadata(bookLanguage = null))
+        assertEquals(english.id, repository.state.value.effectiveProfile.id)
+        assertEquals(english.id, repository.state.value.globalActiveProfileId)
 
         repository.clearLoadedProfile()
         assertEquals(repository.state.value.globalActiveProfileId, repository.state.value.effectiveProfile.id)
+    }
+
+    @Test
+    fun activateForBookPersistsResolvedGlobalProfileAcrossRepositoryRestart() = runBlocking {
+        val filesDir = tempFolder.newFolder("files")
+        val repository = ProfileRepository(filesDir)
+        val english = repository.createProfile("English", "en")
+        repository.setPrimaryProfile("en", english.id)
+
+        repository.activateForBook(bookMetadata(bookLanguage = "en-US"))
+        repository.clearLoadedProfile()
+
+        val restoredRepository = ProfileRepository(filesDir)
+
+        assertEquals(english.id, restoredRepository.state.value.globalActiveProfileId)
+        assertEquals(english.id, restoredRepository.state.value.effectiveProfile.id)
+        assertEquals(null, restoredRepository.state.value.loadedProfileId)
+    }
+
+    @Test
+    fun activateForBookDoesNotRewriteIndexWhenResolvedProfileIsAlreadyGlobal() = runBlocking {
+        val filesDir = tempFolder.newFolder("files")
+        val repository = ProfileRepository(filesDir)
+        val indexFile = filesDir.resolve("Profiles/profiles.json")
+        val sentinelLastModified = 123_456_789_000L
+        assertTrue(indexFile.setLastModified(sentinelLastModified))
+
+        repository.activateForBook(bookMetadata())
+
+        assertEquals(sentinelLastModified, indexFile.lastModified())
     }
 
     private fun bookMetadata(profileId: String? = null, bookLanguage: String? = null): BookMetadata =

@@ -262,7 +262,7 @@ internal sealed interface ReaderRouteRenderState {
 }
 
 internal suspend fun ReaderRouteLoadState.activateProfileAndPrepareRender(
-    activateForBook: (BookMetadata) -> ContentLanguageProfile,
+    activateForBook: suspend (BookMetadata) -> ContentLanguageProfile,
     clearLoadedProfile: () -> Unit,
     loadReaderSettings: suspend () -> ReaderSettings,
     loadGeneration: Int = 0,

@@ -32,9 +32,12 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   metadata under app-specific files, exposes active profile state through
   `StateFlow`, and controls the effective content language for Reader,
   Dictionary search, Process Text lookup, Anki settings, and dictionary lookup
-  sessions. Profile metadata mutations are main-safe suspend APIs backed by the
-  injected IO dispatcher. Creating a profile copies existing profile-owned files
-  from the current global active profile.
+  sessions. Profile metadata mutations, including successful book-profile
+  activation, are main-safe suspend APIs backed by the injected IO dispatcher.
+  Creating a profile copies existing profile-owned files from the current
+  global active profile. The loaded-reader profile marker is transient; closing
+  Reader clears that marker without reverting the persisted global active
+  profile.
 
 ## Storage And Data
 
@@ -78,7 +81,9 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   local-date provider driven by the global minute-level statistics reset time.
 - Book metadata sidecars may include a forced profile id and parsed EPUB
   language. Reader opening resolves the effective profile from forced profile,
-  then EPUB language primary profile, then the global active profile.
+  then EPUB language primary profile, then the global active profile. After a
+  successful Reader load, the resolved profile is persisted as the global active
+  profile; a failed load does not change it.
 - Dictionary import, term/Kanji lookup, media, style extraction, deinflection,
   frequency, and complete pitch data are owned by
   `third_party/hoshidicts-kotlin-bridge`. The parent Kotlin ABI copy must remain
