@@ -181,6 +181,7 @@ window.hoshiRubyGeometry = window.hoshiRubyGeometry || {
 
 window.hoshiSelection = {
     selection: null,
+    selectionRevision: 0,
     options: {
         bridge: 'webkit',
         language: 'ja',
@@ -189,6 +190,8 @@ window.hoshiSelection = {
         rubyAwareRects: false,
         scaleRects: true,
         textProjection: null,
+        previewSelection: null,
+        clearSelectionPreview: null,
     },
     scanDelimiters: '。、！？…‥「」『』（）()【】〈〉《》〔〕｛｝{}［］[]・：；:;，,.─\n\r',
     sentenceDelimiters: '。！？.!?\n\r',
@@ -206,6 +209,34 @@ window.hoshiSelection = {
             return;
         }
         window.webkit?.messageHandlers?.textSelected?.postMessage(selection);
+    },
+
+    scheduleAfterPaint(callback) {
+        if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => {
+                if (typeof window.setTimeout === 'function') {
+                    window.setTimeout(callback, 0);
+                    return;
+                }
+                if (typeof globalThis.setTimeout === 'function') {
+                    globalThis.setTimeout(callback, 0);
+                    return;
+                }
+                callback();
+            });
+            return;
+        }
+        // Non-browser hosts (including the unit-test VM) do not have a
+        // paint boundary to wait for. Keep their bridge behavior synchronous;
+        // WebView always provides requestAnimationFrame above.
+        callback();
+    },
+
+    postTextSelectedAfterPaint(payload, selection, revision) {
+        this.scheduleAfterPaint(() => {
+            if (this.selection !== selection || this.selectionRevision !== revision) return;
+            this.postTextSelected(payload);
+        });
     },
 
     linkTapResult() {
@@ -633,6 +664,7 @@ window.hoshiSelection = {
             return null;
         }
 
+        const revision = ++this.selectionRevision;
         this.selection = {
             startNode: hit.node,
             startOffset: hit.offset,
@@ -641,19 +673,27 @@ window.hoshiSelection = {
             text
         };
 
+        if (typeof this.options.previewSelection === 'function') {
+            try {
+                this.options.previewSelection(this);
+            } catch {}
+        } else {
+            this.highlightSelection(1);
+        }
+
         const sentenceContext = this.getSentenceContext(hit.node, hit.offset);
         const normalizedOffset = projection
             ? projection.normalizedOffsetForHit?.(hit) ?? null
             : window.hoshiReader
                 ? this.getNormalizedOffset(hit.node, hit.offset)
                 : null;
-        this.postTextSelected({
+        this.postTextSelectedAfterPaint({
             text,
             sentence: sentenceContext.sentence,
             rect: this.getSelectionRect(rectX, rectY),
             normalizedOffset,
             sentenceOffset: sentenceContext.sentenceOffset
-        });
+        }, this.selection, revision);
 
         return text;
     },
@@ -846,8 +886,14 @@ window.hoshiSelection = {
     },
 
     clearSelection() {
+        this.selectionRevision += 1;
         window.getSelection()?.removeAllRanges();
         CSS.highlights?.get('hoshi-selection')?.clear();
+        if (typeof this.options.clearSelectionPreview === 'function') {
+            try {
+                this.options.clearSelectionPreview();
+            } catch {}
+        }
         this.selection = null;
     }
 };

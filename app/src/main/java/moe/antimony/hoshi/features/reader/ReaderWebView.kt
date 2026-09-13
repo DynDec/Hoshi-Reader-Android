@@ -915,13 +915,16 @@ fun ReaderWebView(
                 )
             }
         } else {
-            onTextSelected(selection)?.let { count ->
-                selectionRects(count) { rects ->
+            val selectionCount = onTextSelected(selection)
+            if (selectionCount != null) {
+                selectionRects(selectionCount) { rects ->
                     rootSelectionHighlight = ReaderRootSelectionHighlight(
                         popupId = null,
                         rects = rects,
                     )
                 }
+            } else {
+                webView?.evaluateJavascript(ReaderSelectionCommand.ClearSelectionPreview.source, null)
             }
         }
     }

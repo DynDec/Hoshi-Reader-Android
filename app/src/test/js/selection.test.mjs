@@ -77,6 +77,9 @@ function loadSelection(text) {
         getComputedStyle() {
             return { writingMode: 'horizontal-tb' };
         },
+        getSelection() {
+            return null;
+        },
     };
 
     vm.runInNewContext(selectionSource(), {
@@ -177,6 +180,7 @@ function loadAdjacentExpressionTags() {
 
     const selection = window.hoshiSelection;
     selection.clearSelection = () => {};
+    selection.highlightSelection = () => {};
     selection.getCharacterAtPoint = () => ({ node: firstNode, offset: 0 });
     selection.getSelectionRect = () => ({ x: 0, y: 0, width: 1, height: 1 });
     selection.postTextSelected = () => {};
@@ -298,6 +302,112 @@ test('shared selection posts reader payloads through the Android reader bridge',
     selection.postTextSelected({ text: '猫', sentence: '猫。' });
 
     assert.equal(posted, JSON.stringify({ text: '猫', sentence: '猫。' }));
+});
+
+test('shared selection previews before dispatching the bridge payload after paint', () => {
+    const { document, selection, textNode, window } = loadSelection('猫犬');
+    const events = [];
+    const pendingTasks = [];
+    document.pointElement = hitElement([]);
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 0 });
+    selection.postTextSelected = (payload) => events.push(`post:${payload.text}`);
+    selection.configure({
+        previewSelection(selectionApi) {
+            const [range] = selectionApi.selectionCharacterRanges(1);
+            events.push(`preview:${selectionApi.codePointAt(range.startContainer.textContent, range.startOffset)}`);
+        },
+    });
+    window.requestAnimationFrame = (callback) => {
+        events.push('raf');
+        callback();
+    };
+    window.setTimeout = (callback) => {
+        events.push('task');
+        pendingTasks.push(callback);
+    };
+
+    assert.equal(selection.selectText(1, 1, 80), '猫犬');
+    assert.deepEqual(events, ['preview:猫', 'raf', 'task']);
+
+    pendingTasks.shift()();
+    assert.deepEqual(events, ['preview:猫', 'raf', 'task', 'post:猫犬']);
+});
+
+test('shared selection previews one supplementary Unicode code point', () => {
+    const { document, selection, textNode, window } = loadSelection('𠮟猫');
+    let preview = null;
+    document.pointElement = hitElement([]);
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 1 });
+    selection.postTextSelected = () => {};
+    selection.configure({
+        previewSelection(selectionApi) {
+            const [range] = selectionApi.selectionCharacterRanges(1);
+            preview = {
+                text: selectionApi.codePointAt(range.startContainer.textContent, range.startOffset),
+                start: range.startOffset,
+                end: range.endOffset,
+            };
+        },
+    });
+    window.requestAnimationFrame = (callback) => callback();
+    window.setTimeout = (callback) => callback();
+
+    assert.equal(selection.selectText(1, 1, 80), '𠮟猫');
+    assert.deepEqual(preview, { text: '𠮟', start: 0, end: 2 });
+});
+
+test('shared selection suppresses a deferred bridge post after clearing or replacing selection', () => {
+    const { document, selection, textNode, window } = loadSelection('猫犬');
+    const pendingTasks = [];
+    const posted = [];
+    document.pointElement = hitElement([]);
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 0 });
+    selection.postTextSelected = (payload) => posted.push(payload.text);
+    window.requestAnimationFrame = (callback) => callback();
+    window.setTimeout = (callback) => pendingTasks.push(callback);
+
+    selection.selectText(1, 1, 80);
+    const staleAfterClear = pendingTasks.shift();
+    selection.clearSelection();
+    staleAfterClear();
+    assert.deepEqual(posted, []);
+
+    selection.selectText(1, 1, 80);
+    const staleAfterReplace = pendingTasks.shift();
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 1 });
+    selection.selectText(1, 1, 80);
+    const current = pendingTasks.shift();
+    staleAfterReplace();
+    assert.deepEqual(posted, []);
+    current();
+    assert.deepEqual(posted, ['犬']);
+});
+
+test('shared selection clears a configured preview and falls back to CSS preview when unconfigured', () => {
+    const { document, selection, textNode } = loadSelection('猫');
+    const previewCalls = [];
+    const clearCalls = [];
+    document.pointElement = hitElement([]);
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 0 });
+    selection.postTextSelected = () => {};
+    selection.highlightSelection = (count) => previewCalls.push(count);
+    selection.configure({
+        previewSelection() {
+            previewCalls.push('hook');
+        },
+        clearSelectionPreview() {
+            clearCalls.push(true);
+        },
+    });
+
+    selection.selectText(1, 1, 80);
+    selection.clearSelection();
+    assert.deepEqual(previewCalls, ['hook']);
+    assert.equal(clearCalls.length, 2);
+
+    selection.configure({ previewSelection: null });
+    selection.selectText(1, 1, 80);
+    assert.deepEqual(previewCalls, ['hook', 1]);
 });
 
 test('shared selection can preserve reader link and image tap tokens', () => {

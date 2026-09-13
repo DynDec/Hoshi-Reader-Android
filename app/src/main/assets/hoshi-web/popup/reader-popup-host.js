@@ -9,6 +9,7 @@
     const frameSources = new WeakMap();
     let idleRootRecord = null;
     let rootHighlight = null;
+    let rootSelectionPreview = null;
     let sasayakiHighlight = null;
 
     function ensureLayer() {
@@ -351,7 +352,7 @@
 
     function cleanupLayerIfIdle() {
         const layer = document.getElementById(LAYER_ID);
-        if (layer && frames.size === 0 && !idleRootRecord && !hasSasayakiHighlight()) {
+        if (layer && frames.size === 0 && !idleRootRecord && !hasSasayakiHighlight() && !hasVisibleRootHighlight()) {
             layer.remove();
         }
     }
@@ -493,14 +494,14 @@
         return merged;
     }
 
-    function rootHighlightBoxRects(rects) {
-        if (!rootHighlight?.eInkMode) return rects;
-        return highlightBoxRects(rects, rootHighlight.verticalWriting);
+    function rootHighlightBoxRects(highlight, rects) {
+        if (!highlight?.eInkMode) return rects;
+        return highlightBoxRects(rects, !!highlight.verticalWriting);
     }
 
-    function rootHighlightRectsSplit(first, second) {
+    function rootHighlightRectsSplit(highlight, first, second) {
         const tolerance = 8;
-        if (rootHighlight.verticalWriting) {
+        if (highlight.verticalWriting) {
             const sameWidth = Math.abs(first.width - second.width) <= tolerance;
             const wrapsToNextLine = first.y > second.y + tolerance;
             const touchesPageEdge = first.y + first.height >= window.innerHeight - tolerance ||
@@ -515,11 +516,11 @@
         return sameHeight && (wrapsToNextLine || touchesPageEdge);
     }
 
-    function rootHighlightBoxEdges(rects) {
+    function rootHighlightBoxEdges(highlight, rects) {
         const edges = rects.map(fullBoxEdges);
         for (let index = 0; index < rects.length - 1; index++) {
-            if (!rootHighlightRectsSplit(rects[index], rects[index + 1])) continue;
-            if (rootHighlight.verticalWriting) {
+            if (!rootHighlightRectsSplit(highlight, rects[index], rects[index + 1])) continue;
+            if (highlight.verticalWriting) {
                 edges[index].bottom = false;
                 edges[index + 1].top = false;
             } else {
@@ -563,8 +564,8 @@
         if (edges.left) appendRootHighlightEdge(item, 'hoshi-reader-selection-highlight-edge-left', 0, 0, lineSize, blockEnd, color);
     }
 
-    function renderRootHighlight(visible) {
-        if (!visible || !rootHighlight || rootHighlight.pending || !Array.isArray(rootHighlight.rects)) {
+    function renderRootHighlight(highlight) {
+        if (!highlight || highlight.pending || !Array.isArray(highlight.rects)) {
             document.getElementById(LAYER_ID)
                 ?.querySelector('.hoshi-reader-selection-highlight-layer')
                 ?.replaceChildren();
@@ -572,18 +573,19 @@
         }
         const layer = ensureHighlightLayer();
         layer.replaceChildren();
-        const color = rootHighlight.eInkMode
-            ? (rootHighlight.darkMode ? '#fff' : '#000')
-            : (rootHighlight.darkMode ? 'rgba(255, 255, 255, 0.32)' : 'rgba(160, 160, 160, 0.32)');
+        const color = highlight.eInkMode
+            ? (highlight.darkMode ? '#fff' : '#000')
+            : (highlight.darkMode ? 'rgba(255, 255, 255, 0.32)' : 'rgba(160, 160, 160, 0.32)');
         const rects = rootHighlightBoxRects(
-            rootHighlight.rects.filter(rect => rect && rect.width > 0 && rect.height > 0),
+            highlight,
+            highlight.rects.filter(rect => rect && rect.width > 0 && rect.height > 0),
         );
-        const boxEdges = rootHighlight.eInkMode ? rootHighlightBoxEdges(rects) : [];
+        const boxEdges = highlight.eInkMode ? rootHighlightBoxEdges(highlight, rects) : [];
         for (let index = 0; index < rects.length; index++) {
             const rect = rects[index];
             const item = document.createElement('div');
             item.className = 'hoshi-reader-selection-highlight-rect';
-            if (rootHighlight.eInkMode) {
+            if (highlight.eInkMode) {
                 applyRootHighlightBox(item, rect, color, boxEdges[index]);
             } else {
                 item.style.background = color;
@@ -596,6 +598,29 @@
         }
     }
 
+    function resolvedRootHighlight(highlight) {
+        return !!highlight && highlight.pending !== true && Array.isArray(highlight.rects);
+    }
+
+    function activeRootHighlight() {
+        // A new tap must replace an old resolved highlight before the native
+        // side has sent its pending rootHighlight update. Once that update is
+        // resolved, renderStack clears the preview and this falls through to
+        // the exact range.
+        return rootSelectionPreview || (resolvedRootHighlight(rootHighlight) ? rootHighlight : null);
+    }
+
+    function renderActiveRootHighlight() {
+        renderRootHighlight(activeRootHighlight());
+    }
+
+    function hasVisibleRootHighlight() {
+        const highlight = activeRootHighlight();
+        return !!highlight && Array.isArray(highlight.rects) && highlight.rects.some(
+            rect => rect && rect.width > 0 && rect.height > 0,
+        );
+    }
+
     function syncRootReveal() {
         if (hasSasayakiHighlight()) {
             renderSasayakiHighlight(sasayakiHighlight);
@@ -604,21 +629,42 @@
         for (const record of frames.values()) {
             setRevealReady(record, !rootHighlightBlocksReveal(record));
         }
-        const highlightVisible = !!rootHighlight &&
-            !rootHighlight.pending &&
-            Array.isArray(rootHighlight.rects) &&
-            rootHighlight.rects.length > 0 &&
-            (!rootRecord || (rootRecord.contentReady && rootRecord.revealReady));
-        renderRootHighlight(highlightVisible);
+        // The resolved reader range is independent from popup iframe
+        // readiness. The popup itself still uses contentReady/revealReady in
+        // its CSS visibility gate, while the reader overlay can appear as
+        // soon as its geometry arrives.
+        renderActiveRootHighlight();
     }
 
     function renderStack(payload) {
         const items = Array.isArray(payload) ? payload : (payload?.popups || []);
         rootHighlight = Array.isArray(payload) ? null : (payload?.rootHighlight || null);
+        if (resolvedRootHighlight(rootHighlight) || !rootHighlight || items.length === 0) {
+            rootSelectionPreview = null;
+        }
         const activeIds = new Set(items.map(item => item.id));
         items.forEach((item, index) => renderPayload(item, index));
         removeMissing(activeIds);
         syncRootReveal();
+    }
+
+    function previewRootSelection(payload) {
+        if (!payload || !Array.isArray(payload.rects)) {
+            rootSelectionPreview = null;
+        } else {
+            rootSelectionPreview = {
+                ...payload,
+                rects: payload.rects,
+            };
+        }
+        renderActiveRootHighlight();
+        cleanupLayerIfIdle();
+    }
+
+    function clearRootSelectionPreview() {
+        rootSelectionPreview = null;
+        renderActiveRootHighlight();
+        cleanupLayerIfIdle();
     }
 
     function topPopupId() {
@@ -835,6 +881,8 @@
 
     window.hoshiReaderPopupHost = {
         renderStack,
+        previewRootSelection,
+        clearRootSelectionPreview,
         resolveMessage,
         highlightSelection,
         navigateBack,
@@ -846,6 +894,10 @@
     };
     if (window.__hoshiReaderPopupIframeUrl) {
         preloadIdleRootFrame(window.__hoshiReaderPopupIframeUrl);
+    }
+    if (window.__hoshiPendingReaderSelectionPreview) {
+        previewRootSelection(window.__hoshiPendingReaderSelectionPreview);
+        window.__hoshiPendingReaderSelectionPreview = null;
     }
     if (window.__hoshiPendingReaderPopupStack) {
         renderStack(window.__hoshiPendingReaderPopupStack);

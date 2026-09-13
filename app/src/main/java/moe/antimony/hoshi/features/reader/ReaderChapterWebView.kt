@@ -530,6 +530,7 @@ internal data class ReaderWebViewSetupReloadKey(
 )
 
 internal data class ReaderAppearanceUpdateKey(
+    val darkMode: Boolean,
     val backgroundColorCss: String,
     val textColorCss: String,
     val eInkLineColorCss: String,
@@ -547,6 +548,7 @@ internal fun readerAppearanceUpdateKey(
     sasayakiBackgroundColor: Long,
 ): ReaderAppearanceUpdateKey =
     ReaderAppearanceUpdateKey(
+        darkMode = settings.usesDarkInterface(systemDark),
         backgroundColorCss = settings.backgroundColorCss(systemDark),
         textColorCss = settings.textColorCss(systemDark),
         eInkLineColorCss = if (settings.usesDarkInterface(systemDark)) "#fff" else "#000",
@@ -834,6 +836,11 @@ private fun readerSetupScript(
     assets: ReaderWebAssets,
 ): String {
     val eInkMode = readerJavaScriptStringLiteral(if (settings.eInkMode) "true" else "false")
+    val selectionPreviewConfiguration = readerSelectionPreviewConfigurationScript(
+        darkMode = settings.usesDarkInterface(systemDark),
+        eInkMode = settings.eInkMode,
+        verticalWriting = settings.verticalWriting,
+    )
     val contentLanguageTag = readerJavaScriptStringLiteral(contentLanguageProfile.htmlLang)
     val selectionLanguageId = readerJavaScriptStringLiteral(contentLanguageProfile.dictionaryLanguageId)
     val viewportLayout = readerViewportCssLayout(
@@ -883,6 +890,7 @@ private fun readerSetupScript(
             rubyAwareRects: true,
             scaleRects: false
           });
+          $selectionPreviewConfiguration
           if (!document.getElementById('hoshi-reader-popup-host-script')) {
             var popupHostScript = document.createElement('script');
             popupHostScript.id = 'hoshi-reader-popup-host-script';
@@ -952,6 +960,11 @@ private fun readerAppearanceScript(
     val visualNovelRevealSpeed = appearanceUpdateKey.visualNovelRevealSpeed
     val sasayakiText = readerJavaScriptStringLiteral(appearanceUpdateKey.sasayakiTextColorCss)
     val sasayakiBackground = readerJavaScriptStringLiteral(appearanceUpdateKey.sasayakiBackgroundColorCss)
+    val selectionPreviewConfiguration = readerSelectionPreviewConfigurationScript(
+        darkMode = appearanceUpdateKey.darkMode,
+        eInkMode = appearanceUpdateKey.eInkModeCss == "1",
+        verticalWriting = appearanceUpdateKey.verticalWritingCss == "1",
+    )
     return """
         (function() {
           document.documentElement.style.setProperty('--hoshi-background-color', $backgroundColor);
@@ -960,6 +973,7 @@ private fun readerAppearanceScript(
           document.documentElement.style.setProperty('--hoshi-reader-eink-mode', $eInkMode);
           document.documentElement.dataset.hoshiReaderEinkMode = $eInkMode === '1' ? 'true' : 'false';
           document.documentElement.style.setProperty('--hoshi-reader-vertical-writing', $verticalWriting);
+          $selectionPreviewConfiguration
           window.hoshiReader?.setRevealSpeed?.($visualNovelRevealSpeed);
           document.documentElement.style.setProperty('--hoshi-sasayaki-text-color', $sasayakiText);
           document.documentElement.style.setProperty('--hoshi-sasayaki-background-color', $sasayakiBackground);
@@ -967,6 +981,32 @@ private fun readerAppearanceScript(
         })();
     """.trimIndent()
 }
+
+private fun readerSelectionPreviewConfigurationScript(
+    darkMode: Boolean,
+    eInkMode: Boolean,
+    verticalWriting: Boolean,
+): String = """
+    window.hoshiSelection?.configure?.({
+      previewSelection: function(selectionApi) {
+        var payload = {
+          rects: selectionApi.selectionRects(1),
+          darkMode: $darkMode,
+          eInkMode: $eInkMode,
+          verticalWriting: $verticalWriting
+        };
+        if (window.hoshiReaderPopupHost?.previewRootSelection) {
+          window.hoshiReaderPopupHost.previewRootSelection(payload);
+        } else {
+          window.__hoshiPendingReaderSelectionPreview = payload;
+        }
+      },
+      clearSelectionPreview: function() {
+        window.__hoshiPendingReaderSelectionPreview = null;
+        window.hoshiReaderPopupHost?.clearRootSelectionPreview?.();
+      }
+    });
+""".trimIndent()
 
 private fun String.scriptTagBody(): String =
     substringAfter("<script>").substringBeforeLast("</script>").trim()
@@ -1353,6 +1393,7 @@ private fun WebView.applyReaderSasayakiCues(loadKey: String, cuesJson: String) {
 
 private fun releaseReaderWebView(webView: HoshiReaderWebView) {
     webView.animate().cancel()
+    webView.evaluateJavascript(ReaderSelectionCommand.ClearSelection.source, null)
     readerPendingProgressSaveCallbacks.remove(webView)?.let(webView::removeCallbacks)
     readerRestoreGenerations.remove(webView)
     readerAppliedSasayakiCues.remove(webView)

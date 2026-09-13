@@ -40,6 +40,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Changed
 
+- Show the tapped character immediately in Reader lookup feedback, then expand it
+  to the full matched word when the lookup result is ready.
 - Synchronize the active profile with the profile selected for the last
   successfully opened book, using the book's explicit profile, language-primary
   profile, or the existing active profile as the fallback.

@@ -32,6 +32,11 @@ internal sealed interface ReaderSelectionCommand {
         override val source: String =
             "window.hoshiSelection.clearSelection()"
     }
+
+    data object ClearSelectionPreview : ReaderSelectionCommand {
+        override val source: String =
+            "window.__hoshiPendingReaderSelectionPreview = null; window.hoshiReaderPopupHost?.clearRootSelectionPreview?.()"
+    }
 }
 
 internal sealed interface ReaderHighlightCommand {

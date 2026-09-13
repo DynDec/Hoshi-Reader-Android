@@ -536,6 +536,157 @@ test('reader highlight updates can omit initial entry without replacing iframe c
     );
 });
 
+test('root selection preview renders immediately in normal mode', () => {
+    const scene = popupHost();
+
+    scene.host.previewRootSelection({
+        darkMode: false,
+        eInkMode: false,
+        verticalWriting: false,
+        rects: [{ x: 12, y: 24, width: 30, height: 16 }],
+    });
+
+    const layer = scene.document.getElementById('hoshi-reader-popup-layer');
+    const highlights = layer.querySelector('.hoshi-reader-selection-highlight-layer').children;
+    assert.equal(highlights.length, 1);
+    assert.equal(highlights[0].style.background, 'rgba(160, 160, 160, 0.32)');
+    assert.equal(highlights[0].style.left, '12px');
+    assert.equal(highlights[0].style.top, '24px');
+    assert.equal(highlights[0].style.width, '30px');
+    assert.equal(highlights[0].style.height, '16px');
+});
+
+test('root selection preview remains visible while the resolved root highlight is pending', () => {
+    const scene = popupHost();
+    scene.host.previewRootSelection({
+        darkMode: false,
+        eInkMode: false,
+        verticalWriting: false,
+        rects: [{ x: 12, y: 24, width: 10, height: 16 }],
+    });
+
+    scene.host.renderStack({
+        popups: [rootPopupPayload()],
+        rootHighlight: {
+            popupId: 'root',
+            pending: true,
+            rects: [],
+            darkMode: false,
+            eInkMode: false,
+            verticalWriting: false,
+        },
+    });
+
+    const layer = scene.document.getElementById('hoshi-reader-popup-layer');
+    const highlights = layer.querySelector('.hoshi-reader-selection-highlight-layer').children;
+    assert.equal(highlights.length, 1);
+    assert.equal(highlights[0].style.left, '12px');
+    assert.equal(highlights[0].style.width, '10px');
+});
+
+test('resolved root highlight replaces the preview before iframe content is ready', () => {
+    const scene = popupHost();
+    scene.host.previewRootSelection({
+        darkMode: false,
+        eInkMode: false,
+        verticalWriting: false,
+        rects: [{ x: 12, y: 24, width: 10, height: 16 }],
+    });
+
+    scene.host.renderStack({
+        popups: [rootPopupPayload()],
+        rootHighlight: {
+            popupId: 'root',
+            pending: true,
+            rects: [],
+            darkMode: false,
+            eInkMode: false,
+            verticalWriting: false,
+        },
+    });
+    scene.host.renderStack({
+        popups: [rootPopupPayload()],
+        rootHighlight: {
+            popupId: 'root',
+            pending: false,
+            rects: [{ x: 40, y: 50, width: 30, height: 18 }],
+            darkMode: false,
+            eInkMode: false,
+            verticalWriting: false,
+        },
+    });
+
+    const layer = scene.document.getElementById('hoshi-reader-popup-layer');
+    const shell = layer.querySelector('.hoshi-reader-popup-shell');
+    const highlights = layer.querySelector('.hoshi-reader-selection-highlight-layer').children;
+    assert.equal(shell.dataset.contentReady, 'false');
+    assert.equal(highlights.length, 1);
+    assert.equal(highlights[0].style.left, '40px');
+    assert.equal(highlights[0].style.top, '50px');
+    assert.equal(highlights[0].style.width, '30px');
+    assert.equal(highlights[0].style.height, '18px');
+});
+
+test('clearing root selection preview removes its overlay when no popup is active', () => {
+    const scene = popupHost();
+    scene.host.previewRootSelection({
+        darkMode: false,
+        eInkMode: false,
+        verticalWriting: false,
+        rects: [{ x: 12, y: 24, width: 10, height: 16 }],
+    });
+
+    scene.host.clearRootSelectionPreview();
+
+    assert.equal(scene.document.getElementById('hoshi-reader-popup-layer'), null);
+});
+
+test('root selection preview uses horizontal e-ink boxes and preserves line splits', () => {
+    const scene = popupHost();
+    scene.host.previewRootSelection({
+        darkMode: false,
+        eInkMode: true,
+        verticalWriting: false,
+        rects: [
+            { x: 90, y: 24, width: 10, height: 16 },
+            { x: 0, y: 50, width: 12, height: 16 },
+        ],
+    });
+
+    const highlights = scene.document
+        .getElementById('hoshi-reader-popup-layer')
+        .querySelector('.hoshi-reader-selection-highlight-layer').children;
+    assert.equal(highlights.length, 2);
+    assert.equal(highlights[0].style.background, 'transparent');
+    assert.equal(highlightEdge(highlights[0], 'right'), undefined);
+    assert.notEqual(highlightEdge(highlights[0], 'left'), undefined);
+    assert.equal(highlightEdge(highlights[1], 'left'), undefined);
+    assert.notEqual(highlightEdge(highlights[1], 'right'), undefined);
+});
+
+test('root selection preview uses vertical e-ink boxes and preserves page splits', () => {
+    const scene = popupHost();
+    scene.host.previewRootSelection({
+        darkMode: false,
+        eInkMode: true,
+        verticalWriting: true,
+        rects: [
+            { x: 40, y: 90, width: 12, height: 10 },
+            { x: 40, y: 0, width: 12, height: 8 },
+        ],
+    });
+
+    const highlights = scene.document
+        .getElementById('hoshi-reader-popup-layer')
+        .querySelector('.hoshi-reader-selection-highlight-layer').children;
+    assert.equal(highlights.length, 2);
+    assert.equal(highlights[0].style.background, 'transparent');
+    assert.equal(highlightEdge(highlights[0], 'bottom'), undefined);
+    assert.notEqual(highlightEdge(highlights[0], 'top'), undefined);
+    assert.equal(highlightEdge(highlights[1], 'top'), undefined);
+    assert.notEqual(highlightEdge(highlights[1], 'bottom'), undefined);
+});
+
 test('non e-ink root lookup highlight keeps the filled selection rectangle', () => {
     const highlights = renderRootHighlight({
         popupId: 'root',

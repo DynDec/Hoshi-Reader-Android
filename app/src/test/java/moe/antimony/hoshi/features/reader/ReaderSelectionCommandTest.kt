@@ -41,6 +41,14 @@ class ReaderSelectionCommandTest {
     }
 
     @Test
+    fun clearSelectionPreviewCommandClearsReaderPopupPreview() {
+        assertEquals(
+            "window.__hoshiPendingReaderSelectionPreview = null; window.hoshiReaderPopupHost?.clearRootSelectionPreview?.()",
+            ReaderSelectionCommand.ClearSelectionPreview.source,
+        )
+    }
+
+    @Test
     fun readerHighlightCommandsBuildIosHighlightInvocations() {
         assertEquals(
             "window.hoshiHighlights.prepareHighlightSelection()",

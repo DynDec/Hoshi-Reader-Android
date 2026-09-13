@@ -761,6 +761,25 @@ class ReaderWebViewStateHolderTest {
     }
 
     @Test
+    fun readerAppearanceUpdateKeyTracksDarkInterfaceForSelectionPreview() {
+        val lightKey = readerAppearanceUpdateKey(
+            ReaderSettings(theme = ReaderTheme.Light),
+            systemDark = true,
+            sasayakiTextColor = 0xFF111111,
+            sasayakiBackgroundColor = 0xFFFFFFFF,
+        )
+        val darkKey = readerAppearanceUpdateKey(
+            ReaderSettings(theme = ReaderTheme.Dark),
+            systemDark = false,
+            sasayakiTextColor = 0xFF111111,
+            sasayakiBackgroundColor = 0xFFFFFFFF,
+        )
+
+        assertFalse(lightKey.darkMode)
+        assertTrue(darkKey.darkMode)
+    }
+
+    @Test
     fun readerAppearanceUpdateKeyTracksVisualNovelRevealSpeedWithoutReloadingContent() {
         val base = ReaderSettings(
             viewMode = ReaderViewMode.VisualNovel,
