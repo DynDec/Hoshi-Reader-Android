@@ -23,6 +23,7 @@ private class FakeHoshiWebViewSettings : HoshiWebViewSettings {
     override var domStorageEnabled: Boolean = true
     override var allowFileAccess: Boolean = true
     override var allowContentAccess: Boolean = true
+    override var minimumFontSize: Int = 8
     override var forceDarkAllowed: Boolean = true
     override var algorithmicDarkeningAllowed: Boolean = true
 }

@@ -55,6 +55,7 @@ import moe.antimony.hoshi.epub.HighlightColor
 import moe.antimony.hoshi.features.dictionary.DictionarySettings
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import moe.antimony.hoshi.webview.applyHoshiWebViewSecurityDefaults
+import moe.antimony.hoshi.webview.applyHoshiReaderTextDefaults
 
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
@@ -249,6 +250,7 @@ internal fun ChapterWebView(
         factory = { context ->
             HoshiReaderWebView(context).apply {
                 applyHoshiWebViewSecurityDefaults()
+                applyHoshiReaderTextDefaults()
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
                 this.onHighlightCreated = { color, id, creation ->

@@ -154,6 +154,9 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   family, style, and weight declarations intact.
 - Reader rendering and lookup remain WebView-based to preserve iOS-aligned
   visible behavior.
+- Reader chapter WebViews lower Android's 8px minimum font size to 1px so CSS
+  furigana can retain its iOS-sized `0.45em` geometry. Other Hoshi WebViews keep
+  their existing platform text defaults.
 - Reader layout modes are WebView-backed assets for paginated, continuous, and
   VN reading. Kotlin selects the asset, injects typed settings, and keeps
   persisted progress as chapter progress mapped to whole-book character count.
