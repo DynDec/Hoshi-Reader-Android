@@ -53,6 +53,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Fixed
 
+- Keep vertical paginated Reader pages from developing font- and ruby-dependent
+  horizontal padding gaps by removing an obsolete WebKit line-box sizing override.
 - Ask for confirmation before resetting Dictionary custom CSS to prevent
   accidental clearing.
 - Keep text and images reachable in every Reader mode when publisher CSS wraps

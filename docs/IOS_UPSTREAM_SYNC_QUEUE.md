@@ -173,7 +173,7 @@ Validation:
 
 ### 5. Reader WebView line-box CSS parity
 
-Status: pending Android sync.
+Status: Android sync implemented; device validation pending.
 
 Commits:
 
@@ -191,13 +191,12 @@ iOS behavior to mirror:
 
 Android current gap:
 
-- `app/src/main/assets/hoshi-web/reader/reader.css` still sets the property and
-  `ReaderSettingsTest` explicitly preserves it.
+- The Android Reader CSS now omits the property, and `ReaderSettingsTest` asserts
+  that it is absent.
 
 Suggested slice:
 
-- Remove it only after Android WebView comparison, then update tests to assert
-  the final CSS behavior.
+- Complete Android WebView comparison across the validation matrix below.
 
 Validation:
 
@@ -212,7 +211,7 @@ Validation:
 | `ed25036`, `8d1442e` | 2026-06-14 / 2026-07-01 | Popup masonry redesign and theme accents | Pending settings/assets/height range |
 | `53fdb72` | 2026-06-15 | Closeable Reader open-failure view | Pending route error UI |
 | `4dae37c` | 2026-06-13 | Drive timeouts and transient refresh suppression | Pending timeout/error normalization |
-| `bdf71a6` | 2026-06-07 | Remove Reader WebKit line-box property | Pending Android WebView validation |
+| `bdf71a6` | 2026-06-07 | Remove Reader WebKit line-box property | Android sync implemented; device validation pending |
 
 ## Suggested Implementation Order
 
@@ -220,7 +219,7 @@ Validation:
 2. Lookup popup two-column layout and visual sizing.
 3. Reader route open-failure fallback.
 4. Google Drive timeout and automatic-refresh error suppression.
-5. Reader WebView line-box CSS parity.
+5. Reader WebView line-box CSS parity device validation.
 
 ## Covered Or No Android Action
 
