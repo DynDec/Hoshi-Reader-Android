@@ -659,6 +659,11 @@ window.hoshiReader.initialize = function() {
     return new Promise(function(resolve) { setTimeout(resolve, 50); });
   }).then(function() {
     window.hoshiReaderLayoutSemantics.sanitizeInlineBlocks(document, window.hoshiReader.isVertical());
+    if (window.hoshiReader.isVertical()
+      && window.hoshiReaderLayoutSemantics
+      && typeof window.hoshiReaderLayoutSemantics.fitVerticalPaginatedFurigana === 'function') {
+      window.hoshiReaderLayoutSemantics.fitVerticalPaginatedFurigana(document, true);
+    }
     window.hoshiReader.buildNodeOffsets();
     __HOSHI_RESTORE_SCRIPTS__
   });

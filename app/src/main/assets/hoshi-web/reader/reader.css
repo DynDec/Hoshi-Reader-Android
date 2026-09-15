@@ -9,6 +9,7 @@ __HOSHI_PARAGRAPH_SPACING_CSS__
     --hoshi-eink-line-color: __HOSHI_EINK_LINE_COLOR__;
     --hoshi-reader-eink-mode: __HOSHI_READER_EINK_MODE__;
     --hoshi-reader-vertical-writing: __HOSHI_READER_VERTICAL_WRITING__;
+    --hoshi-furigana-scale: 0.45em;
     --hoshi-sasayaki-text-color: __HOSHI_SASAYAKI_TEXT_COLOR__;
     --hoshi-sasayaki-background-color: __HOSHI_SASAYAKI_BACKGROUND_COLOR__;
 }

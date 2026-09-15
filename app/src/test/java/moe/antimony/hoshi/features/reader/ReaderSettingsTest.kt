@@ -708,6 +708,8 @@ class ReaderSettingsTest {
         assertTrue(css.contains("ruby > rt, ruby > rp"))
         assertTrue(css.contains("-webkit-user-select: none;"))
         assertTrue(css.contains("user-select: none;"))
+        assertTrue(css.contains("--hoshi-furigana-scale: 0.45em;"))
+        assertTrue(css.contains("font-size: var(--hoshi-furigana-scale, 0.45em);"))
     }
 
     @Test

@@ -214,7 +214,7 @@ internal object ReaderContentStyles {
         } else {
             """
             rt {
-                font-size: 0.45em;
+                font-size: var(--hoshi-furigana-scale, 0.45em);
             }
             """.trimIndent()
         }

@@ -730,6 +730,9 @@ test('reader initialization waits for fonts and images before sanitizing layout,
           window.hoshiReaderLayoutSemantics = {
             sanitizeInlineBlocks: function(scope, vertical) {
               window.__events.push(scope === document && vertical ? 'sanitize-vertical' : 'sanitize-horizontal');
+            },
+            fitVerticalPaginatedFurigana: function() {
+              window.__events.push('ruby-calibration');
             }
           };
         `;
@@ -763,7 +766,10 @@ test('reader initialization waits for fonts and images before sanitizing layout,
             await Promise.resolve();
         }
 
-        assert.deepEqual(events.slice(0, 4), ['setup', 'sanitize-vertical', 'offsets', 'restore']);
+        const expected = sourceUrl === readerPaginatedUrl
+            ? ['setup', 'sanitize-vertical', 'ruby-calibration', 'offsets', 'restore']
+            : ['setup', 'sanitize-vertical', 'offsets', 'restore'];
+        assert.deepEqual(events.slice(0, expected.length), expected);
     }
 });
 
