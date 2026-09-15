@@ -424,6 +424,10 @@
     <string name="reader_appearance_import_font">导入字体</string>
     <string name="reader_appearance_importing" comment="Generic import progress label, intentionally shared with ッツ backup import.">正在导入...</string>
     <string name="reader_appearance_font_size">字号</string>
+    <string name="reader_furigana_off" comment="Furigana visibility mode that shows annotations normally; intentionally matches other off labels.">关闭</string>
+    <string name="reader_furigana_dimmed">淡化</string>
+    <string name="reader_furigana_toggle">点击显示</string>
+    <string name="reader_furigana_hidden">隐藏</string>
     <string name="reader_appearance_hide_furigana">隐藏振假名</string>
     <string name="reader_appearance_mode" comment="Reader appearance setting label, intentionally matching dictionary mode.">模式</string>
     <string name="reader_appearance_paginated">分页</string>

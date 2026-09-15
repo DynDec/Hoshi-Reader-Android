@@ -803,7 +803,7 @@ class ReaderSettingsTest {
     fun readerCssUsesIosAppearanceFlags() {
         val css = ReaderContentStyles.styleTag(
             ReaderSettings(
-                hideFurigana = true,
+                furiganaMode = FuriganaMode.Hidden,
                 avoidPageBreak = true,
                 justifyText = true,
             ),

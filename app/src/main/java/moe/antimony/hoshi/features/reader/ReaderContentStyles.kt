@@ -205,18 +205,10 @@ internal object ReaderContentStyles {
         } else {
             ""
         }
-        val furiganaCss = if (settings.hideFurigana) {
-            """
-            rt {
-                display: none !important;
-            }
-            """.trimIndent()
-        } else {
-            """
-            rt {
-                font-size: 0.45em;
-            }
-            """.trimIndent()
+        val furiganaCss = when (settings.furiganaMode) {
+            FuriganaMode.Hidden -> "rt { display: none !important; }"
+            FuriganaMode.Dimmed -> "rt { font-size: 0.45em; } ruby > rt, ruby > rp { opacity: 0.4 !important; }"
+            FuriganaMode.Off, FuriganaMode.Toggle -> "rt { font-size: 0.45em; }"
         }
         val generatedLayout = ReaderGeneratedLayout.from(settings)
         val layoutCss = when (settings.viewMode) {

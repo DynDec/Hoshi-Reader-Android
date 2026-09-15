@@ -68,7 +68,7 @@ class ReaderSettingsRepositoryTest {
             assertEquals(null, settings.selectedFontVariantId)
             assertTrue(settings.fontVariantSelections.isEmpty())
             assertEquals(22, settings.fontSize)
-            assertFalse(settings.hideFurigana)
+            assertEquals(FuriganaMode.Off, settings.furiganaMode)
             assertEquals(ReaderViewMode.Paginated, settings.viewMode)
             assertFalse(settings.continuousMode)
             assertEquals(45, settings.visualNovelRevealSpeed)
@@ -280,7 +280,7 @@ class ReaderSettingsRepositoryTest {
                         "recommended:kleeone" to "wght-400-normal",
                     ),
                     fontSize = 24,
-                    hideFurigana = true,
+                    furiganaMode = FuriganaMode.Hidden,
                     viewMode = ReaderViewMode.VisualNovel,
                     visualNovelRevealSpeed = 80,
                     visualNovelScreenMode = VisualNovelScreenMode.Sentences,
@@ -348,7 +348,7 @@ class ReaderSettingsRepositoryTest {
             assertEquals("wght-600-normal", saved.selectedFontVariantId)
             assertEquals("wght-400-normal", saved.fontVariantSelections["recommended:kleeone"])
             assertEquals(24, saved.fontSize)
-            assertTrue(saved.hideFurigana)
+            assertEquals(FuriganaMode.Hidden, saved.furiganaMode)
             assertEquals(ReaderViewMode.VisualNovel, saved.viewMode)
             assertFalse(saved.continuousMode)
             assertEquals(80, saved.visualNovelRevealSpeed)
@@ -451,6 +451,7 @@ class ReaderSettingsRepositoryTest {
                 it.copy(
                     theme = ReaderTheme.Dark,
                     fontSize = 30,
+                    furiganaMode = FuriganaMode.Toggle,
                     popupWidth = 440,
                     pageSwipeThresholdPx = 96,
                     topSafeAreaDp = 46,
@@ -469,6 +470,7 @@ class ReaderSettingsRepositoryTest {
             val inherited = repository.settings.first()
             assertEquals(ReaderTheme.Dark, inherited.theme)
             assertEquals(30, inherited.fontSize)
+            assertEquals(FuriganaMode.Toggle, inherited.furiganaMode)
             assertEquals(440, inherited.popupWidth)
             assertEquals(96, inherited.pageSwipeThresholdPx)
             assertEquals(46, inherited.topSafeAreaDp)
@@ -484,6 +486,7 @@ class ReaderSettingsRepositoryTest {
                 it.copy(
                     theme = ReaderTheme.Light,
                     fontSize = 18,
+                    furiganaMode = FuriganaMode.Dimmed,
                     popupWidth = 280,
                     pageSwipeThresholdPx = 120,
                     topSafeAreaDp = 58,
@@ -501,6 +504,7 @@ class ReaderSettingsRepositoryTest {
             val japanese = repository.settings.first()
             assertEquals(ReaderTheme.Dark, japanese.theme)
             assertEquals(30, japanese.fontSize)
+            assertEquals(FuriganaMode.Toggle, japanese.furiganaMode)
             assertEquals(440, japanese.popupWidth)
             assertEquals(96, japanese.pageSwipeThresholdPx)
             assertEquals(46, japanese.topSafeAreaDp)
@@ -511,6 +515,42 @@ class ReaderSettingsRepositoryTest {
             assertFalse(japanese.volumeKeysNavigatePopupTerms)
             assertFalse(japanese.lockCurrentOrientation)
             assertFalse(japanese.openLastReadBookOnLaunch)
+        }
+    }
+
+    @Test
+    fun legacyFuriganaMigratesAndExplicitModeWins() = runBlocking {
+        repository().use { repository ->
+            repository.editPreferences {
+                this[booleanPreferencesKey("readerSettingsMigratedFromSharedPreferences")] = true
+                this[booleanPreferencesKey("readerHideFurigana")] = true
+            }
+            assertEquals(FuriganaMode.Hidden, repository.settings.first().furiganaMode)
+            repository.update { it.copy(furiganaMode = FuriganaMode.Toggle) }
+            assertEquals(FuriganaMode.Toggle, repository.settings.first().furiganaMode)
+            repository.editPreferences {
+                this[booleanPreferencesKey("readerHideFurigana")] = true
+            }
+            assertEquals(FuriganaMode.Toggle, repository.settings.first().furiganaMode)
+            for (mode in FuriganaMode.entries) {
+                repository.update { it.copy(furiganaMode = mode) }
+                assertEquals(mode, repository.settings.first().furiganaMode)
+            }
+        }
+    }
+
+    @Test
+    fun legacyProfileFuriganaMigratesAndPersistsNewMode() = runBlocking {
+        val profiles = ProfileRepository(tempFolder.newFolder("furigana-profiles"))
+        val file = profiles.readerSettingsFile()
+        file.parentFile?.mkdirs()
+        file.writeText("""{"hideFurigana":true}""")
+        repository(profileRepository = profiles).use { repository ->
+            assertEquals(FuriganaMode.Hidden, repository.settings.first().furiganaMode)
+            repository.update { it.copy(furiganaMode = FuriganaMode.Dimmed) }
+        }
+        repository(profileRepository = profiles, fileName = "furigana-reopened.preferences_pb").use { repository ->
+            assertEquals(FuriganaMode.Dimmed, repository.settings.first().furiganaMode)
         }
     }
 

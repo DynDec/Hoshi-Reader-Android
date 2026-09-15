@@ -426,6 +426,10 @@
     <string name="reader_appearance_import_font">Import Font</string>
     <string name="reader_appearance_importing" comment="Generic import progress label, intentionally shared with ッツ backup import.">Importing...</string>
     <string name="reader_appearance_font_size">Font Size</string>
+    <string name="reader_furigana_off" comment="Furigana visibility mode that shows annotations normally; intentionally matches other off labels.">Off</string>
+    <string name="reader_furigana_dimmed">Dimmed</string>
+    <string name="reader_furigana_toggle">Toggle</string>
+    <string name="reader_furigana_hidden">Hidden</string>
     <string name="reader_appearance_hide_furigana">Hide Furigana</string>
     <string name="reader_appearance_mode" comment="Reader appearance setting label, intentionally matching dictionary mode.">Mode</string>
     <string name="reader_appearance_paginated">Paginated</string>

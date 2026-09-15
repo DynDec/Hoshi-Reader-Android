@@ -202,6 +202,10 @@ class TestElement extends TestNode {
         };
     }
 
+    get localName() {
+        return this.tagName.toLowerCase();
+    }
+
     get className() {
         return this.attributes.get('class') ?? '';
     }
@@ -629,6 +633,8 @@ function textOffsetWithin(root, target) {
 }
 
 function matchesSelector(node, selector) {
+    const tagClass = selector.match(/^([a-z]+)\.([\w-]+)$/i);
+    if (tagClass) return node.localName === tagClass[1].toLowerCase() && node.classList.contains(tagClass[2]);
     if (selector.startsWith('#')) {
         return node.id === selector.slice(1);
     }
@@ -2631,4 +2637,39 @@ test('visual novel Sasayaki completes reveal before highlighting the active cue'
     assert.equal(currentScreen(reader).querySelectorAll('[data-hoshi-visual-novel-unrevealed]').length, 0);
     assert.equal(sasayakiWrappers(reader)[0].textContent, '蒸し暑い');
     assert.equal(sasayakiWrappers(reader)[0].classList.contains('hoshi-sasayaki-active'), true);
+});
+
+
+test('VN Toggle reveals styled ruby groups and retains them after screen return', async () => {
+    const sourceRuby = rubyText('日本', 'にほん');
+    const adjacentRuby = rubyText('語', 'ご');
+    const base = sourceRuby.firstChild;
+    const styledBase = new TestElement('span');
+    sourceRuby.insertBefore(styledBase, base);
+    styledBase.appendChild(base);
+    const body = bodyWith(paragraphWith(sourceRuby, adjacentRuby, '。'), p('次の画面。'));
+    const loaded = loadReader(body, { mode: 'block', revealSpeed: 0, selectionScript: readerSelectionSource() });
+    const { reader, document, window, selectionMessages } = loaded;
+    window.hoshiSelection.configure({ bridge: 'android-reader' });
+    window.hoshiSelection.setupFurigana('Toggle', document);
+    await reader.initialize();
+    const cloneRuby = currentScreen(reader).querySelector('ruby');
+    // The lightweight DOM fixture must assign the document to freshly cloned nodes.
+    assignOwnerDocument(currentScreen(reader), document);
+    assert.equal(cloneRuby.classList.contains('furigana-hidden'), true);
+    document.elementFromPoint = () => cloneRuby;
+    assert.equal(window.hoshiSelection.selectText(12, 72, 32), 'furigana');
+    assert.equal(selectionMessages.length, 0);
+    assert.equal(sourceRuby.classList.contains('furigana-hidden'), false);
+    assert.equal(adjacentRuby.classList.contains('furigana-hidden'), false);
+    assert.equal(reader.totalChapterChars, 7);
+    reader.renderScreen(1, true);
+    reader.renderScreen(0, true);
+    assert.equal(currentScreen(reader).querySelectorAll('ruby').some((ruby) => ruby.classList.contains('furigana-hidden')), false);
+    const baseNode = reader.createWalker(currentScreen(reader).querySelector('ruby')).nextNode();
+    document.elementFromPoint = () => baseNode.parentElement;
+    window.hoshiSelection.getCharacterAtPoint = () => ({ node: baseNode, offset: 0 });
+    assert.equal(window.hoshiSelection.selectText(12, 72, 32), '日本語');
+    assert.equal(selectionMessages[0].sentence, '日本語。');
+    assert.equal(selectionMessages[0].normalizedOffset, 0);
 });

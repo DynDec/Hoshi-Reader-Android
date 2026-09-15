@@ -86,7 +86,7 @@ data class ReaderSettings(
     val selectedFontVariantId: String? = null,
     val fontVariantSelections: Map<String, String> = emptyMap(),
     val fontSize: Int = 22,
-    val hideFurigana: Boolean = false,
+    val furiganaMode: FuriganaMode = FuriganaMode.Off,
     val viewMode: ReaderViewMode = ReaderViewMode.Paginated,
     val visualNovelRevealSpeed: Int = 45,
     val visualNovelScreenMode: VisualNovelScreenMode = VisualNovelScreenMode.Block,
@@ -272,6 +272,19 @@ internal fun ReaderSettings.withDefaultFont(): ReaderSettings = copy(
         (ReaderFontManager.systemMinchoFamilyId to "wght-400-normal"),
 )
 
+@Serializable
+enum class FuriganaMode(@param:StringRes val labelResId: Int) {
+    Off(R.string.reader_furigana_off),
+    Dimmed(R.string.reader_furigana_dimmed),
+    Toggle(R.string.reader_furigana_toggle),
+    Hidden(R.string.reader_furigana_hidden);
+
+    companion object {
+        fun fromStorage(value: String?, legacyHidden: Boolean = false): FuriganaMode =
+            entries.firstOrNull { it.name == value } ?: if (legacyHidden) Hidden else Off
+    }
+}
+
 enum class ReaderTheme(val label: String) {
     System("System"),
     Light("Light"),
@@ -378,7 +391,10 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             ?.let { runCatching { Json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
             .orEmpty(),
         fontSize = preferences.getInt("fontSize", 22),
-        hideFurigana = preferences.getBoolean("readerHideFurigana", false),
+        furiganaMode = FuriganaMode.fromStorage(
+            preferences.getString("furiganaMode", null),
+            preferences.getBoolean("readerHideFurigana", false),
+        ),
         viewMode = ReaderViewMode.fromStorage(
             preferences.getString("readerViewMode", null),
             legacyContinuousMode = preferences.getBoolean("continuousMode", false),
@@ -471,7 +487,8 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .putString("selectedFontVariantId", settings.selectedFontVariantId)
             .putString("fontVariantSelections", Json.encodeToString(settings.fontVariantSelections))
             .putInt("fontSize", settings.fontSize)
-            .putBoolean("readerHideFurigana", settings.hideFurigana)
+            .putString("furiganaMode", settings.furiganaMode.name)
+            .putBoolean("readerHideFurigana", settings.furiganaMode == FuriganaMode.Hidden)
             .putString("readerViewMode", settings.viewMode.rawValue)
             .putBoolean("continuousMode", settings.continuousMode)
             .putInt("visualNovelRevealSpeed", settings.visualNovelRevealSpeed.coerceVisualNovelRevealSpeed())
@@ -602,6 +619,12 @@ class ReaderSettingsRepository(
                 preferences.writeReaderSettings(legacySource?.load() ?: ReaderSettings())
                 preferences[KEY_MIGRATED_FROM_SHARED_PREFERENCES] = true
             }
+            if (preferences[KEY_FURIGANA_MODE] == null) {
+                preferences[KEY_FURIGANA_MODE] = FuriganaMode.fromStorage(
+                    null,
+                    preferences[KEY_HIDE_FURIGANA] ?: false,
+                ).name
+            }
             preferences.migrateStatisticsAutostartIfNeeded()
         }
     }
@@ -637,7 +660,7 @@ class ReaderSettingsRepository(
                 ?.let { runCatching { json.decodeFromString<Map<String, String>>(it) }.getOrNull() }
                 .orEmpty(),
             fontSize = this[KEY_FONT_SIZE] ?: 22,
-            hideFurigana = this[KEY_HIDE_FURIGANA] ?: false,
+            furiganaMode = FuriganaMode.fromStorage(this[KEY_FURIGANA_MODE], this[KEY_HIDE_FURIGANA] ?: false),
             viewMode = ReaderViewMode.fromStorage(
                 this[KEY_READER_VIEW_MODE],
                 legacyContinuousMode = this[KEY_CONTINUOUS_MODE] ?: false,
@@ -719,7 +742,8 @@ class ReaderSettingsRepository(
             ?: remove(KEY_SELECTED_FONT_VARIANT_ID)
         this[KEY_FONT_VARIANT_SELECTIONS] = json.encodeToString(settings.fontVariantSelections)
         this[KEY_FONT_SIZE] = settings.fontSize
-        this[KEY_HIDE_FURIGANA] = settings.hideFurigana
+        this[KEY_FURIGANA_MODE] = settings.furiganaMode.name
+        this[KEY_HIDE_FURIGANA] = settings.furiganaMode == FuriganaMode.Hidden
         this[KEY_READER_VIEW_MODE] = settings.viewMode.rawValue
         this[KEY_CONTINUOUS_MODE] = settings.continuousMode
         this[KEY_VISUAL_NOVEL_REVEAL_SPEED] = settings.visualNovelRevealSpeed.coerceVisualNovelRevealSpeed()
@@ -845,6 +869,7 @@ class ReaderSettingsRepository(
         private val KEY_SELECTED_FONT_VARIANT_ID = stringPreferencesKey("selectedFontVariantId")
         private val KEY_FONT_VARIANT_SELECTIONS = stringPreferencesKey("fontVariantSelections")
         private val KEY_FONT_SIZE = intPreferencesKey("fontSize")
+        private val KEY_FURIGANA_MODE = stringPreferencesKey("furiganaMode")
         private val KEY_HIDE_FURIGANA = booleanPreferencesKey("readerHideFurigana")
         private val KEY_READER_VIEW_MODE = stringPreferencesKey("readerViewMode")
         private val KEY_CONTINUOUS_MODE = booleanPreferencesKey("continuousMode")
@@ -932,6 +957,7 @@ private data class ProfileReaderAppearanceSettings(
     val selectedFontVariantId: String? = null,
     val fontVariantSelections: Map<String, String> = emptyMap(),
     val fontSize: Int = 22,
+    val furiganaMode: FuriganaMode? = null,
     val hideFurigana: Boolean = false,
     val viewMode: ReaderViewMode? = null,
     val continuousMode: Boolean = false,
@@ -993,7 +1019,8 @@ private fun ReaderSettings.toProfileAppearanceSettings(): ProfileReaderAppearanc
         selectedFontVariantId = selectedFontVariantId,
         fontVariantSelections = fontVariantSelections,
         fontSize = fontSize,
-        hideFurigana = hideFurigana,
+        furiganaMode = furiganaMode,
+        hideFurigana = furiganaMode == FuriganaMode.Hidden,
         viewMode = viewMode,
         continuousMode = continuousMode,
         visualNovelRevealSpeed = visualNovelRevealSpeed.coerceVisualNovelRevealSpeed(),
@@ -1054,7 +1081,7 @@ private fun ReaderSettings.withProfileAppearance(appearance: ProfileReaderAppear
         selectedFontVariantId = appearance.selectedFontVariantId,
         fontVariantSelections = appearance.fontVariantSelections,
         fontSize = appearance.fontSize,
-        hideFurigana = appearance.hideFurigana,
+        furiganaMode = appearance.furiganaMode ?: FuriganaMode.fromStorage(null, appearance.hideFurigana),
         viewMode = appearance.viewMode ?: if (appearance.continuousMode) {
             ReaderViewMode.Continuous
         } else {

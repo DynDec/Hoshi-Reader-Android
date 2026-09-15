@@ -135,6 +135,12 @@ Manual reader validation should cover:
   open the existing fullscreen copy/save/share viewer. Verify the tabs appear as
   Chapters, Highlights, Gallery, Search and none of their scrolling content
   stretches or glows past either edge.
+- furigana Off/Dimmed/Toggle/Hidden in paginated, continuous, and VN modes,
+  with horizontal/vertical writing and XHTML lowercase ruby nodes. Toggle first
+  taps reveal adjacent ruby separated only by ASCII whitespace without lookup or
+  page advance; punctuation or styled sibling elements stop the group. Second
+  taps perform lookup. Verify highlights, Sasayaki, progress/restore, VN return
+  to a revealed screen, profile switching/restart, and legacy boolean migration.
 - forward and backward chapter boundaries, including reverse landing at the
   previous chapter end.
 - page progress monotonicity, per-page progress updates, and restore landing

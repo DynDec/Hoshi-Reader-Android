@@ -8,6 +8,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Add Off, Dimmed, Toggle, and Hidden furigana modes in Reader Appearance;
+  Toggle reveals whitespace-adjacent ruby annotations together on the first tap.
+
 - Add Show, Blur, and Hide privacy modes for bookshelf covers, plus deterministic
   title and author artwork when a book has no visible cover.
 - Warn users before enabling AnkiConnect that most setups can create cards

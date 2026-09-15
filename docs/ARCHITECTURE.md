@@ -159,6 +159,10 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   and chapter time remaining derive from one Kotlin-owned TOC range model;
   Gallery thumbnails and the fullscreen viewer reuse the existing safe EPUB
   resource path.
+- Reader furigana mode is profile-scoped, with legacy hide-furigana booleans
+  migrated to Hidden or Off. Shared selection consumes Toggle reveal taps and
+  reveals whitespace-adjacent ruby groups; VN uses its existing source/clone
+  projection to retain reveals when a screen is rendered again.
 - Reader text semantics live in `reader-text-semantics.js` and are consumed by
   paginated, continuous, and VN assets for normalization, matchable character
   counting, raw character counting, and matchable-character checks.

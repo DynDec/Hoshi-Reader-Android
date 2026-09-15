@@ -417,10 +417,17 @@ private fun ReaderAppearanceContent(
                         palette = palette,
                     )
                     AppearanceDivider(palette)
-                    SwitchRow(
+                    val furiganaLabels = FuriganaMode.entries.map { stringResource(it.labelResId) }
+                    SegmentedRow(
                         label = stringResource(R.string.reader_appearance_hide_furigana),
-                        checked = settings.hideFurigana,
-                        onCheckedChange = { onSettingsChange(settings.copy(hideFurigana = it)) },
+                        options = furiganaLabels,
+                        selected = stringResource(settings.furiganaMode.labelResId),
+                        onSelected = { label ->
+                            onSettingsChange(
+                                settings.copy(furiganaMode = FuriganaMode.entries[furiganaLabels.indexOf(label)]),
+                            )
+                        },
+                        palette = palette,
                     )
                 }
                 AppearanceSection(title = stringResource(R.string.reader_appearance_layout), palette = palette) {

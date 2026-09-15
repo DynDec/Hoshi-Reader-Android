@@ -240,52 +240,7 @@ Validation:
   bracketed complete sentences, 100-hit limit, jump/back/forward, page-turn
   clearing and supplementary-character offsets in all reader modes.
 
-### 7. Reader furigana reveal and dimmed modes
-
-Status: pending Android sync.
-
-Commits:
-
-- `15d4a6e` - add Off, Toggle, and Hidden furigana modes.
-- `23e0764` - migrate the legacy hide-furigana preference.
-- `a4e16df`, `253a589` - reveal adjacent ruby and add Dimmed mode.
-
-Dependency/value reasoning:
-
-- This is a self-contained reader setting, but it touches shared selection and
-  all reader modes, so its state and tap semantics should land together.
-
-iOS behavior to mirror:
-
-- Off shows furigana normally. Hidden removes it. Toggle initially hides ruby
-  annotations with a dotted base-text indicator; tapping reveals its ruby group
-  without opening lookup for that tap.
-- Dimmed leaves annotations visible at 0.4 opacity. Toggle reveals adjacent ruby
-  separated only by whitespace as one group. Existing hide-furigana users
-  migrate to the equivalent final mode.
-
-Android current gap:
-
-- `ReaderSettings` stores only `hideFurigana: Boolean`; `ReaderAppearanceView.kt`
-  exposes a switch rather than a four-state mode.
-- `ReaderContentStyles.kt` removes/hides ruby globally and shared
-  `selection.js` has no `ruby.furigana-hidden` reveal tap result. Paginated,
-  continuous, and VN therefore cannot reveal individual annotations.
-
-Suggested slice:
-
-- Replace the boolean with a compatible enum migration, add the segmented
-  setting, and implement the same reveal marker and tap interception through the
-  shared reader selection/text semantics used by all modes, including adjacent
-  ruby reveal and Dimmed opacity.
-
-Validation:
-
-- Verify Off/Dimmed/Toggle/Hidden in paginated, continuous, and VN modes,
-  horizontal and vertical writing, with lookup, highlights, Sasayaki, restore, and ruby
-  split across styled nodes.
-
-### 8. Lookup popup two-column layout and dictionary CSS isolation
+### 7. Lookup popup two-column layout and dictionary CSS isolation
 
 Status: pending Android sync.
 
@@ -334,7 +289,7 @@ Validation:
 - Run `node --test app/src/test/js/*.test.mjs`, focused settings tests,
   localization tests, and lint.
 
-### 9. Dictionary search source text and click lookup
+### 8. Dictionary search source text and click lookup
 
 Status: pending Android sync.
 
@@ -342,7 +297,7 @@ Commits: `beb46ba`, `969b978`.
 
 Dependency/value reasoning:
 
-- Shared iframe result/history behavior depends on popup slice 8; preserve the
+- Shared iframe result/history behavior depends on popup slice 7; preserve the
   original query and selection offset together for correct Anki cloze context.
 
 iOS behavior to mirror:
@@ -369,7 +324,7 @@ Validation:
 - Long/multiline query, repeated words, supplementary characters, scrolling,
   redirects/back/forward, Anki cloze offsets, profile changes and child popups.
 
-### 10. Popup audio candidate selection
+### 9. Popup audio candidate selection
 
 Status: pending Android sync.
 
@@ -407,7 +362,7 @@ Validation:
 - Local/remote mixed sources, exact/reading-only matches, duplicate names/URLs,
   empty/failing sources, autoplay, mining, recursive lookup and history resets.
 
-### 11. Frequency sorting controls and import/update feedback
+### 10. Frequency sorting controls and import/update feedback
 
 Status: partial native support; pending Android UI/bridge integration.
 
@@ -454,7 +409,7 @@ Validation:
   equal/missing frequencies; mixed valid/invalid batch imports and recovery;
   automatic low-RAM with the manual setting off and unchanged manual behavior.
 
-### 12. Anki tag handlebars
+### 11. Anki tag handlebars
 
 Status: pending Android sync.
 
@@ -487,7 +442,7 @@ Validation:
 - Literal plus title/expression tags, whitespace/newlines, missing title,
   unknown handlebars, multiple formats, saved custom tags and both backends.
 
-### 13. Google Drive timeout and automatic-refresh error suppression
+### 12. Google Drive timeout and automatic-refresh error suppression
 
 Status: pending Android sync.
 
@@ -525,7 +480,7 @@ Validation:
 - Automatic refresh offline, slow token/list requests, and connection loss;
   manual connect/refresh/import/export/delete must still show actionable errors.
 
-### 14. Remote bookshelf last-access ordering
+### 13. Remote bookshelf last-access ordering
 
 Status: pending Android sync.
 
@@ -533,7 +488,7 @@ Commits: `e6e2b4b`.
 
 Dependency/value reasoning:
 
-- Independent of timeout slice 13; reuse the existing TTU filename timestamp
+- Independent of timeout slice 12; reuse the existing TTU filename timestamp
   parsers and grouped Drive file discovery.
 
 iOS behavior to mirror:
@@ -558,7 +513,7 @@ Validation:
 - Progress versus audio newest timestamp, bookdata fallback, missing/malformed
   names, multiple remote books, Recent/Title switch and refresh/import.
 
-### 15. Reader navigation and options toolbar
+### 14. Reader navigation and options toolbar
 
 Status: partial Android implementation; remaining visual/interaction parity.
 
@@ -597,7 +552,7 @@ Validation:
   routing, Sasayaki eligibility, focus toggles/history, horizontal/vertical
   continuous and paginated/VN content, custom/dark/e-ink themes and rotation.
 
-### 16. Reader WebView line-box CSS parity
+### 15. Reader WebView line-box CSS parity
 
 Status: pending Android sync.
 
@@ -630,7 +585,7 @@ Validation:
 - Paginated/continuous horizontal and vertical writing, ruby, cover and
   multi-image pages, line height, progress, and restore.
 
-### 17. App accent and stroke-order font attribution
+### 16. App accent and stroke-order font attribution
 
 Status: pending Android sync.
 
@@ -666,7 +621,6 @@ Validation:
 
 | Commit | Date | iOS summary | Android status |
 | --- | --- | --- | --- |
-| `15d4a6e`, `23e0764`, `a4e16df`, `253a589` | 2026-06-15 / 06-20 / 08-20 | Furigana mode, migration, grouped reveal and Dimmed | Pending four-state persistence and tap/CSS semantics |
 | `ed25036`, `8d1442e`, `0a91398` | 2026-06-14 / 07-01 / 08-22 | Popup layout/themes and dictionary CSS isolation | Pending settings/assets and div-scoped styles |
 | `53fdb72` | 2026-06-15 | Closeable Reader open-failure view | Pending localized route error UI |
 | `4dae37c` | 2026-06-13 | Drive timeouts and transient refresh suppression | Pending timeout/error normalization |
@@ -691,18 +645,21 @@ Validation:
 2. Renderer recovery (2) and localized open-failure fallback (3).
 3. Statistics archive/restore, then daily editing and lifecycle/overview parity (4).
 4. Highlight sidecar/range editing (5), then book search remaining parity (6).
-5. Furigana reveal/Dimmed modes (7), using the shared ruby contract.
-6. Popup layout/CSS isolation (8), then dictionary search source text (9).
-7. Audio candidate API, then popup selection/mining (10).
-8. Native frequency options/import diagnostics, then settings and automatic
-   low-RAM update policy (11).
-9. Anki tag handlebars (12).
-10. Drive timeout/error suppression (13) and remote Recent sorting (14).
-11. Reader navigation/options toolbar (15), after statistics availability (4).
-12. Reader line-box CSS parity (16), app accent and font attribution (17).
+5. Popup layout/CSS isolation (7), then dictionary search source text (8).
+6. Audio candidate API, then popup selection/mining (9).
+7. Native frequency options/import diagnostics, then settings and automatic
+   low-RAM update policy (10).
+8. Anki tag handlebars (11).
+9. Drive timeout/error suppression (12) and remote Recent sorting (13).
+10. Reader navigation/options toolbar (14), after statistics availability (4).
+11. Reader line-box CSS parity (15), app accent and font attribution (16).
 
 ## Covered Or No Android Action
 
+- `15d4a6e`, `23e0764`, `a4e16df`, `253a589`: Android now provides
+  profile-scoped Off/Dimmed/Toggle/Hidden furigana modes, migrates legacy hide
+  booleans, consumes Toggle reveal taps, reveals whitespace-adjacent ruby, and
+  retains VN reveal state across screen rendering.
 - `c6b29c8`, `1db2cd3`: Android now stores the first EPUB creator as optional
   compatible book metadata, renders deterministic title/author fallback artwork,
   and applies persisted Show/Blur/Hide privacy modes across local, remote,
@@ -757,7 +714,7 @@ Validation:
 - `e833279`, `e7b08b8`, `1992872`, `c1e4e57`: intermediate hoshidicts bumps are
   superseded by the final dictionary behavior; Android already exposes Kanji,
   pitch and transcription data. Explicit frequency option integration is the
-  remaining bridge gap described in slice 11.
+  remaining bridge gap described in slice 10.
 - `77a7eaa`, `19bd095`: iOS cleanup and unwrap removal do not define additional
   Android-visible behavior.
 - `188284b`: iOS local-audio launch/actor initialization fix has no direct
@@ -824,17 +781,17 @@ Validation:
 - `7c50443`, `434ed70`, `aa1994f`: dependency revision metadata only. Android's
   vendored native library already supports frequency `LookupOptions`, IPA/
   transcriptions and importer error results; expose missing Kotlin/JNI behavior
-  in slice 11 rather than queueing revision bumps.
+  in slice 10 rather than queueing revision bumps.
 - `7dd3f49` (query-release mechanics): Android's
   `DictionaryLookupQueryService.rebuild()` serializes complete replacement
   sessions and destroys the prior session after its atomic swap; the Swift
   bundle-release sequence is not an extra Android behavior requirement. The
-  automatic low-RAM difference remains slice 11.
+  automatic low-RAM difference remains slice 10.
 - `93ba3be` (popup defaults): Android already defaults popup width/height to
   500/500 and permits height 1000, exceeding the iOS increase to 350/310. The
   unset statistics-sync default remains slice 4.
 - `8024df1` (SwiftLAME attribution): Android does not ship SwiftLAME; no action.
-  Attribution for the downloadable stroke-order font remains slice 17.
+  Attribution for the downloadable stroke-order font remains slice 16.
 - `efd89fc`, `e1b0854`: README/issue-template changes only.
 - `0425880`, `c71a2a9`, `d76127d`, `f86eb95`, `d8e150d`, `8137e1e`:
   iOS version metadata only.

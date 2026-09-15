@@ -889,6 +889,7 @@ private fun readerSetupScript(
             popupHostScript.src = 'https://appassets.androidplatform.net/popup/reader-popup-host.js';
             document.head.appendChild(popupHostScript);
           }
+          window.hoshiSelection.setupFurigana(${readerJavaScriptStringLiteral(settings.furiganaMode.name)});
           $paginationScript
         })();
     """.trimIndent()
