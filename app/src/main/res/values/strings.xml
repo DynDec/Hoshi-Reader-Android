@@ -430,6 +430,7 @@
     <string name="reader_appearance_importing" comment="Generic import progress label, intentionally shared with ッツ backup import.">Importing...</string>
     <string name="reader_appearance_font_size">Font Size</string>
     <string name="reader_appearance_hide_furigana">Hide Furigana</string>
+    <string name="reader_appearance_adaptive_furigana">Adaptive Furigana</string>
     <string name="reader_appearance_mode" comment="Reader appearance setting label, intentionally matching dictionary mode.">Mode</string>
     <string name="reader_appearance_paginated">Paginated</string>
     <string name="reader_appearance_continuous">Continuous</string>

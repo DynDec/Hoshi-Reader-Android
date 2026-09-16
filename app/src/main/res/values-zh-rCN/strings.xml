@@ -428,6 +428,7 @@
     <string name="reader_appearance_importing" comment="Generic import progress label, intentionally shared with ッツ backup import.">正在导入...</string>
     <string name="reader_appearance_font_size">字号</string>
     <string name="reader_appearance_hide_furigana">隐藏振假名</string>
+    <string name="reader_appearance_adaptive_furigana">自适应振假名</string>
     <string name="reader_appearance_mode" comment="Reader appearance setting label, intentionally matching dictionary mode.">模式</string>
     <string name="reader_appearance_paginated">分页</string>
     <string name="reader_appearance_continuous">连续</string>

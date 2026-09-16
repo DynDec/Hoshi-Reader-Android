@@ -55,9 +55,10 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 - Keep vertical paginated Reader pages from developing font- and ruby-dependent
   horizontal padding gaps by removing the obsolete WebKit line-box override,
-  lowering Android's minimum font-size floor, and adaptively fitting visible
-  furigana from iOS-sized `0.45em` down to `0.30em` in `0.005em` steps per
-  chapter without changing the configured line height.
+  and add an opt-in Adaptive Furigana setting that lowers Android's minimum
+  font-size floor and fits visible furigana from iOS-sized `0.45em` down to
+  `0.30em` in `0.005em` steps per chapter without changing the configured line
+  height; disabled, it preserves the former fixed `0.45em`/8px behavior.
 - Ask for confirmation before resetting Dictionary custom CSS to prevent
   accidental clearing.
 - Keep text and images reachable in every Reader mode when publisher CSS wraps

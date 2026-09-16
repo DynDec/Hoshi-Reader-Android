@@ -25,8 +25,12 @@ internal fun HoshiWebViewSettings.applyHoshiWebViewSecurityDefaults() {
 }
 
 internal fun HoshiWebViewSettings.applyHoshiReaderTextDefaults() {
-    // WebView defaults to 8px, which enlarges 0.45em furigana at small reader font sizes.
-    minimumFontSize = 1
+    applyHoshiReaderTextDefaults(adaptiveFurigana = false)
+}
+
+internal fun HoshiWebViewSettings.applyHoshiReaderTextDefaults(adaptiveFurigana: Boolean) {
+    // Adaptive furigana needs CSS-sized ruby annotations below WebView's former 8px floor.
+    minimumFontSize = if (adaptiveFurigana) 1 else 8
 }
 
 fun WebView.applyHoshiWebViewSecurityDefaults() {
@@ -34,8 +38,8 @@ fun WebView.applyHoshiWebViewSecurityDefaults() {
     disableNativeOverscrollStretch()
 }
 
-fun WebView.applyHoshiReaderTextDefaults() {
-    AndroidHoshiWebViewSettings(this).applyHoshiReaderTextDefaults()
+fun WebView.applyHoshiReaderTextDefaults(adaptiveFurigana: Boolean = false) {
+    AndroidHoshiWebViewSettings(this).applyHoshiReaderTextDefaults(adaptiveFurigana)
 }
 
 fun WebView.disableNativeOverscrollStretch() {

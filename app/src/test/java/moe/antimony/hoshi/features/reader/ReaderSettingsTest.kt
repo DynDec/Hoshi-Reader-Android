@@ -28,6 +28,7 @@ class ReaderSettingsTest {
         assertFalse(settings.eInkMode)
         assertEquals(true, settings.verticalWriting)
         assertEquals(22, settings.fontSize)
+        assertFalse(settings.adaptiveFurigana)
         assertEquals(5, settings.horizontalPadding)
         assertEquals(0, settings.verticalPadding)
         assertEquals(30, settings.topSafeAreaDp)

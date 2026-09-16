@@ -18,6 +18,29 @@ class ReaderPaginationScriptsTest {
     }
 
     @Test
+    fun generatedPaginatedScriptGatesAdaptiveFuriganaAndCleansDisabledOverrides() {
+        val disabled = ReaderPaginationScripts.shellScript(
+            settings = ReaderSettings(
+                viewMode = ReaderViewMode.Paginated,
+                adaptiveFurigana = false,
+            ),
+        )
+        val enabled = ReaderPaginationScripts.shellScript(
+            settings = ReaderSettings(
+                viewMode = ReaderViewMode.Paginated,
+                adaptiveFurigana = true,
+            ),
+        )
+
+        assertFalse(disabled.contains("__HOSHI_"))
+        assertFalse(enabled.contains("__HOSHI_"))
+        assertTrue(disabled.contains("if (false\n      && !false"))
+        assertTrue(enabled.contains("if (true\n      && !false"))
+        assertTrue(disabled.contains("removeProperty('--hoshi-furigana-scale')"))
+        assertTrue(enabled.contains("fitVerticalPaginatedFurigana(document, {"))
+    }
+
+    @Test
     fun previousChapterNavigationTargetsEndLikeIos() {
         val position = ReaderChapterPosition(index = 3)
 

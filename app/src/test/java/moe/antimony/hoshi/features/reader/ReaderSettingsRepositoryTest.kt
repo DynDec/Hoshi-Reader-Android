@@ -62,6 +62,7 @@ class ReaderSettingsRepositoryTest {
             assertTrue(settings.fontVariantSelections.isEmpty())
             assertEquals(22, settings.fontSize)
             assertFalse(settings.hideFurigana)
+            assertFalse(settings.adaptiveFurigana)
             assertEquals(ReaderViewMode.Paginated, settings.viewMode)
             assertFalse(settings.continuousMode)
             assertEquals(45, settings.visualNovelRevealSpeed)
@@ -113,6 +114,23 @@ class ReaderSettingsRepositoryTest {
             assertFalse(settings.lockCurrentOrientation)
             assertFalse(settings.openLastReadBookOnLaunch)
             assertFalse(settings.hideBookshelfProgress)
+        }
+    }
+
+    @Test
+    fun missingAdaptiveFuriganaInProfileJsonDefaultsToFalse() = runBlocking {
+        val profileRepository = ProfileRepository(tempFolder.newFolder("files"))
+        val defaultProfileId = profileRepository.state.value.defaultProfileId
+        profileRepository.readerSettingsFile(defaultProfileId).apply {
+            parentFile?.mkdirs()
+            writeText("""{"theme":"Dark"}""")
+        }
+
+        repository(profileRepository = profileRepository).use { repository ->
+            val settings = repository.settings.first()
+
+            assertEquals(ReaderTheme.Dark, settings.theme)
+            assertFalse(settings.adaptiveFurigana)
         }
     }
 
@@ -202,6 +220,7 @@ class ReaderSettingsRepositoryTest {
                     ),
                     fontSize = 24,
                     hideFurigana = true,
+                    adaptiveFurigana = true,
                     viewMode = ReaderViewMode.VisualNovel,
                     visualNovelRevealSpeed = 80,
                     visualNovelScreenMode = VisualNovelScreenMode.Sentences,
@@ -270,6 +289,7 @@ class ReaderSettingsRepositoryTest {
             assertEquals("wght-400-normal", saved.fontVariantSelections["recommended:kleeone"])
             assertEquals(24, saved.fontSize)
             assertTrue(saved.hideFurigana)
+            assertTrue(saved.adaptiveFurigana)
             assertEquals(ReaderViewMode.VisualNovel, saved.viewMode)
             assertFalse(saved.continuousMode)
             assertEquals(80, saved.visualNovelRevealSpeed)
@@ -406,6 +426,7 @@ class ReaderSettingsRepositoryTest {
                 it.copy(
                     theme = ReaderTheme.Dark,
                     fontSize = 30,
+                    adaptiveFurigana = true,
                     popupWidth = 440,
                     pageSwipeThresholdPx = 96,
                     topSafeAreaDp = 46,
@@ -425,6 +446,7 @@ class ReaderSettingsRepositoryTest {
             val inherited = repository.settings.first()
             assertEquals(ReaderTheme.Dark, inherited.theme)
             assertEquals(30, inherited.fontSize)
+            assertTrue(inherited.adaptiveFurigana)
             assertEquals(440, inherited.popupWidth)
             assertEquals(96, inherited.pageSwipeThresholdPx)
             assertEquals(46, inherited.topSafeAreaDp)
@@ -441,6 +463,7 @@ class ReaderSettingsRepositoryTest {
                 it.copy(
                     theme = ReaderTheme.Light,
                     fontSize = 18,
+                    adaptiveFurigana = false,
                     popupWidth = 280,
                     pageSwipeThresholdPx = 120,
                     topSafeAreaDp = 58,
@@ -459,6 +482,7 @@ class ReaderSettingsRepositoryTest {
             val japanese = repository.settings.first()
             assertEquals(ReaderTheme.Dark, japanese.theme)
             assertEquals(30, japanese.fontSize)
+            assertTrue(japanese.adaptiveFurigana)
             assertEquals(440, japanese.popupWidth)
             assertEquals(96, japanese.pageSwipeThresholdPx)
             assertEquals(46, japanese.topSafeAreaDp)

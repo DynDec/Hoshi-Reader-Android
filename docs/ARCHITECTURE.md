@@ -154,16 +154,17 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   family, style, and weight declarations intact.
 - Reader rendering and lookup remain WebView-based to preserve iOS-aligned
   visible behavior.
-- Reader chapter WebViews lower Android's 8px minimum font size to 1px so CSS
-  furigana can retain iOS-aligned geometry. In vertical paginated mode with
-  visible ruby, shared layout calibration runs after fonts and images settle,
-  measures the chapter's typography groups, and exposes one chapter-wide
-  `--hoshi-furigana-scale`, selecting the largest fitting value from `0.45em`
-  down to `0.30em` in `0.005em` steps when ruby advance is within `0.5px` of
-  plain text. At the lower bound it accepts residual widening rather than
-  increasing the configured line height; horizontal, continuous, VN, and
-  hidden-furigana paths remain unchanged. Other Hoshi WebViews keep their
-  existing platform text defaults.
+- Reader chapter WebViews expose an opt-in Adaptive Furigana appearance setting.
+  Disabled chapters retain Android WebView's 8px minimum font size, fixed
+  `0.45em` furigana, and no calibration. Enabled chapters use a 1px minimum
+  font size; visible ruby in vertical paginated mode is calibrated after fonts
+  and images settle, measures the chapter's typography groups, and exposes one
+  chapter-wide `--hoshi-furigana-scale`, selecting the largest fitting value
+  from `0.45em` down to `0.30em` in `0.005em` steps when ruby advance is within
+  `0.5px` of plain text. At the lower bound it accepts residual widening rather
+  than increasing the configured line height. Horizontal, continuous, VN, and
+  hidden-furigana paths receive no adaptive calibration. Other Hoshi WebViews
+  keep their existing platform text defaults.
 - Reader layout modes are WebView-backed assets for paginated, continuous, and
   VN reading. Kotlin selects the asset, injects typed settings, and keeps
   persisted progress as chapter progress mapped to whole-book character count.

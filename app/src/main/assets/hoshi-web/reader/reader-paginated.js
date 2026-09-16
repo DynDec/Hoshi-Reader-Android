@@ -659,10 +659,22 @@ window.hoshiReader.initialize = function() {
     return new Promise(function(resolve) { setTimeout(resolve, 50); });
   }).then(function() {
     window.hoshiReaderLayoutSemantics.sanitizeInlineBlocks(document, window.hoshiReader.isVertical());
-    if (window.hoshiReader.isVertical()
+    if (__HOSHI_ADAPTIVE_FURIGANA__
+      && !__HOSHI_HIDE_FURIGANA__
+      && window.hoshiReader.isVertical()
       && window.hoshiReaderLayoutSemantics
       && typeof window.hoshiReaderLayoutSemantics.fitVerticalPaginatedFurigana === 'function') {
-      window.hoshiReaderLayoutSemantics.fitVerticalPaginatedFurigana(document, true);
+      window.hoshiReaderLayoutSemantics.fitVerticalPaginatedFurigana(document, {
+        mode: 'paginated',
+        paginated: true,
+        vertical: true,
+        visibleRuby: true,
+        furiganaVisible: true,
+        hideFurigana: false
+      });
+    } else if (document.documentElement.style
+      && typeof document.documentElement.style.removeProperty === 'function') {
+      document.documentElement.style.removeProperty('--hoshi-furigana-scale');
     }
     window.hoshiReader.buildNodeOffsets();
     __HOSHI_RESTORE_SCRIPTS__

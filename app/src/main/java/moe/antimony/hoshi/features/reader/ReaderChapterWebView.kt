@@ -250,7 +250,7 @@ internal fun ChapterWebView(
         factory = { context ->
             HoshiReaderWebView(context).apply {
                 applyHoshiWebViewSecurityDefaults()
-                applyHoshiReaderTextDefaults()
+                applyHoshiReaderTextDefaults(readerSettings.adaptiveFurigana)
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
                 this.onHighlightCreated = { color, id, creation ->
@@ -475,6 +475,7 @@ internal fun ChapterWebView(
                         restoreToken = restoreToken,
                     )
                 }
+                applyHoshiReaderTextDefaults(readerSettings.adaptiveFurigana)
                 webView.loadUrl(baseUrl)
             }
         },

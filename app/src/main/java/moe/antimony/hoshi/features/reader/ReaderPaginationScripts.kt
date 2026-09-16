@@ -145,6 +145,8 @@ internal object ReaderPaginationScripts {
             .replace("__HOSHI_TRAILING_SPACER_HEIGHT_LITERAL__", settings.trailingSpacerHeightCss.javaScriptSingleQuotedStringLiteral())
             .replace("__HOSHI_TRAILING_SPACER_WIDTH_LITERAL__", settings.trailingSpacerWidthCss.javaScriptSingleQuotedStringLiteral())
             .replace("__HOSHI_BLUR_IMAGES__", settings.blurImages.toString())
+            .replace("__HOSHI_ADAPTIVE_FURIGANA__", settings.adaptiveFurigana.toString())
+            .replace("__HOSHI_HIDE_FURIGANA__", settings.hideFurigana.toString())
             .replace("__HOSHI_RESTORE_SCRIPTS__", restoreScripts)
         return "<script>\n$body\n</script>"
     }

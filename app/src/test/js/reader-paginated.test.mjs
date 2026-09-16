@@ -46,6 +46,8 @@ function readerSource(url, options = {}) {
         .replaceAll('__HOSHI_BLUR_IMAGES__', 'false')
         .replaceAll('__HOSHI_TRAILING_SPACER_HEIGHT_LITERAL__', JSON.stringify('0px'))
         .replaceAll('__HOSHI_TRAILING_SPACER_WIDTH_LITERAL__', JSON.stringify('0px'))
+        .replaceAll('__HOSHI_ADAPTIVE_FURIGANA__', String(options.adaptiveFurigana ?? true))
+        .replaceAll('__HOSHI_HIDE_FURIGANA__', String(options.hideFurigana ?? false))
         .replaceAll('__HOSHI_RESTORE_SCRIPTS__', options.restoreScripts ?? '');
 }
 
@@ -54,6 +56,9 @@ function testStyle() {
     return {
         setProperty(name, value) {
             values.set(name, value);
+        },
+        removeProperty(name) {
+            values.delete(name);
         },
         getPropertyValue(name) {
             return values.get(name) ?? '';
@@ -771,6 +776,48 @@ test('reader initialization waits for fonts and images before sanitizing layout,
             : ['setup', 'sanitize-vertical', 'offsets', 'restore'];
         assert.deepEqual(events.slice(0, expected.length), expected);
     }
+});
+
+test('disabled adaptive furigana skips calibration and removes stale inline scale', async () => {
+    const body = new TestElement('body');
+    body.appendChild(new TestText('本文'));
+    const events = [];
+    const mediaSemanticsScript = `
+      window.hoshiReaderMediaSemantics = {
+        setupReaderImages: function() {
+          window.__events.push('setup');
+        }
+      };
+    `;
+    const layoutSemanticsScript = `
+      window.hoshiReaderLayoutSemantics = {
+        sanitizeInlineBlocks: function() {
+          window.__events.push('sanitize');
+        },
+        fitVerticalPaginatedFurigana: function() {
+          window.__events.push('ruby-calibration');
+        }
+      };
+    `;
+    const { reader, document, window } = loadReader(body, readerPaginatedUrl, {
+        adaptiveFurigana: false,
+        mediaSemanticsScript,
+        layoutSemanticsScript,
+        restoreMessages: [],
+    });
+    window.__events = events;
+    document.documentElement.style.setProperty('--hoshi-furigana-scale', '0.30em');
+    reader.buildNodeOffsets = () => {
+        events.push('offsets');
+    };
+
+    reader.initialize();
+    for (let i = 0; i < 10; i += 1) {
+        await Promise.resolve();
+    }
+
+    assert.deepEqual(events, ['setup', 'sanitize', 'offsets']);
+    assert.equal(document.documentElement.style.getPropertyValue('--hoshi-furigana-scale'), '');
 });
 
 test('paginated restoreProgress lands on the page containing the target character', async () => {

@@ -21,10 +21,19 @@ class HoshiWebViewTest {
     }
 
     @Test
-    fun readerTextDefaultsAllowCssSizedFuriganaBelowWebViewEightPixelFloor() {
+    fun readerTextDefaultsUseEightPixelFloorWhenAdaptiveFuriganaIsDisabled() {
         val settings = FakeHoshiWebViewSettings()
 
-        settings.applyHoshiReaderTextDefaults()
+        settings.applyHoshiReaderTextDefaults(adaptiveFurigana = false)
+
+        assertEquals(8, settings.minimumFontSize)
+    }
+
+    @Test
+    fun readerTextDefaultsUseOnePixelFloorWhenAdaptiveFuriganaIsEnabled() {
+        val settings = FakeHoshiWebViewSettings()
+
+        settings.applyHoshiReaderTextDefaults(adaptiveFurigana = true)
 
         assertEquals(1, settings.minimumFontSize)
     }
