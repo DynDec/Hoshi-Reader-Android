@@ -475,7 +475,7 @@ internal fun ChapterWebView(
                         restoreToken = restoreToken,
                     )
                 }
-                applyHoshiReaderTextDefaults(readerSettings.adaptiveFurigana)
+                webView.applyHoshiReaderTextDefaults(readerSettings.adaptiveFurigana)
                 webView.loadUrl(baseUrl)
             }
         },
