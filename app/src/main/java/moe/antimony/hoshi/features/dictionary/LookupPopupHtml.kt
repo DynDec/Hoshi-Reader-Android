@@ -190,6 +190,7 @@ internal object LookupPopupHtml {
                             showNotes: { postMessage: function(content) { return window.HoshiAndroidPopup.requestMessage('showNotes', content); } },
                             getEntry: { postMessage: function(index) { return window.HoshiAndroidPopup.requestMessage('getEntry', index); } },
                             lookupRedirect: { postMessage: function(query) { return window.HoshiAndroidPopup.requestMessage('lookupRedirect', query); } },
+                            sourceHistoryRestored: { postMessage: function(offset) { window.HoshiAndroidPopup.postMessage('sourceHistoryRestored', { sentenceOffset: offset }); } },
                             kanjiRedirect: { postMessage: function(kanji) { return window.HoshiAndroidPopup.requestMessage('kanjiRedirect', kanji); } },
                             kanjiRedirectCommitted: { postMessage: function() { window.HoshiAndroidPopup.postMessage('kanjiRedirectCommitted'); } }
                         }
@@ -247,6 +248,7 @@ internal object LookupPopupHtml {
             </head>
             <body>
                 $popupGesturesJs
+                <div id="search-text" hidden style="--hoshi-search-text-size: ${normalizedSettings.searchTextSize}px;"></div>
                 <div id="entries-container"></div>
                 <div class="overlay">
                     <div class="overlay-close" onclick="closeOverlay()">×</div>
@@ -326,7 +328,7 @@ internal object LookupPopupHtml {
                                     }
                                 }
                                 if (window.replacePopupResults) {
-                                    window.replacePopupResults(window.entryCount, initialEntries);
+                                    window.replacePopupResults(window.entryCount, initialEntries, message.sourceText, message.sourceSentenceOffset);
                                 } else {
                                     window.lookupEntries = initialEntries;
                                     window.hoshiPopupObserveContentReady?.();

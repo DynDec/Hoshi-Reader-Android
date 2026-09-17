@@ -30,6 +30,14 @@ class FakeElement {
         this.attributes = new Map();
         this.children = [];
         this.className = '';
+        this.classList = {
+            contains: (name) => this.className.split(' ').includes(name),
+            toggle: (name, enabled) => {
+                const names = new Set(this.className.split(' ').filter(Boolean));
+                if (enabled) names.add(name); else names.delete(name);
+                this.className = [...names].join(' ');
+            },
+        };
         this.childProbeWidth = undefined;
         this.dataset = {};
         this.matches = new Set(matches);
@@ -132,6 +140,8 @@ function popupContext({
     duplicateStates = {},
     kanjiResult = null,
     getEntry = null,
+    lookupRedirect = () => 0,
+    sourceHistoryRestored = () => {},
 } = {}) {
     const documentElement = new FakeElement();
     documentElement.childProbeWidth = htmlProbeWidth;
@@ -145,6 +155,7 @@ function popupContext({
     };
     const documentListeners = new Map();
     const entriesContainer = new FakeElement();
+    const searchTextContainer = new FakeElement();
     const overlay = new FakeElement();
     const document = {
         body,
@@ -164,7 +175,7 @@ function popupContext({
             return { nodeType: 3, textContent: text, parentElement: null };
         },
         getElementById(id) {
-            return id === 'entries-container' ? entriesContainer : null;
+            return id === 'entries-container' ? entriesContainer : id === 'search-text' ? searchTextContainer : null;
         },
         scrollingElement: { scrollTop: 0, scrollHeight: 0, clientHeight: 0 },
         querySelectorAll() {
@@ -204,6 +215,8 @@ function popupContext({
         Node: { TEXT_NODE: 3 },
         webkit: {
             messageHandlers: {
+                lookupRedirect: { postMessage: lookupRedirect },
+                sourceHistoryRestored: { postMessage: sourceHistoryRestored },
                 tapOutside: {
                     postMessage(message) {
                         tapOutsideMessages.push(message);
@@ -274,9 +287,286 @@ function popupContext({
         kanjiRedirectMessages,
         kanjiRedirectCommittedMessages,
         entriesContainer,
+        searchTextContainer,
         setDuplicateStates(value) { currentDuplicateStates = value; },
     };
 }
+
+test('source text renders code points and redirects exact suffix with matched highlight and scroll preservation', async () => {
+    const requests = [];
+    const entry = { expression: '𠮟る', reading: 'しかる', matched: '𠮟る', glossaries: [], frequencies: [], pitches: [] };
+    const setup = popupContext({ htmlZoom: '2', lookupRedirect: (query) => { requests.push(query); return 1; }, getEntry: () => entry });
+    setup.context.window.replacePopupResults(0, [], '前𠮟る 後');
+    const source = setup.searchTextContainer;
+    assert.equal(source.hidden, false);
+    assert.deepEqual(source.children.map(span => span.textContent), ['前', '𠮟', 'る', ' ', '後']);
+    setup.document.scrollingElement.scrollTop = 147;
+    await source.onclick({ target: source.children[1], stopPropagation() {} });
+    await flushAsyncWork();
+    assert.deepEqual(requests, ['𠮟る 後']);
+    assert.deepEqual(source.children.map(span => span.classList.contains('matched')), [false, true, true, false, false]);
+    assert.equal(setup.document.scrollingElement.scrollTop, 147);
+    assert.equal(setup.entriesContainer.children[0].dataset.entryIndex, '0');
+    setup.context.redirect(1);
+    assert.equal(setup.document.scrollingElement.scrollTop, 0);
+});
+
+test('source text touch target bypasses generic selection and outside dismissal', () => {
+    const setup = popupContext();
+    const target = new FakeElement(['#search-text']);
+    assert.equal(setup.context.handlePopupTap(target, 10, 10), false);
+    assert.deepEqual(setup.tapOutsideMessages, []);
+    assert.deepEqual(setup.selectTextCalls, []);
+});
+
+for (const popupScale of [0.8, 1, 2]) test(`source redirect retains visual scroll at scale ${popupScale} while delayed results clamp`, async () => {
+    const entry = { expression: '猫', reading: 'ねこ', matched: '猫', glossaries: [], frequencies: [], pitches: [] };
+    let entryRequests = 0;
+    let finishRenderingEntry;
+    const setup = popupContext({
+        htmlZoom: String(popupScale),
+        lookupRedirect: () => 1,
+        getEntry: () => ++entryRequests === 1 ? entry : new Promise(resolve => { finishRenderingEntry = resolve; }),
+    });
+    const viewportHeight = 600;
+    const sourceHeight = 240;
+    const entries = setup.entriesContainer;
+    const source = setup.searchTextContainer;
+    let top = 0;
+    function clamp(value) {
+        // Model browser scroll bounds from visible source and current/minimum entry height.
+        const minimumHeight = (parseFloat(entries.style.minHeight) || 0) / 100 * viewportHeight * popupScale;
+        const entriesHeight = Math.max(entries.children.length ? 900 : 0, minimumHeight);
+        const contentHeight = (source.hidden ? 0 : sourceHeight) + entriesHeight;
+        return Math.max(0, Math.min(value, contentHeight - viewportHeight));
+    }
+    Object.defineProperty(setup.document.scrollingElement, 'scrollTop', {
+        get: () => top = clamp(top),
+        set: value => { top = clamp(value); },
+    });
+    Object.defineProperty(entries, 'innerHTML', {
+        set(value) {
+            if (value === '') entries.children = [];
+            top = clamp(top);
+        },
+    });
+
+    setup.context.window.replacePopupResults(0, [], '猫後');
+    entries.appendChild(new FakeElement());
+    setup.document.scrollingElement.scrollTop = 180;
+    await source.onclick({ target: source.children[0], stopPropagation() {} });
+    assert.equal(entryRequests, 2);
+    assert.equal(entries.children.length, 0);
+    assert.equal(setup.document.scrollingElement.scrollTop, 180);
+
+    finishRenderingEntry(entry);
+    await flushAsyncWork();
+    assert.equal(entries.children[0].dataset.entryIndex, '0');
+    assert.equal(setup.document.scrollingElement.scrollTop, 180);
+
+    setup.context.window.replacePopupResults(0, []);
+    setup.document.scrollingElement.scrollTop = 180;
+    assert.equal(setup.document.scrollingElement.scrollTop, 0);
+    assert.equal(entries.style.minHeight, '');
+});
+
+for (const [text, firstIndex, secondIndex, offsets] of [
+    ['猫と猫', 0, 2, [0, 2]],
+    ['𠮟猫と猫', 1, 3, [2, 4]],
+]) test(`source history restores repeated-word highlights and UTF-16 mining offsets for ${text}`, async () => {
+    const entry = { expression: '猫', reading: 'ねこ', matched: '猫', glossaries: [], frequencies: [], pitches: [] };
+    const restored = [];
+    const setup = popupContext({ lookupRedirect: () => 1, getEntry: () => entry, sourceHistoryRestored: offset => restored.push(offset) });
+    setup.context.window.replacePopupResults(0, [], text);
+    const source = setup.searchTextContainer;
+    const highlighted = () => source.children.flatMap((span, index) => span.classList.contains('matched') ? [index] : []);
+    await source.onclick({ target: source.children[firstIndex], stopPropagation() {} });
+    await flushAsyncWork();
+    await source.onclick({ target: source.children[secondIndex], stopPropagation() {} });
+    await flushAsyncWork();
+    assert.deepEqual(highlighted(), [secondIndex]);
+    setup.context.window.navigateBack();
+    assert.deepEqual(highlighted(), [firstIndex]);
+    assert.deepEqual(restored, [offsets[0]]);
+    setup.context.window.navigateForward();
+    assert.deepEqual(highlighted(), [secondIndex]);
+    assert.deepEqual(restored, offsets);
+});
+
+test('ordinary popup history does not emit source restoration messages', () => {
+    const restored = [];
+    const setup = popupContext({ sourceHistoryRestored: offset => restored.push(offset) });
+    setup.context.window.replacePopupResults(0, []);
+    setup.context.redirect(0);
+    setup.context.window.navigateBack();
+    assert.deepEqual(restored, []);
+});
+
+test('source history restores initial mining offset and null after a non-suffix glossary redirect', async () => {
+    const entry = { expression: '猫', reading: 'ねこ', matched: '猫', glossaries: [], frequencies: [], pitches: [] };
+    const restored = [];
+    const setup = popupContext({ lookupRedirect: () => 1, getEntry: () => entry, sourceHistoryRestored: offset => restored.push(offset) });
+    setup.context.window.replacePopupResults(0, [], '猫と猫', 0);
+    const source = setup.searchTextContainer;
+    await source.onclick({ target: source.children[2], stopPropagation() {} });
+    await flushAsyncWork();
+    setup.context.window.navigateBack();
+    assert.deepEqual(restored, [0]);
+    setup.context.window.navigateForward();
+    setup.context.redirect(0);
+    assert.equal(source.children.some(span => span.classList.contains('matched')), false);
+    setup.context.window.navigateBack();
+    setup.context.window.navigateForward();
+    assert.deepEqual(restored, [0, 2, 2, null]);
+    setup.context.redirect(0, 0, '猫');
+    setup.context.redirect(0, 0, '犬');
+    setup.context.window.navigateBack();
+    assert.equal(restored.at(-1), 2);
+});
+
+test('reset or replacement discards pending source redirect replies', async () => {
+    for (const resetAt of ['lookup', 'entry']) {
+        let resolveLookup;
+        let resolveEntry;
+        const setup = popupContext({
+            lookupRedirect: () => new Promise(resolve => { resolveLookup = resolve; }),
+            getEntry: () => new Promise(resolve => { resolveEntry = resolve; }),
+        });
+        setup.context.window.replacePopupResults(0, [], '猫後');
+        const pending = setup.searchTextContainer.onclick({ target: setup.searchTextContainer.children[0], stopPropagation() {} });
+        if (resetAt === 'entry') {
+            resolveLookup(1);
+            await flushAsyncWork();
+        }
+        setup.context.window.resetPopupResults();
+        setup.context.window.replacePopupResults(0, [], '新しい文');
+        if (resetAt === 'lookup') resolveLookup(1);
+        else resolveEntry({ matched: '猫' });
+        await flushAsyncWork();
+        assert.equal(setup.context.window.entryCount, 0);
+        assert.equal(setup.searchTextContainer.children.map(span => span.textContent).join(''), '新しい文');
+        assert.equal(setup.searchTextContainer.children.some(span => span.classList.contains('matched')), false);
+        if (resetAt === 'lookup' && resolveEntry) resolveEntry({ matched: '猫' });
+        await pending;
+    }
+});
+
+test('later source tap invalidates an earlier lookup awaiting redirect', async () => {
+    let resolveFirstLookup;
+    const entry = { expression: '犬', reading: 'いぬ', matched: '犬', glossaries: [], frequencies: [], pitches: [] };
+    const setup = popupContext({
+        lookupRedirect: query => query === '猫犬'
+            ? new Promise(resolve => { resolveFirstLookup = resolve; })
+            : 1,
+        getEntry: () => entry,
+    });
+    setup.context.window.replacePopupResults(0, [], '猫犬');
+    const source = setup.searchTextContainer;
+    const first = source.onclick({ target: source.children[0], stopPropagation() {} });
+    await flushAsyncWork();
+    const second = source.onclick({ target: source.children[1], stopPropagation() {} });
+    await second;
+    assert.deepEqual(source.children.map(span => span.classList.contains('matched')), [false, true]);
+
+    resolveFirstLookup(1);
+    await first;
+    assert.deepEqual(source.children.map(span => span.classList.contains('matched')), [false, true]);
+});
+
+test('later source tap invalidates an earlier lookup awaiting its entry', async () => {
+    let resolveFirstEntry;
+    let entryRequests = 0;
+    const entry = { expression: '犬', reading: 'いぬ', matched: '犬', glossaries: [], frequencies: [], pitches: [] };
+    const setup = popupContext({
+        lookupRedirect: () => 1,
+        getEntry: () => ++entryRequests === 1
+            ? new Promise(resolve => { resolveFirstEntry = resolve; })
+            : entry,
+    });
+    setup.context.window.replacePopupResults(0, [], '猫犬');
+    const source = setup.searchTextContainer;
+    const first = source.onclick({ target: source.children[0], stopPropagation() {} });
+    await flushAsyncWork();
+    const second = source.onclick({ target: source.children[1], stopPropagation() {} });
+    await second;
+    assert.deepEqual(source.children.map(span => span.classList.contains('matched')), [false, true]);
+
+    resolveFirstEntry(entry);
+    await first;
+    assert.deepEqual(source.children.map(span => span.classList.contains('matched')), [false, true]);
+});
+
+test('glossary redirect invalidates a source lookup awaiting its entry', async () => {
+    let resolveSourceEntry;
+    let entryRequests = 0;
+    const entry = { expression: '犬', reading: 'いぬ', matched: '犬', glossaries: [], frequencies: [], pitches: [] };
+    const setup = popupContext({
+        lookupRedirect: () => 1,
+        getEntry: () => ++entryRequests === 1
+            ? new Promise(resolve => { resolveSourceEntry = resolve; })
+            : entry,
+    });
+    setup.context.window.replacePopupResults(0, [], '猫犬');
+    const source = setup.searchTextContainer;
+    const pending = source.onclick({ target: source.children[0], stopPropagation() {} });
+    await flushAsyncWork();
+
+    setup.context.redirect(3, 0, '犬');
+    resolveSourceEntry(entry);
+    await pending;
+
+    assert.equal(setup.context.window.entryCount, 3);
+    assert.equal(source.children.some(span => span.classList.contains('matched')), false);
+});
+
+test('Kanji redirect invalidates a source lookup awaiting redirect', async () => {
+    let resolveLookup;
+    const entry = { expression: '猫', reading: 'ねこ', matched: '猫', glossaries: [], frequencies: [], pitches: [] };
+    const setup = popupContext({
+        lookupRedirect: () => new Promise(resolve => { resolveLookup = resolve; }),
+        getEntry: () => entry,
+    });
+    setup.context.window.replacePopupResults(0, [], '猫犬');
+    const pending = setup.searchTextContainer.onclick({
+        target: setup.searchTextContainer.children[0],
+        stopPropagation() {},
+    });
+    await flushAsyncWork();
+
+    setup.context.redirectKanji({ character: '犬', entries: [] });
+    resolveLookup(1);
+    await pending;
+
+    assert.equal(setup.entriesContainer.children[0].classList.contains('kanji-entry'), true);
+});
+
+test('source zero-result lookup preserves results highlight and scroll; replacement and reset clear source', async () => {
+    let count = 1;
+    let calls = 0;
+    const entry = { expression: '猫', reading: 'ねこ', matched: '猫', glossaries: [], frequencies: [], pitches: [] };
+    const setup = popupContext({ lookupRedirect: () => { calls++; return count; }, getEntry: () => entry });
+    setup.context.window.replacePopupResults(0, [], '猫後');
+    setup.context.window.replacePopupResults(0, [], '猫後');
+    const source = setup.searchTextContainer;
+    assert.equal(source.children.length, 2);
+    await source.onclick({ target: source.children[0], stopPropagation() {} });
+    await flushAsyncWork();
+    const rendered = setup.entriesContainer.children.slice();
+    count = 0;
+    setup.document.scrollingElement.scrollTop = 89;
+    await source.onclick({ target: source.children[1], stopPropagation() {} });
+    assert.equal(calls, 2);
+    assert.deepEqual(setup.entriesContainer.children, rendered);
+    assert.deepEqual(source.children.map(span => span.classList.contains('matched')), [true, false]);
+    assert.equal(setup.document.scrollingElement.scrollTop, 89);
+    setup.context.window.replacePopupResults(0, []);
+    assert.equal(source.hidden, true);
+    assert.equal(source.children.length, 0);
+    setup.context.window.replacePopupResults(0, [], '猫');
+    setup.context.window.resetPopupResults();
+    assert.equal(source.hidden, true);
+    assert.equal(source.children.length, 0);
+});
 
 async function flushAsyncWork(turns = 8) {
     for (let turn = 0; turn < turns; turn++) {

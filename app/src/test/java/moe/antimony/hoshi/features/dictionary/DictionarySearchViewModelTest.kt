@@ -21,6 +21,91 @@ import moe.antimony.hoshi.ui.UiText
 
 class DictionarySearchViewModelTest {
     @Test
+    fun restoredSourceHistoryUpdatesRootMiningContextInBothDirections() {
+        listOf("猫と猫" to listOf(0, 2), "𠮟猫と猫" to listOf(2, 4)).forEach { (sentence, offsets) ->
+            val repository = FakeDictionarySearchRepository(lookupResults = listOf(lookupResult("猫")))
+            val viewModel = viewModel(repository)
+            viewModel.applyExternalLookup(sentence)
+            viewModel.lookupRootRedirect(sentence.substring(offsets[0]))
+            viewModel.lookupRootRedirect(sentence.substring(offsets[1]))
+            viewModel.navigateBack()
+            viewModel.restoreRootSourceHistory(offsets[0])
+            assertEquals(offsets[0], viewModel.uiState.value.sentenceOffset)
+            assertEquals(sentence, viewModel.rootMiningContext().sentence)
+            assertEquals(offsets[0], viewModel.rootMiningContext().sentenceOffset)
+            viewModel.navigateForward()
+            viewModel.restoreRootSourceHistory(offsets[1])
+            assertEquals(offsets[1], viewModel.rootMiningContext().sentenceOffset)
+            viewModel.restoreRootSourceHistory(null)
+            assertNull(viewModel.rootMiningContext().sentenceOffset)
+            assertEquals(sentence, viewModel.uiState.value.lastQuery)
+        }
+    }
+
+    @Test
+    fun sourceRedirectPreservesOriginalQueryAndTracksUtf16SuffixForMining() {
+        val repository = FakeDictionarySearchRepository(lookupResults = listOf(lookupResult("前")))
+        val viewModel = viewModel(repository)
+        viewModel.applyExternalLookup("前𠮟る後")
+        repository.lookupResults = listOf(lookupResult("る"))
+
+        viewModel.lookupRootRedirect("る後")
+
+        val state = viewModel.uiState.value
+        assertEquals("前𠮟る後", state.query)
+        assertEquals("前𠮟る後", state.lastQuery)
+        assertEquals(3, state.sentenceOffset)
+        assertEquals("る", state.results.single().matched)
+        assertEquals(1, state.backCount)
+        viewModel.lookupRootRedirect("別")
+        assertNull(viewModel.uiState.value.sentenceOffset)
+    }
+
+    @Test
+    fun sourceRedirectUsesExactSuffixAndFailedRedirectPreservesState() {
+        val repository = FakeDictionarySearchRepository(lookupResults = listOf(lookupResult("前")))
+        val viewModel = viewModel(repository)
+        viewModel.applyExternalLookup("前 猫 後")
+        viewModel.lookupRootRedirect(" 猫 後")
+        assertEquals(" 猫 後:16:16", repository.lookupCalls.last())
+        assertEquals(1, viewModel.uiState.value.sentenceOffset)
+        val before = viewModel.uiState.value
+        repository.lookupResults = emptyList()
+        assertTrue(viewModel.lookupRootRedirect("後").isEmpty())
+        assertEquals(before, viewModel.uiState.value)
+        assertTrue(viewModel.lookupRootRedirect("  ").isEmpty())
+        assertEquals(before, viewModel.uiState.value)
+        repository.error = IllegalStateException("lookup failed")
+        assertTrue(viewModel.lookupRootRedirect("後").isEmpty())
+        assertEquals(before, viewModel.uiState.value)
+    }
+
+    @Test
+    fun newLookupResetFailureAndProfileChangeClearSourceOffset() {
+        val repository = FakeDictionarySearchRepository(lookupResults = listOf(lookupResult("前")))
+        val viewModel = viewModel(repository)
+        viewModel.onEffectiveProfileChanged("japanese")
+        fun redirect() {
+            viewModel.applyExternalLookup("前𠮟る後")
+            viewModel.lookupRootRedirect("る後")
+            assertEquals(3, viewModel.uiState.value.sentenceOffset)
+        }
+        redirect()
+        viewModel.runLookup()
+        assertNull(viewModel.uiState.value.sentenceOffset)
+        redirect()
+        viewModel.resetSearch()
+        assertNull(viewModel.uiState.value.sentenceOffset)
+        redirect()
+        viewModel.onEffectiveProfileChanged("english")
+        assertNull(viewModel.uiState.value.sentenceOffset)
+        redirect()
+        repository.error = IllegalStateException("lookup failed")
+        viewModel.runLookup()
+        assertNull(viewModel.uiState.value.sentenceOffset)
+    }
+
+    @Test
     fun initializesLookupQueryLikePreviousComposableLaunchEffect() {
         val repository = FakeDictionarySearchRepository()
 
@@ -356,7 +441,7 @@ private class FakeDictionarySearchRepository(
     private val dictionaryStyles: Map<String, String> = emptyMap(),
     dictionarySettings: DictionarySettings = DictionarySettings(),
     audioSettings: AudioSettings = AudioSettings(),
-    private val error: Throwable? = null,
+    var error: Throwable? = null,
 ) : DictionarySearchRepository {
     val dictionarySettingsFlow = MutableStateFlow(dictionarySettings)
     val audioSettingsFlow = MutableStateFlow(audioSettings)
