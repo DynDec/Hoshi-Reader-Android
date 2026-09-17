@@ -8,6 +8,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Long-press a lookup result's audio button to choose among named local and
+  remote audio candidates; the selected recording is also used for Anki cards.
 - Show source text above Dictionary and externally shared lookup results; tap a
   character to look up from that position while keeping the full sentence for
   Anki cards. Back/Forward restores the selected occurrence for mining, and

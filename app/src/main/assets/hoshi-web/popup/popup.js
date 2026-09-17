@@ -18,6 +18,9 @@ const NUMERIC_TAG = /^\d+$/;
 // this might not cover every tag
 const POS_TAGS = new Set(['n', 'adj-i', 'adj-na', 'adj-no', 'v1', 'vk', 'vs', 'vs-i', 'vs-s', 'vz', 'vi', 'vt']);
 let audioUrls = {};
+let audioLists = {};
+let audioStateGeneration = 0;
+let activeAudioCandidateMenu = null;
 let lastSelection = '';
 let currentDictionaryMedia = null;
 let selectedDictionaries = {};
@@ -131,6 +134,14 @@ window.createPopupGeometry = function({
         };
     }
 
+    function visualViewportPointToLayout(x, y) {
+        const scale = bridgeRectScale();
+        return {
+            x: x / scale,
+            y: y / scale,
+        };
+    }
+
     return Object.freeze({
         bridgeRectScale,
         bridgeSelectionRect,
@@ -140,6 +151,7 @@ window.createPopupGeometry = function({
         scrollTop,
         selectionCoordinates,
         setScrollTop,
+        visualViewportPointToLayout,
         viewportHeight,
         viewportMinHeightCss,
     });
@@ -1177,7 +1189,7 @@ async function mineEntry(expression, reading, frequencies, pitches, rules, match
     const pitchAccentGraphs = constructPitchAccentGraphsHtml(pitches, reading || expression);
 
     if (!audioUrls[idx] && window.audioSources?.length && window.needsAudio) {
-        audioUrls[idx] = await fetchAudioUrl(expression, reading || expression);
+        audioUrls[idx] = (await fetchAudioList(idx))[0]?.url || null;
     }
 
     const audio = audioUrls[idx] || '';
@@ -1654,26 +1666,134 @@ function createTags(entry) {
     return container;
 }
 
-async function fetchAudioUrl(expression, reading) {
-    const templates = window.audioSources;
-    if (!templates?.length) return null;
-
-    for (const template of templates) {
-        const url = template
+async function fetchAudioSources(source, expression, reading) {
+    const template = typeof source === 'string' ? source : source?.url;
+    if (!template) {
+        return [];
+    }
+    const url = template
         .replace('{term}', encodeURIComponent(expression))
         .replace('{reading}', encodeURIComponent(reading));
-        try {
-            const audioRequestUrl = window.audioRequestEndpoint
-                ? `${window.audioRequestEndpoint}?url=${encodeURIComponent(url)}`
-                : `audio://?url=${encodeURIComponent(url)}`;
-            const response = await fetch(audioRequestUrl);
-            const data = await response.json();
-            if (data.type === 'audioSourceList' && data.audioSources?.[0]?.url) {
-                return data.audioSources[0].url;
-            }
-        } catch {}
+    try {
+        const audioRequestUrl = window.audioRequestEndpoint
+            ? `${window.audioRequestEndpoint}?url=${encodeURIComponent(url)}`
+            : `audio://?url=${encodeURIComponent(url)}`;
+        const response = await fetch(audioRequestUrl);
+        const data = await response.json();
+        if (data.type !== 'audioSourceList') {
+            return [];
+        }
+        return (data.audioSources || []).filter(candidate => candidate?.url);
+    } catch {
+        return [];
     }
-    return null;
+}
+
+async function fetchAudioList(entryIndex) {
+    if (audioLists[entryIndex]) {
+        return await audioLists[entryIndex];
+    }
+    const entry = window.lookupEntries?.[entryIndex];
+    const sources = window.audioSources;
+    if (!entry || !sources?.length) {
+        return [];
+    }
+
+    const cache = audioLists;
+    cache[entryIndex] = (async () => {
+        const list = [];
+        for (const source of sources) {
+            const candidates = await fetchAudioSources(source, entry.expression, entry.reading);
+            const sourceName = typeof source === 'string' ? 'Audio' : (source.name || 'Audio');
+            candidates.forEach(candidate => list.push({
+                name: candidate.name ? `${sourceName}: ${candidate.name}` : sourceName,
+                url: candidate.url,
+            }));
+        }
+        return list;
+    })();
+    return await cache[entryIndex];
+}
+
+async function getAudioMenu(entryIndex) {
+    const list = await fetchAudioList(entryIndex);
+    const counts = {};
+    return {
+        names: list.map(candidate => {
+            counts[candidate.name] = (counts[candidate.name] || 0) + 1;
+            return counts[candidate.name] > 1
+                ? `${candidate.name} ${counts[candidate.name]}`
+                : candidate.name;
+        }),
+        selected: list.findIndex(candidate => candidate.url === audioUrls[entryIndex]),
+    };
+}
+
+function closeAudioCandidateMenu() {
+    activeAudioCandidateMenu?.menu?.remove();
+    activeAudioCandidateMenu?.scrim?.remove();
+    activeAudioCandidateMenu = null;
+}
+
+async function showAudioCandidateMenu(entryIndex, anchor) {
+    const generation = audioStateGeneration;
+    const menuData = await getAudioMenu(entryIndex);
+    if (generation !== audioStateGeneration || !anchor?.isConnected) {
+        return;
+    }
+    closeAudioCandidateMenu();
+
+    const scrim = el('div', { className: 'audio-candidate-menu-scrim' });
+    const menu = el('div', { className: 'audio-candidate-menu' });
+    const names = menuData.names.length ? menuData.names : [window.noAudioFoundText || 'No audio found'];
+    names.forEach((name, index) => {
+        const item = el('button', {
+            className: 'audio-candidate-menu-item',
+            textContent: name,
+            disabled: menuData.names.length === 0,
+            'data-selected': String(index === menuData.selected),
+        });
+        if (menuData.names.length) {
+            item.addEventListener('click', async event => {
+                event.preventDefault();
+                event.stopPropagation();
+                closeAudioCandidateMenu();
+                await playEntryAudio(entryIndex, index);
+            });
+        }
+        menu.appendChild(item);
+    });
+    const stopMenuEvent = event => event.stopPropagation();
+    menu.addEventListener('pointerdown', stopMenuEvent);
+    menu.addEventListener('click', stopMenuEvent);
+    scrim.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeAudioCandidateMenu();
+    });
+    document.body.appendChild(scrim);
+    document.body.appendChild(menu);
+    activeAudioCandidateMenu = { menu, scrim };
+
+    const anchorRect = anchor.getBoundingClientRect();
+    requestAnimationFrame(() => {
+        if (activeAudioCandidateMenu?.menu !== menu) return;
+        const visualViewportWidth = window.innerWidth || document.documentElement.clientWidth || 320;
+        const visualViewportHeight = window.innerHeight || document.documentElement.clientHeight || 480;
+        const anchorPoint = popupGeometry.visualViewportPointToLayout(anchorRect.right, anchorRect.bottom);
+        const viewport = popupGeometry.visualViewportPointToLayout(visualViewportWidth, visualViewportHeight);
+        const menuWidth = menu.offsetWidth || 220;
+        const menuHeight = menu.offsetHeight || Math.min(names.length * 40, viewport.y - 16);
+        menu.style.left = `${Math.max(8, Math.min(anchorPoint.x - menuWidth, viewport.x - menuWidth - 8))}px`;
+        menu.style.top = `${Math.max(8, Math.min(anchorPoint.y + 4, viewport.y - menuHeight - 8))}px`;
+    });
+}
+
+function resetAudioCandidateState() {
+    audioUrls = {};
+    audioLists = {};
+    audioStateGeneration++;
+    closeAudioCandidateMenu();
 }
 
 function playWordAudio(audioUrl) {
@@ -1704,11 +1824,51 @@ function createButtonSlot(kind, entryIndex, enabled = true, formatId = null, for
     });
     slot.type = 'button';
     slot.setAttribute('aria-label', kind === 'audio' ? 'Play audio' : kind === 'notes' ? 'Show Anki notes' : 'Add to Anki');
+    let audioLongPressTimer = null;
+    let audioLongPressed = false;
+    let audioPointerStart = null;
+    const cancelAudioLongPress = () => {
+        clearTimeout(audioLongPressTimer);
+        audioLongPressTimer = null;
+        audioPointerStart = null;
+    };
+    if (kind === 'audio') {
+        slot.addEventListener('pointerdown', event => {
+            if (slot.dataset.enabled === 'false') return;
+            audioLongPressed = false;
+            audioPointerStart = { x: event.clientX, y: event.clientY };
+            audioLongPressTimer = setTimeout(() => {
+                audioLongPressTimer = null;
+                audioLongPressed = true;
+                showAudioCandidateMenu(entryIndex, slot);
+            }, 400);
+        });
+        slot.addEventListener('pointermove', event => {
+            if (!audioPointerStart) return;
+            if (Math.abs(event.clientX - audioPointerStart.x) > 10 || Math.abs(event.clientY - audioPointerStart.y) > 10) {
+                cancelAudioLongPress();
+            }
+        });
+        slot.addEventListener('pointerup', cancelAudioLongPress);
+        slot.addEventListener('pointercancel', cancelAudioLongPress);
+        slot.addEventListener('contextmenu', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!audioLongPressed) {
+                audioLongPressed = true;
+                showAudioCandidateMenu(entryIndex, slot);
+            }
+        });
+    }
     slot.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
         if (slot.dataset.enabled === 'false') { return; }
         if (kind === 'audio') {
+            if (audioLongPressed) {
+                audioLongPressed = false;
+                return;
+            }
             playEntryAudio(entryIndex);
         } else if (kind === 'mine') {
             const parent = slot.parentElement;
@@ -1760,13 +1920,15 @@ function applyButtonSlotVisualState(slot) {
     slot.style.setProperty('--button-icon-url', `url("https://appassets.androidplatform.net/popup/icons/${iconName}.svg")`);
 }
 
-async function playEntryAudio(entryIndex) {
+async function playEntryAudio(entryIndex, sourceIndex = null) {
     const entry = window.lookupEntries?.[entryIndex];
     if (!entry) { return; }
     const audioSlot = getButtonSlot('audio', entryIndex);
 
-    if (!audioUrls[entryIndex]) {
-        audioUrls[entryIndex] = await fetchAudioUrl(entry.expression, entry.reading);
+    if (sourceIndex !== null) {
+        audioUrls[entryIndex] = (await fetchAudioList(entryIndex))[sourceIndex]?.url || null;
+    } else if (!audioUrls[entryIndex]) {
+        audioUrls[entryIndex] = (await fetchAudioList(entryIndex))[0]?.url || null;
     }
     if (!audioUrls[entryIndex] || !playWordAudio(audioUrls[entryIndex])) {
         updateButtonSlot(audioSlot, { state: 'error' });
@@ -2071,7 +2233,7 @@ window.resetPopupResults = function() {
     pendingHistoryRestore = null;
     window.lookupEntries = undefined;
     window.entryCount = 0;
-    audioUrls = {};
+    resetAudioCandidateState();
     selectedDictionaries = {};
     resetDictionaryMediaObserver();
     document.getElementById('entries-container')?.replaceChildren();
@@ -2121,7 +2283,7 @@ function redirect(count, scrollTop = 0, query = null) {
     replaceHostEntrySet();
     window.lookupEntries = undefined;
     window.entryCount = count;
-    audioUrls = {};
+    resetAudioCandidateState();
     selectedDictionaries = {};
     document.getElementById('entries-container').innerHTML = '';
     window.renderPopup();
@@ -2184,7 +2346,7 @@ function redirectKanji(data) {
     forwardStack.length = 0;
     window.lookupEntries = undefined;
     window.entryCount = 0;
-    audioUrls = {};
+    resetAudioCandidateState();
     selectedDictionaries = {};
     const container = document.getElementById('entries-container');
     container.replaceChildren(buildKanjiEntry(data));
@@ -2252,7 +2414,7 @@ window.replacePopupResults = function(count, initialEntries, sourceText = null, 
     forwardStack.length = 0;
     window.lookupEntries = Array.isArray(initialEntries) && initialEntries.length ? initialEntries : undefined;
     window.entryCount = count;
-    audioUrls = {};
+    resetAudioCandidateState();
     selectedDictionaries = {};
     resetDictionaryMediaObserver();
     const container = document.getElementById('entries-container');
@@ -2313,7 +2475,7 @@ function restore(snapshot) {
     }
     window.lookupEntries = snapshot.lookupEntries;
     window.entryCount = snapshot.entryCount;
-    audioUrls = {};
+    resetAudioCandidateState();
     selectedDictionaries = {};
     applyHoshiPopupThemeOverrides(container);
     requestAnimationFrame(() => {

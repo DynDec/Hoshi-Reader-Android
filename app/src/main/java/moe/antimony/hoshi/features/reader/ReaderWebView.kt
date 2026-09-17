@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -49,6 +50,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import moe.antimony.hoshi.LocalHoshiUiDependencies
+import moe.antimony.hoshi.R
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.EpubBook
@@ -224,6 +226,7 @@ fun ReaderWebView(
     val popupDarkMode = effectiveSettings.usesDarkInterface(systemDarkTheme)
     val popupContentLanguageProfile = contentLanguageProfile
     val progressDisplay = readerProgressDisplay(contentLanguageProfile)
+    val noAudioFoundText = stringResource(R.string.audio_no_audio_found)
     val readerPopupIframeDocument = remember(
         dictionaryStyles,
         dictionarySettings,
@@ -240,6 +243,7 @@ fun ReaderWebView(
         fontLibraryState.revision,
         effectiveSettings.popupScale,
         popupContentLanguageProfile,
+        noAudioFoundText,
     ) {
         LookupPopupHtml.renderIframeDocument(
             assets = null,
@@ -253,6 +257,7 @@ fun ReaderWebView(
             darkMode = popupDarkMode,
             eInkMode = effectiveSettings.eInkMode,
             audioSettings = audioSettings,
+            noAudioFoundText = noAudioFoundText,
             ankiSettings = ankiUiState.popupSettings,
             fontFaceCss = fontManager.popupFontFaceCss(),
             popupScale = effectiveSettings.popupScale,

@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.ProcessTextLookupRequest
 import moe.antimony.hoshi.MainActivity
+import moe.antimony.hoshi.R
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.dictionary.DictionaryRepository
 import moe.antimony.hoshi.features.audio.AudioRequestHandler
@@ -166,6 +168,7 @@ private fun ProcessTextLookupOverlay(
         dependencies.readerFontManager.popupFontFaceCss()
     }
     val popupSettings = popups.firstOrNull()?.state
+    val noAudioFoundText = stringResource(R.string.audio_no_audio_found)
     val readerPopupIframeDocument = remember(
         popupSettings?.dictionaryStyles,
         popupSettings?.dictionarySettings,
@@ -180,6 +183,7 @@ private fun ProcessTextLookupOverlay(
         readerSettings.eInkMode,
         ankiUiState.popupSettings,
         fontFaceCss,
+        noAudioFoundText,
     ) {
         LookupPopupHtml.renderIframeDocument(
             assets = null,
@@ -193,6 +197,7 @@ private fun ProcessTextLookupOverlay(
             darkMode = darkMode,
             eInkMode = readerSettings.eInkMode,
             audioSettings = popupSettings?.audioSettings ?: AudioSettings(),
+            noAudioFoundText = noAudioFoundText,
             ankiSettings = ankiUiState.popupSettings,
             fontFaceCss = fontFaceCss,
             popupScale = readerSettings.popupScale,

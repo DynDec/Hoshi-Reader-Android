@@ -270,7 +270,15 @@ Validate relevant dictionary/audio changes with:
   imported MP3 and Opus `android.db` files. Disable the highest-priority source
   and confirm lookup playback and Anki audio export use the next enabled source;
   disable every source and confirm both return no local audio; then re-enable
-  and reorder sources and confirm the preserved priority takes effect.
+  and reorder sources and confirm the preserved priority takes effect. In
+  Reader, Dictionary, Process Text, and recursive popups, long-press the audio
+  button and verify all local/remote candidates are named in source order,
+  duplicate names are numbered, the current choice is marked, and an empty or
+  failing source produces the disabled no-audio state. Select a non-default
+  candidate and confirm immediate playback and both Anki backends use that same
+  recording; autoplay, redirects, Kanji lookup, Back/Forward, and new popup
+  results must reset entry-scoped candidate state. Repeat in light, dark, and
+  light/dark E-ink themes at popup scales 0.8, 1, and 2.
 - Sasayaki MP3, M4B, and Opus imports from local or seekable SAF sources before pressing Play: confirm the total
   duration is already visible; M4B/Opus title, artist, cover, and chapters load
   together without a delayed artist row; playback preparation may subsequently

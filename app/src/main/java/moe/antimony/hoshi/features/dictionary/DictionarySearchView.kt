@@ -237,6 +237,7 @@ fun DictionarySearchView(
             popupScale = readerSettings.popupScale,
         )
     }
+    val noAudioFoundText = stringResource(R.string.audio_no_audio_found)
     val readerPopupIframeDocument = remember(
         uiState.dictionaryStyles,
         uiState.dictionarySettings,
@@ -252,6 +253,7 @@ fun DictionarySearchView(
         fontFaceCss,
         readerSettings.popupScale,
         rootContentLanguageProfile,
+        noAudioFoundText,
     ) {
         LookupPopupHtml.renderIframeDocument(
             assets = null,
@@ -265,6 +267,7 @@ fun DictionarySearchView(
             darkMode = popupDarkMode,
             eInkMode = readerSettings.eInkMode,
             audioSettings = uiState.audioSettings,
+            noAudioFoundText = noAudioFoundText,
             ankiSettings = ankiUiState.popupSettings,
             fontFaceCss = fontFaceCss,
             popupScale = readerSettings.popupScale,

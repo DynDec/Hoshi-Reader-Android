@@ -206,8 +206,18 @@ class LookupPopupHtmlTest {
         assertTrue(html.contains("window.ankiFormats = [{\"id\":\"format-a\",\"icon\":\"circle-small\",\"isValid\":true}];"))
         assertTrue(html.contains("window.disableShowNotes = true;"))
         assertTrue(html.contains("showNotes: { postMessage:"))
-        assertTrue(html.contains("hoshi-local-audio-source://get/?term={term}&reading={reading}"))
-        assertTrue(html.contains(AudioSettings.LocalAudioUrl))
+        assertTrue(
+            html.contains(
+                """window.audioSources = [{"name":"Local","url":"hoshi-local-audio-source://get/?term={term}&reading={reading}"},{"name":"Ankiconnect Android","url":"${AudioSettings.LocalAudioUrl}"}];""",
+            ),
+        )
+    }
+
+    @Test
+    fun iframePopupShellInjectsLocalizedNoAudioCandidateText() {
+        val html = LookupPopupHtml.renderIframeDocument(noAudioFoundText = "未找到音频")
+
+        assertTrue(html.contains("window.noAudioFoundText = \"未找到音频\";"))
     }
 
     @Test

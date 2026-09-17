@@ -217,6 +217,12 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   Kotlin owns popup payloads, resource handling, and native service bridges for
   audio, dictionary media, Anki, and external links; do not reintroduce Android
   native overlay popup fallback paths for these flows.
+- Popup audio sources cross the iframe boundary as ordered name/URL pairs.
+  `LocalAudioRepository` returns every enabled, ranked local candidate and
+  `AudioRequestHandler` exposes their descriptive labels and deduplicated URLs.
+  Popup JS owns the entry-scoped candidate cache and selected URL, so playback
+  and Anki mining use the same choice; replacing or restoring popup results
+  clears that state.
 - Shared iframe frame payloads accept optional root `sourceText` for Dictionary
   search and Process Text; Reader and recursive child frames omit it. Shared
   popup assets render character spans, look up exact suffixes on tap, mark the
