@@ -73,7 +73,7 @@ class ReaderSettingsTest {
     }
 
     @Test
-    fun removingVerticalBordersUsesEightDpEffectiveInsetsAndRestoresConfiguredValues() {
+    fun removingVerticalBordersUsesCompactEffectiveInsetsAndRestoresConfiguredValues() {
         val configured = ReaderSettings(
             verticalPadding = 12,
             topSafeAreaDp = 40,
@@ -86,8 +86,8 @@ class ReaderSettingsTest {
         assertEquals(40, compact.topSafeAreaDp)
         assertEquals(46, compact.bottomSafeAreaDp)
         assertEquals(0, compact.effectiveVerticalPadding)
-        assertEquals(8, compact.effectiveTopSafeAreaDp)
-        assertEquals(8, compact.effectiveBottomSafeAreaDp)
+        assertEquals(10, compact.effectiveTopSafeAreaDp)
+        assertEquals(6, compact.effectiveBottomSafeAreaDp)
         assertEquals(12, compact.copy(removeVerticalBorders = false).effectiveVerticalPadding)
         assertEquals(40, compact.copy(removeVerticalBorders = false).effectiveTopSafeAreaDp)
         assertEquals(46, compact.copy(removeVerticalBorders = false).effectiveBottomSafeAreaDp)

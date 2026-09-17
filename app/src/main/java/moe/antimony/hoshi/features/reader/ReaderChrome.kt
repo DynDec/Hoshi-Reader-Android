@@ -314,9 +314,7 @@ fun readerBottomChromeMetrics(
         secondaryIconSizeDp = 28,
         horizontalPaddingDp = 22,
         bottomPaddingDp = 2,
-        // Keep an explicit zero available to callers that need no safe-area
-        // space; ReaderSettings supplies the 8dp borderless-mode value.
-        bottomSafeAreaDp = if (bottomSafeAreaDp == 0) 0 else bottomSafeAreaDp.coerceReaderBottomSafeAreaDp(),
+        bottomSafeAreaDp = bottomSafeAreaDp.coerceIn(0, ReaderBottomSafeAreaMaxDp),
         menuButtonGapDp = ReaderMenuButtonGapDp,
         trailingButtonSpacingDp = 8,
         menuWidthDp = 204,
@@ -330,9 +328,7 @@ fun readerBottomChromeMetrics(
 fun readerTopChromeMetrics(
     topSafeAreaDp: Int = ReaderTopSafeAreaDefaultDp,
 ): ReaderTopChromeMetrics {
-    // Keep an explicit zero available to callers that need no safe-area space;
-    // ReaderSettings supplies the 8dp borderless-mode value.
-    val safeAreaDp = if (topSafeAreaDp == 0) 0 else topSafeAreaDp.coerceReaderTopSafeAreaDp()
+    val safeAreaDp = topSafeAreaDp.coerceIn(0, ReaderTopSafeAreaMaxDp)
     val iconSizeDp = readerTopQuickIconSizeDp(safeAreaDp)
     return ReaderTopChromeMetrics(
         topSafeAreaDp = safeAreaDp,

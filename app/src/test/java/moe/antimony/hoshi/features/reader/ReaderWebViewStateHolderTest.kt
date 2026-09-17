@@ -575,8 +575,8 @@ class ReaderWebViewStateHolderTest {
         assertTrue(holder.isWebViewRestoring)
         assertEquals(previousEpoch + 1, holder.webViewRestoreEpoch)
         assertEquals(0, holder.effectiveSettings.effectiveVerticalPadding)
-        assertEquals(8, holder.effectiveSettings.effectiveTopSafeAreaDp)
-        assertEquals(8, holder.effectiveSettings.effectiveBottomSafeAreaDp)
+        assertEquals(10, holder.effectiveSettings.effectiveTopSafeAreaDp)
+        assertEquals(6, holder.effectiveSettings.effectiveBottomSafeAreaDp)
 
         holder.markWebViewRestored()
         holder.syncSettings(configured.copy(removeVerticalBorders = false))
