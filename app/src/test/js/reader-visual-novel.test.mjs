@@ -1151,6 +1151,33 @@ test('block mode preserves ruby annotations while indexing only base text', asyn
     assert.equal(reader.nodeStartOffsets.get(rubyTextNodes.find((node) => node.textContent === 'ほし')), undefined);
 });
 
+test('Korean VN counts and restores screens while keeping raw offsets and ruby-free cue ranges', async () => {
+    const ruby = element('ruby', {}, [
+        '한글', element('rp', {}, ['fallback']), element('rt', {}, ['reading']), element('rp', {}, ['주석']),
+    ]);
+    const { reader } = await initializeReader(
+        bodyWith(p('𠮟가、'), paragraphWith(ruby, ' ㄱㆎA')),
+        { mode: 'block', revealSpeed: 0 },
+    );
+    assert.equal(reader.totalChapterChars, 7);
+    const firstProgress = reader.calculateProgress();
+    assert.equal(firstProgress, 2 / 7);
+
+    await reader.restoreProgress(0.6);
+
+    const screenRuby = currentScreen(reader).querySelector('ruby');
+    assert.ok(screenRuby);
+    const base = collectTextNodes(screenRuby).find((node) => node.textContent === '한글');
+    assert.equal(reader.nodeStartOffsets.get(base), 2);
+    assert.equal(reader.nodeStartRawOffsets.get(base), 3);
+    assert.equal(reader.calculateProgress(), 1);
+
+    const cue = { id: 'korean', start: 2, length: 2 };
+    reader.applySasayakiCues([cue]);
+    reader.highlightSasayakiCue(cue, false);
+    assert.equal(sasayakiWrappers(reader).map((wrapper) => wrapper.textContent).join(''), '한글');
+});
+
 test('block mode splits vertical ruby-adjacent clone text and preserves offsets', async () => {
     const body = bodyWith(paragraphWith('「', rubyText('貴女', 'あなた'), 'も、この学園'));
     const { reader } = await initializeReader(body, {
@@ -1633,6 +1660,32 @@ test('VN selection maps supplementary characters and ruby base text across a scr
     assert.equal(window.hoshiSelection.selectText(12, 48, 32), '激しい抵抗');
     assert.equal(selectionMessages[0].sentence, '𠮟激しい抵抗。');
     assert.equal(selectionMessages[0].normalizedOffset, 1);
+});
+
+test('VN Korean lookup uses the full source sentence across a screen boundary', async () => {
+    const loaded = await initializeReader(bodyWith(p('𠮟가한글문장。')), {
+        mode: 'block', charactersPerScreen: 2, revealSpeed: 0,
+        selectionScript: readerSelectionSource(),
+    });
+    const { reader, document, selectionMessages, window } = loaded;
+    const screenIndex = reader.screens.findIndex((screen) =>
+        reader.screenStartRawCount(screen) <= 2 && reader.screenEndRawCount(screen) > 2
+    );
+    reader.renderScreen(screenIndex, true);
+    const walker = reader.createWalker();
+    let hitNode;
+    let node;
+    while (node = walker.nextNode()) {
+        if (node.textContent.includes('한')) hitNode = node;
+    }
+    assert.ok(hitNode);
+    document.elementFromPoint = () => hitNode.parentElement;
+    window.hoshiSelection.configure({ bridge: 'android-reader' });
+    window.hoshiSelection.getCharacterAtPoint = () => ({ node: hitNode, offset: hitNode.textContent.indexOf('한') });
+
+    assert.equal(window.hoshiSelection.selectText(12, 48, 32), '한글문장');
+    assert.equal(selectionMessages[0].sentence, '𠮟가한글문장。');
+    assert.equal(selectionMessages[0].normalizedOffset, 2);
 });
 
 test('sentence mode groups sentences by configured count', async () => {

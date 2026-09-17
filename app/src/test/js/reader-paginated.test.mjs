@@ -425,10 +425,10 @@ function loadReader(body, sourceUrl = readerPaginatedUrl, options = {}) {
         createRange() {
             return new TestRange();
         },
-        createTreeWalker(root) {
+        createTreeWalker(root, whatToShow, filter) {
             const nodes = [];
             const visit = (node) => {
-                if (node.nodeType === 3) nodes.push(node);
+                if (node.nodeType === 3 && (!filter || filter.acceptNode(node) === 1)) nodes.push(node);
                 node.childNodes?.forEach(visit);
             };
             visit(root);
@@ -518,6 +518,36 @@ function rubyParagraph() {
     paragraph.appendChild(new TestText('そ'));
     paragraph.appendChild(new TestText('れ'));
     return { paragraph, ruby };
+}
+
+for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+    test(`${sourceUrl.pathname.split('/').pop()} counts Korean and skips ruby fallback in offsets and cues`, () => {
+        const body = new TestElement('body');
+        body.appendChild(new TestText('𠮟가、'));
+        const ruby = new TestElement('ruby');
+        const base = new TestText('한글');
+        ruby.appendChild(base);
+        for (const [tag, text] of [['rp', 'fallback'], ['rt', 'reading'], ['rp', '주석']]) {
+            const annotation = new TestElement(tag);
+            annotation.appendChild(new TestText(text));
+            ruby.appendChild(annotation);
+        }
+        body.appendChild(ruby);
+        const tail = new TestText(' ㄱㆎA');
+        body.appendChild(tail);
+        const { reader } = loadReader(body, sourceUrl);
+        reader.buildNodeOffsets();
+
+        assert.equal(reader.nodeStartOffsets.get(base), 2);
+        assert.equal(reader.nodeStartRawOffsets.get(base), 3);
+        assert.equal(reader.nodeStartOffsets.get(tail), 4);
+        assert.equal(reader.nodeStartRawOffsets.get(tail), 5);
+        assert.equal(reader.textOffsetForCharCount(body.firstChild, 1), 2);
+
+        reader.isEInkMode = () => false;
+        reader.applySasayakiCues([{ id: 'korean', start: 2, length: 2 }]);
+        assert.equal(reader.cueWrappers.get('korean').map((wrapper) => wrapper.textContent).join(''), '한글');
+    });
 }
 
 function rubyParagraphWithWhitespaceTextNodes() {
@@ -767,36 +797,63 @@ test('reader initialization waits for fonts and images before sanitizing layout,
     }
 });
 
-test('paginated restoreProgress lands on the page containing the target character', async () => {
+for (const [firstText, secondText] of [['一二', '三四五'], ['가힣', 'ㄱㆎ한']]) {
+    test(`paginated restoreProgress lands on the page containing ${secondText}`, async () => {
+        const body = new TestElement('body');
+        body.scrollTop = 0;
+        body.scrollHeight = 3_200;
+        const first = new TestText(firstText);
+        first.rects = [testRect(0, 40)];
+        const punctuation = new TestText('。');
+        punctuation.rects = [testRect(780, 800)];
+        const second = new TestText(secondText);
+        second.rects = [testRect(1_620, 1_660)];
+        body.appendChild(first);
+        body.appendChild(punctuation);
+        body.appendChild(second);
+        const restoreMessages = [];
+        const { reader } = loadReader(body, readerPaginatedUrl, { restoreMessages });
+        reader.pageHeight = 800;
+        reader.pageWidth = 480;
+        reader.registerSnapScroll = (position) => {
+            reader.snapPosition = position;
+        };
+        reader.refreshSasayakiCuePresentation = () => {};
+
+        await reader.restoreProgress(0.6);
+        for (let i = 0; i < 5; i += 1) {
+            await Promise.resolve();
+        }
+
+        assert.equal(body.scrollTop, 1_600);
+        assert.equal(reader.snapPosition, 1_600);
+        assert.deepEqual(restoreMessages, ['restore-token']);
+    });
+}
+
+test('continuous Korean restore lands inside the target text after a supplementary character', async () => {
     const body = new TestElement('body');
-    body.scrollTop = 0;
-    body.scrollHeight = 3_200;
-    const first = new TestText('一二');
-    first.rects = [testRect(0, 40)];
-    const punctuation = new TestText('。');
-    punctuation.rects = [testRect(780, 800)];
-    const second = new TestText('三四五');
-    second.rects = [testRect(1_620, 1_660)];
+    const first = new TestElement('p');
+    first.appendChild(new TestText('𠮟가'));
+    const second = new TestElement('p');
+    second.appendChild(new TestText('ㄱㆎ한'));
     body.appendChild(first);
-    body.appendChild(punctuation);
     body.appendChild(second);
-    const restoreMessages = [];
-    const { reader } = loadReader(body, readerPaginatedUrl, { restoreMessages });
-    reader.pageHeight = 800;
-    reader.pageWidth = 480;
-    reader.registerSnapScroll = (position) => {
-        reader.snapPosition = position;
+    const { reader, document } = loadReader(body, readerContinuousUrl, { writingMode: 'horizontal-tb' });
+    const createElement = document.createElement;
+    const landings = [];
+    document.createElement = (tag) => {
+        const element = createElement(tag);
+        element.scrollIntoView = () => {
+            landings.push({ parent: element.parentNode, precedingText: element.previousSibling?.textContent });
+        };
+        return element;
     };
-    reader.refreshSasayakiCuePresentation = () => {};
 
     await reader.restoreProgress(0.6);
-    for (let i = 0; i < 5; i += 1) {
-        await Promise.resolve();
-    }
 
-    assert.equal(body.scrollTop, 1_600);
-    assert.equal(reader.snapPosition, 1_600);
-    assert.deepEqual(restoreMessages, ['restore-token']);
+    assert.deepEqual(landings, [{ parent: second, precedingText: 'ㄱ' }]);
+    assert.equal(second.textContent, 'ㄱㆎ한');
 });
 
 test('continuous restoreProgress zero resets every WebView scroll surface', async () => {
@@ -854,28 +911,30 @@ test('continuous restoreProgress one lands on the last text block end', async ()
     assert.deepEqual(restoreMessages, ['restore-token']);
 });
 
-test('paged and continuous progress counts matchable text before the viewport', () => {
-    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
-        const body = new TestElement('body');
-        const before = new TestText('古都');
-        before.rects = [testRect(-60, -20)];
-        const punctuation = new TestText('。');
-        punctuation.rects = [testRect(20, 40)];
-        const visible = new TestText('３年生');
-        visible.rects = [testRect(20, 40)];
-        body.appendChild(before);
-        body.appendChild(punctuation);
-        body.appendChild(visible);
-        const { reader, document } = loadReader(body, sourceUrl, {
-            writingMode: sourceUrl === readerContinuousUrl ? 'horizontal-tb' : 'vertical-rl',
-        });
-        reader.pageHeight = 800;
-        reader.pageWidth = 480;
-        document.documentElement.scrollTop = 0;
+for (const [beforeText, visibleText] of [['古都', '３年生'], ['가힣', 'ㄱㆎ한']]) {
+    test(`paged and continuous progress counts ${beforeText} before the viewport`, () => {
+        for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+            const body = new TestElement('body');
+            const before = new TestText(beforeText);
+            before.rects = [testRect(-60, -20)];
+            const punctuation = new TestText('。');
+            punctuation.rects = [testRect(20, 40)];
+            const visible = new TestText(visibleText);
+            visible.rects = [testRect(20, 40)];
+            body.appendChild(before);
+            body.appendChild(punctuation);
+            body.appendChild(visible);
+            const { reader, document } = loadReader(body, sourceUrl, {
+                writingMode: sourceUrl === readerContinuousUrl ? 'horizontal-tb' : 'vertical-rl',
+            });
+            reader.pageHeight = 800;
+            reader.pageWidth = 480;
+            document.documentElement.scrollTop = 0;
 
-        assert.equal(reader.calculateProgress(), 2 / 5);
-    }
-});
+            assert.equal(reader.calculateProgress(), 2 / 5);
+        }
+    });
+}
 
 test('paginated content metrics include final partial page when real text reaches it', () => {
     const body = new TestElement('body');

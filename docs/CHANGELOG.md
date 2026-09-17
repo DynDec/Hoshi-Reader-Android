@@ -48,6 +48,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Fixed
 
+- Count Korean text consistently in Reader progress, book search, and new
+  Sasayaki subtitle matches, and exclude ruby fallback text from native counts
+  and search. Existing books refresh their cached counts when reopened.
 - Ask for confirmation before resetting Dictionary custom CSS to prevent
   accidental clearing.
 - Keep text and images reachable in every Reader mode when publisher CSS wraps

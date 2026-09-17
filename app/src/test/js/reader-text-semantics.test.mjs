@@ -12,6 +12,19 @@ function loadTextSemantics() {
     return window.hoshiReaderTextSemantics;
 }
 
+test('Korean ranges match native normalization without changing raw counts or other scripts', () => {
+    const semantics = loadTextSemantics();
+    // Same input and expectation as ReaderTextFilterTest.
+    const text = '가힣ㄱㆎ 한글 日本語 Aｚ9、! 𠮟🙂\uABFF\uD7A4\u3130\u318F\u1100\u1161';
+    assert.equal(semantics.normalizeText(text), '가힣ㄱㆎ한글日本語Aｚ9𠮟');
+    assert.equal(semantics.countChars(text), 13);
+    assert.equal(semantics.countRawChars(text), 26);
+    for (const char of '가힣ㄱㆎ') assert.equal(semantics.isMatchableChar(char), true);
+    for (const char of '\uABFF\uD7A4\u3130\u318F\u1100\u1161') {
+        assert.equal(semantics.isMatchableChar(char), false);
+    }
+});
+
 test('reader text semantics normalizes matchable text while preserving raw counts', () => {
     const semantics = loadTextSemantics();
 

@@ -34,3 +34,14 @@ test('VN range map converts clone UTF-16 positions to chapter offsets', () => {
     );
     assert.equal(rangeMap.chapterPositionForClone({ textContent: '外' }, 0), null);
 });
+
+test('VN clone positions count Korean while retaining raw punctuation and supplementary offsets', () => {
+    const rangeMap = loadRangeMap();
+    const clone = { textContent: '𠮟가、ㄱ한' };
+    rangeMap.registerCloneTextOffset(clone, 10, 12);
+
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(rangeMap.chapterPositionForClone(clone, 5))),
+        { matchableOffset: 13, rawOffset: 16 },
+    );
+});

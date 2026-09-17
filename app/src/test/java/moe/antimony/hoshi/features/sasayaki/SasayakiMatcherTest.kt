@@ -18,6 +18,27 @@ class SasayakiMatcherTest {
     val tempFolder = TemporaryFolder()
 
     @Test
+    fun koreanCuesUseChapterCodePointOffsetsWithoutRubyFallbackText() {
+        val book = EpubBook(
+            title = "Korean cues",
+            chapters = listOf(EpubChapter(
+                id = "chapter", href = "chapter.xhtml", mediaType = "application/xhtml+xml",
+                html = "<body>𠮟가、<ruby>한글<rp>fallback</rp><rt>reading</rt>" +
+                    "<rp>주석</rp></ruby> 문장입니다。</body>",
+            )),
+        )
+
+        val match = SasayakiMatcher.match(
+            book,
+            listOf(SasayakiCue(id = "korean", startTime = 1.0, endTime = 2.0, text = "한글 문장입니다。")),
+        ).matches.single()
+
+        assertEquals(0, match.chapterIndex)
+        assertEquals(2, match.start)
+        assertEquals(7, match.length)
+    }
+
+    @Test
     fun repeatedResynchronizationAllocationScalesNearLinearly() {
         val allocationBean = ManagementFactory.getThreadMXBean() as? ThreadMXBean
         assumeTrue(allocationBean?.isThreadAllocatedMemorySupported == true)
