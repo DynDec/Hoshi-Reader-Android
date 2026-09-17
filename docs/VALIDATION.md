@@ -308,6 +308,27 @@ Validate relevant dictionary/audio changes with:
   a successful non-suffix glossary redirect followed by a failed source tap.
 - Android AnkiConnect and AnkiDroid flows when Anki behavior changes, including
   duplicate checks, media references, add-note, and sync behavior.
+- Anki tag templates through both backends: mix literal tags with
+  `{document-title}` and `{expression}`; substituted spaces, tabs, newlines,
+  non-breaking spaces, and full-width spaces become underscores without
+  joining separate literal tags. Check missing title/unknown handlebars,
+  independent format tags, `hoshi` on new/rebuilt formats, and preservation of
+  saved empty/custom tags after duplication, restart, profile switch, and fetch.
+  Before diagnosing AnkiDroid availability, confirm the installed package with
+  `adb shell pm list packages anki`; the standard package is `com.ichi2.anki`.
+  The opt-in `AnkiTagsDeviceTest` requires initialized AnkiDroid and an existing
+  database-access grant for Hoshi Debug. It uses an existing deck/model, creates
+  one uniquely tagged note, reads its saved tags, and deletes only that note in
+  `finally`; it uses in-memory settings. Run it without connected Gradle tasks
+  that reinstall or clear app data:
+
+  ```bash
+  ./gradlew assembleDebug :app:assembleDebugAndroidTest
+  adb install -r app/build/outputs/apk/debug/app-debug.apk
+  adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiTagsDeviceTest -e ankiTagSmoke true moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
+  ```
+
 - Reader, Dictionary tab, and Process Text popups with one, two, and three Anki
   formats. Confirm button order and icon size, independent duplicate state,
   disabled formats whose first model field is unmapped, and safe failure after

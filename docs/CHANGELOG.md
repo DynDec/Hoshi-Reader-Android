@@ -8,6 +8,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Support Anki tag handlebars such as `{document-title}` and `{expression}`,
+  joining whitespace inside substituted values with underscores; new card
+  formats default to the `hoshi` tag while saved tags stay unchanged.
 - Long-press a lookup result's audio button to choose among named local and
   remote audio candidates; the selected recording is also used for Anki cards.
 - Show source text above Dictionary and externally shared lookup results; tap a

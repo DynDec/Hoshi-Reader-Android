@@ -338,36 +338,28 @@ Validation:
 
 ### 9. Anki tag handlebars
 
-Status: pending Android sync.
+Status: implemented on Android (2026-09-17).
 
 Commits: `7b9dda8`.
 
-Dependency/value reasoning:
+Android implementation:
 
-- Small independent mining slice; reuse the existing handlebar resolver for
-  tags, preserving both backend paths and per-format configuration.
-
-iOS behavior to mirror:
-
-- Resolve handlebars in tags; join whitespace inside substituted values with
-  underscores before splitting tags. New/reset formats use the default tag
-  `hoshi`.
-
-Android current gap:
-
-- `AnkiRepository.kt` builds tags by splitting raw `format.tags`; it never calls
-  the field resolver for tag substitutions. `AnkiModels.kt` defaults tags to
-  an empty string, and format creation/reset follows that default.
-
-Suggested slice:
-
-- Resolve each substitution using the same mining context as fields, escape its
-  whitespace, and apply the new-format default without overwriting saved tags.
+- Both backends resolve tag handlebars through the field resolver using the
+  same prepared mining context, dictionary snapshot, and selected-glossary
+  fallback. Unicode whitespace inside each substitution becomes underscores;
+  literal tag delimiters retain Android's whitespace splitting and deduplication.
+- New/default-rebuilt formats use `hoshi`. Existing custom, empty, or omitted
+  tags keep their values through decoding, migration, duplication, and fetch.
 
 Validation:
 
-- Literal plus title/expression tags, whitespace/newlines, missing title,
-  unknown handlebars, multiple formats, saved custom tags and both backends.
+- JVM coverage includes both backends, independent formats, category/fallback
+  resolution, Unicode whitespace, missing/unknown handlebars, no recursive
+  expansion, creation/rebuild defaults, and saved-tag persistence.
+- `./gradlew test` and `./gradlew assembleDebug` pass. The opt-in AnkiDroid
+  device smoke test reads back the resolved tags and deletes its temporary
+  note; existing profile Anki settings remain unchanged. Live AnkiConnect
+  server validation remains environment-dependent.
 
 ### 10. Google Drive timeout and automatic-refresh error suppression
 
