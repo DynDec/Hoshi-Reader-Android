@@ -412,7 +412,8 @@ Preserve existing app data when validating statistics:
   Verify the average line, 0/top-hour labels, complete rounded comparison with
   clearly distinguishable up/down arrows, and Characters Read / Reading Speed
   rows in English, Chinese, narrow layouts and enlarged fonts. Long comparisons may move below the value,
-  but must not truncate. E-ink retains hollow unselected and filled selected bars.
+  but must not truncate. E-ink fills all bars without a single-bucket selection;
+  with a selection, only that bar stays filled and the others become hollow.
   The unselected headline explicitly labels Week/Month as Daily Average and
   Year/All as Monthly Average in both languages. Selecting a bar shows that
   day's or month's total without an average label; clearing restores the label.
@@ -444,9 +445,12 @@ Preserve existing app data when validating statistics:
   above it as the book rows, and expands the list. Once all books are visible,
   both the button and its divider disappear.
   No Books section appears for an empty result.
-- In light and dark E-ink modes, unselected reading-time bars are hollow and
-  only the selected bar is filled. Initial display and clearing selection leave
-  all bars hollow. Check switching between bars, short/narrow bars, and normal
+- In light and dark E-ink modes, initial display and clearing selection fill all
+  reading-time bars, matching the full-period headline, summary and book list.
+  Selecting one bar keeps it filled and makes all other bars hollow, matching
+  the selected bucket's statistics. Re-tapping the bar, closing selection,
+  paging or changing period mode restores all filled bars. Check switching
+  between bars, short/narrow bars, and normal
   color mode retaining its existing color-based selection.
   Period and goal-type selectors have outlined tracks; the selected segment
   has a solid fill with inverse text in both light and dark E-ink.

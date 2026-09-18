@@ -99,8 +99,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   Identify daily averages in Week/Month and monthly averages in Year/All.
   Show complete period comparisons with larger text and direction arrows
   alongside rounded percentages; keep Show More left-aligned with
-  a divider above it. In E-ink mode, chart bars are hollow until selected,
-  making the filled selection distinct; period and goal-type selectors use
+  a divider above it. In E-ink mode, chart bars are all filled until a single
+  bar is selected; then only that bar stays filled and the others become hollow.
+  Clearing selection restores all filled bars. Period and goal-type selectors use
   outlined tracks with filled, inverse-text selections, and the goal value wheel
   outlines its center selection. Remove the separate This Week
   card and weekly goal; weekly totals and trends remain available through the

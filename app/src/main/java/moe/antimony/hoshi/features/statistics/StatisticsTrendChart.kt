@@ -112,7 +112,8 @@ internal fun StatisticsTrendChart(
                     val right = start + width * 0.8f
                     val top = plotBottom - height
                     val radius = minOf(3.dp.toPx(), (right - left) / 2f, height)
-                    val hollow = eInkMode && bucket != selectedBucket
+                    val emphasized = selectedBucket == null || bucket == selectedBucket
+                    val hollow = eInkMode && !emphasized
                     val strokeWidth = minOf(1.dp.toPx(), (right - left) / 3f, height / 3f)
                     fun path(inset: Float) = Path().apply {
                         val corner = CornerRadius((radius - inset).coerceAtLeast(0f))
@@ -125,7 +126,7 @@ internal fun StatisticsTrendChart(
                         stroke = Stroke(strokeWidth),
                         color = when {
                             hollow -> surface
-                            selectedBucket == null || bucket == selectedBucket -> primary
+                            emphasized -> primary
                             else -> muted
                         },
                     )
