@@ -57,6 +57,7 @@ function readerSource() {
     return fs.readFileSync(readerVisualNovelUrl, 'utf8')
         .replaceAll('__HOSHI_READER_VIEWPORT_SCRIPT__', readerViewportSource())
         .replaceAll('__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__', readerTextSemanticsSource())
+        .replaceAll('__HOSHI_READER_DOM_TEXT_SCRIPT__', fs.readFileSync(new URL('../../main/assets/hoshi-web/reader/reader-dom-text.js', import.meta.url), 'utf8'))
         .replaceAll('__HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__', readerMediaSemanticsSource())
         .replaceAll(
             '__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__',
@@ -83,6 +84,7 @@ function configuredReaderSource(options = {}) {
     return fs.readFileSync(readerVisualNovelUrl, 'utf8')
         .replaceAll('__HOSHI_READER_VIEWPORT_SCRIPT__', options.viewportScript ?? readerViewportSource())
         .replaceAll('__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__', options.textSemanticsScript ?? readerTextSemanticsSource())
+        .replaceAll('__HOSHI_READER_DOM_TEXT_SCRIPT__', fs.readFileSync(new URL('../../main/assets/hoshi-web/reader/reader-dom-text.js', import.meta.url), 'utf8'))
         .replaceAll('__HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__', options.mediaSemanticsScript ?? readerMediaSemanticsSource())
         .replaceAll(
             '__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__',
@@ -2352,7 +2354,7 @@ test('visual novel Sasayaki reveal jumps to a later screen and returns progress'
     assert.equal(result, 0.75);
     assert.equal(currentScreen(reader).textContent, '二三。');
     assert.equal(currentScreen(reader).querySelectorAll('[data-hoshi-visual-novel-unrevealed]').length, 0);
-    assert.equal(sasayakiWrappers(reader)[0].textContent, '二三');
+    assert.equal(sasayakiWrappers(reader)[0].textContent, '二三。');
     assert.equal(sasayakiWrappers(reader)[0].classList.contains('hoshi-sasayaki-active'), true);
 });
 
@@ -2453,7 +2455,7 @@ test('visual novel Sasayaki reveal jumps to the visible split screen inside an o
     assert.equal(result, 10 / reader.totalChapterChars);
     assert.equal(currentScreen(reader).textContent, '九十。');
     assert.equal(currentScreen(reader).querySelectorAll('[data-hoshi-visual-novel-unrevealed]').length, 0);
-    assert.equal(sasayakiWrappers(reader)[0].textContent, '九十');
+    assert.equal(sasayakiWrappers(reader)[0].textContent, '九十。');
     assert.equal(sasayakiWrappers(reader)[0].classList.contains('hoshi-sasayaki-active'), true);
 });
 
@@ -2470,7 +2472,7 @@ test('visual novel Sasayaki cue without reveal does not move to another screen',
     assert.equal(reader.activeCueId, 'cue');
 
     assert.equal(reader.paginate('forward'), 'scrolled');
-    assert.equal(sasayakiWrappers(reader)[0].textContent, '二三');
+    assert.equal(sasayakiWrappers(reader)[0].textContent, '二三。');
     assert.equal(sasayakiWrappers(reader)[0].classList.contains('hoshi-sasayaki-active'), true);
 });
 
@@ -2560,7 +2562,7 @@ test('visual novel Sasayaki highlights only the visible part of a cross-screen c
 
     assert.equal(reader.paginate('forward'), 'scrolled');
     assert.equal(sasayakiWrappers(reader).length, 1);
-    assert.equal(sasayakiWrappers(reader)[0].textContent, '三四');
+    assert.equal(sasayakiWrappers(reader)[0].textContent, '三四。');
 });
 
 test('visual novel Sasayaki e-ink cross-screen cue uses only visible geometry', async () => {
@@ -2581,7 +2583,7 @@ test('visual novel Sasayaki e-ink cross-screen cue uses only visible geometry', 
     assert.equal(ranges.length, 1);
     assert.equal(ranges[0].startNode.textContent, '三四。');
     assert.equal(ranges[0].startOffset, 0);
-    assert.equal(ranges[0].endOffset, 2);
+    assert.equal(ranges[0].endOffset, 3);
 });
 
 test('visual novel Sasayaki merge setting combines block screens intersecting a cross-screen cue', async () => {
@@ -2602,7 +2604,7 @@ test('visual novel Sasayaki merge setting combines block screens intersecting a 
     await reader.restoreProgress(0);
     reader.highlightSasayakiCue(cue, false);
     assert.equal(sasayakiWrappers(reader).length, 2);
-    assert.equal(sasayakiWrappers(reader).map((wrapper) => wrapper.textContent).join(''), '二。三四');
+    assert.equal(sasayakiWrappers(reader).map((wrapper) => wrapper.textContent).join(''), '二。三四。');
 });
 
 test('visual novel Sasayaki merge setting combines sentence screens intersecting a cross-screen cue', async () => {
@@ -2725,4 +2727,34 @@ test('VN Toggle reveals styled ruby groups and retains them after screen return'
     assert.equal(window.hoshiSelection.selectText(12, 72, 32), '日本語');
     assert.equal(selectionMessages[0].sentence, '日本語。');
     assert.equal(selectionMessages[0].normalizedOffset, 0);
+});
+
+test('VN Sasayaki includes owned punctuation and ruby bases for batch and single cues', async () => {
+    const paragraph = new TestElement('p');
+    paragraph.appendChild(new TestText('「……'));
+    paragraph.appendChild(rubyText('本当', 'ほんとう'));
+    paragraph.appendChild(new TestText('！？」そうか……わかった。'));
+    const { reader } = await initializeReader(bodyWith(paragraph), { revealSpeed: 0 });
+    const cues = [{ id: 'a', start: 0, length: 2 }, { id: 'b', start: 2, length: 3 }, { id: 'c', start: 5, length: 4 }];
+    const texts = (results) => Array.from(results, ({ ranges }) => ranges.map(({ node, start, end }) => node.textContent.slice(start, end)).join(''));
+    const expected = ['「……本当！？」', 'そうか……', 'わかった。'];
+    assert.deepEqual(texts(reader.collectSasayakiCueRanges(cues)), expected);
+    for (let i = 0; i < cues.length; i++) {
+        assert.deepEqual(texts(reader.collectSasayakiCueRanges([cues[i]])), [expected[i]]);
+    }
+});
+
+test('VN preserves CSS paragraph punctuation boundaries before detaching source DOM', async () => {
+    const cssBlock = element('span', { class: 'publisher-paragraph' }, ['……次。']);
+    const body = bodyWith(paragraphWith('前', cssBlock));
+    const { reader, window } = loadReader(body, { revealSpeed: 0 });
+    const getStyle = window.getComputedStyle;
+    window.getComputedStyle = (target) => {
+        let root = target;
+        while (root && root !== body) root = root.parentNode;
+        return { ...getStyle(target), display: root === body && target === cssBlock ? 'block' : '' };
+    };
+    await reader.initialize();
+    const results = reader.collectSasayakiCueRanges([{ id: 'a', start: 0, length: 1 }, { id: 'b', start: 1, length: 1 }]);
+    assert.deepEqual(Array.from(results, ({ ranges }) => ranges.map(({ node, start, end }) => node.textContent.slice(start, end)).join('')), ['前', '……次。']);
 });

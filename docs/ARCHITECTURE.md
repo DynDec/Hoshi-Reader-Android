@@ -270,10 +270,16 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   projection to retain reveals when a screen is rendered again.
 - Reader text semantics live in `reader-text-semantics.js` and are consumed by
   paginated, continuous, and VN assets for normalization, matchable character
-  counting, raw character counting, and matchable-character checks.
+  counting, raw character counting, and matchable-character checks. It also owns
+  Sasayaki boundary-punctuation ownership and the matchable-to-raw display index;
+  cue matching offsets remain unchanged.
 - Paginated and continuous share live DOM ruby/text normalization through
   `reader-dom-text.js`; the mode assets keep thin public wrapper methods so
-  existing reader commands and tests continue to call the same surface.
+  existing reader commands and tests continue to call the same surface. Its
+  Sasayaki DOM adapter reads paragraph, line-break, and media boundaries for all
+  three modes. VN captures CSS boundaries before detaching the chapter DOM,
+  builds and caches this index from the complete source stream
+  and projects expanded raw ranges through its existing screen range map.
 - Reader image setup semantics live in `reader-media-semantics.js` and are
   consumed by paginated, continuous, and VN assets for shared gaiji class
   recognition, transparent monochrome inline-image tinting, SVG image

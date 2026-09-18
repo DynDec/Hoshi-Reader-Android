@@ -305,16 +305,17 @@ class TestRange {
         const before = value.slice(0, this.startOffset);
         const selected = value.slice(this.startOffset, this.endOffset);
         const after = value.slice(this.endOffset);
-        const replacements = [];
-        if (before) replacements.push(new TestText(before));
+        // DOM Range extraction retains the original start text node. Earlier
+        // cue ranges can still reference its prefix when wrapping in reverse.
+        textNode.nodeValue = before;
+        const replacements = [textNode];
         if (after) replacements.push(new TestText(after));
         replacements.forEach((node) => {
             node.parentNode = parent;
         });
         parent.childNodes.splice(index, 1, ...replacements);
-        textNode.parentNode = null;
         this.insertionParent = parent;
-        this.insertionIndex = before ? index + 1 : index;
+        this.insertionIndex = index + 1;
         if (selected) fragment.appendChild(new TestText(selected));
         return fragment;
     }
@@ -1073,8 +1074,9 @@ test('Sasayaki highlight applies active DOM state without CSS Highlight API', ()
         reader.applySasayakiCues([{ id: 'cue', start: 0, length: 4 }]);
         reader.highlightSasayakiCue('cue', false);
 
-        const wrapper = body.firstChild;
-        assert.equal(body.childNodes.length, 1);
+        const wrappers = body.childNodes.filter((node) => node.nodeType === 1);
+        const wrapper = wrappers[0];
+        assert.equal(wrappers.length, 1);
         assert.equal(wrapper.nodeType, 1);
         assert.equal(wrapper.classList.contains('hoshi-sasayaki-cue'), true);
         assert.equal(wrapper.classList.contains('hoshi-sasayaki-active'), true);
@@ -1348,5 +1350,118 @@ test('reader initialization requires XHTML document.head like iOS', () => {
         assert.equal(document.head, null);
 
         assert.throws(() => reader.initialize(), /appendChild/);
+    }
+});
+
+test('Sasayaki assigns Japanese boundary punctuation identically for batch and single cues', () => {
+    const cases = [
+        ['「こんにちは。」', [5], ['「こんにちは。」']],
+        ['「そうか。わかった。」', [3, 4], ['「そうか。', 'わかった。」']],
+        ['そうか……わかった。', [3, 4], ['そうか……', 'わかった。']],
+        ['「……本当！？」', [2], ['「……本当！？」']],
+        ['彼は言った。「行こう」', [5, 3], ['彼は言った。', '「行こう」']],
+        ['『「本当？」』', [2], ['『「本当？」』']],
+        ['前文。　「次の文。」', [2, 3], ['前文。', '「次の文。」']],
+        ['𠮟った――「え？」', [3, 1], ['𠮟った――', '「え？」']],
+    ];
+    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+        for (const [text, lengths, expected] of cases) {
+            const body = new TestElement('body');
+            // Every character lives in a separate inline node.
+            for (const char of text) {
+                const span = new TestElement('span');
+                span.appendChild(new TestText(char));
+                body.appendChild(span);
+            }
+            const { reader } = loadReader(body, sourceUrl);
+            let start = 0;
+            const cues = lengths.map((length, id) => {
+                const cue = { id: String(id), start, length };
+                start += length;
+                return cue;
+            });
+            const texts = (results) => Array.from(results, ({ ranges }) =>
+                ranges.map(({ node, start, end }) => node.textContent.slice(start, end)).join(''));
+            assert.deepEqual(texts(reader.collectSasayakiCueRanges(cues)), expected, text);
+            for (let i = 0; i < cues.length; i++) {
+                assert.deepEqual(texts(reader.collectSasayakiCueRanges([cues[i]])), [expected[i]], text);
+            }
+        }
+    }
+});
+
+test('Sasayaki boundary expansion stops at paragraphs, breaks, media, whitespace and unknown symbols', () => {
+    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+        for (const barrier of ['p', 'br', 'img', ' ', '🙂', '.']) {
+            const body = new TestElement('body');
+            body.appendChild(new TestText('前'));
+            if (barrier === 'p') {
+                const paragraph = new TestElement('p');
+                paragraph.appendChild(new TestText('……次。'));
+                body.appendChild(paragraph);
+            } else {
+                body.appendChild(['br', 'img'].includes(barrier) ? new TestElement(barrier) : new TestText(barrier));
+                body.appendChild(new TestText('……次。'));
+            }
+            const { reader } = loadReader(body, sourceUrl);
+            const result = reader.collectSasayakiCueRanges([{ id: 'first', start: 0, length: 1 }, { id: 'next', start: 1, length: 1 }]);
+            const texts = Array.from(result, ({ ranges }) => ranges.map(({ node, start, end }) => node.textContent.slice(start, end)).join(''));
+            assert.deepEqual(texts, ['前', ['🙂', '.'].includes(barrier) ? '次。' : '……次。'], barrier);
+            assert.equal(reader.collectSasayakiCueRanges([{ id: 'empty', start: 0, length: 0 }])[0].ranges.length, 0);
+        }
+    }
+});
+
+test('Sasayaki punctuation uses the same bounds in wrappers and e-ink geometry after reapplying cues', () => {
+    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+        for (const eInk of [false, true]) {
+            const body = new TestElement('body');
+            body.appendChild(new TestText('「一。」『二！？』'));
+            const { reader } = loadReader(body, sourceUrl);
+            reader.isEInkMode = () => eInk;
+            const cues = [{ id: 'a', start: 0, length: 1 }, { id: 'b', start: 1, length: 1 }];
+            for (let iteration = 0; iteration < 2; iteration++) {
+                reader.applySasayakiCues(cues);
+                const texts = cues.map(({ id }) => eInk
+                    ? Array.from(reader.cueGeometryRanges.get(id), (r) => r.startNode.textContent.slice(r.startOffset, r.endOffset)).join('')
+                    : Array.from(reader.cueWrappers.get(id), (node) => node.textContent).join(''));
+                assert.deepEqual(texts, ['「一。」', '『二！？』']);
+            }
+        }
+    }
+});
+
+test('Sasayaki DOM punctuation indexing preserves the existing walker character offsets', () => {
+    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+        const body = new TestElement('body');
+        body.appendChild(new TestText('一'));
+        const script = new TestElement('script');
+        script.appendChild(new TestText('ignored'));
+        body.appendChild(script);
+        body.appendChild(new TestText('「二。」'));
+        const { reader } = loadReader(body, sourceUrl);
+        reader.buildNodeOffsets();
+        const cue = { id: 'cue', start: reader.nodeStartOffsets.get(body.childNodes[2]), length: 1 };
+        const [{ ranges }] = reader.collectSasayakiCueRanges([cue]);
+        assert.equal(ranges.map(({ node, start, end }) => node.textContent.slice(start, end)).join(''), '「二。」');
+    }
+});
+
+test('Sasayaki includes ruby base punctuation without reading annotation text or layout', () => {
+    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+        const body = new TestElement('body');
+        body.appendChild(new TestText('「'));
+        const ruby = new TestElement('ruby');
+        ruby.appendChild(new TestText('𠮟'));
+        const rt = new TestElement('rt');
+        const styledAnnotation = new TestElement('div');
+        styledAnnotation.appendChild(new TestText('しか'));
+        rt.appendChild(styledAnnotation);
+        ruby.appendChild(rt);
+        body.appendChild(ruby);
+        body.appendChild(new TestText('。」'));
+        const { reader } = loadReader(body, sourceUrl);
+        const [{ ranges }] = reader.collectSasayakiCueRanges([{ id: 'a', start: 0, length: 1 }]);
+        assert.equal(ranges.map(({ node, start, end }) => node.textContent.slice(start, end)).join(''), '「𠮟。」');
     }
 });

@@ -1,5 +1,6 @@
 __HOSHI_READER_VIEWPORT_SCRIPT__
 __HOSHI_READER_TEXT_SEMANTICS_SCRIPT__
+__HOSHI_READER_DOM_TEXT_SCRIPT__
 __HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__
 __HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__
 __HOSHI_READER_VN_CONTENT_STREAM_SCRIPT__
@@ -222,6 +223,7 @@ window.hoshiReader = {
   },
   detachChapterSource: function() {
     if (this.sourceRoot) return;
+    this.sourceSasayakiBoundaries = window.hoshiReaderDomText.captureSasayakiBoundaries(document.body);
     this.sourceRoot = document.createElement('div');
     var children = Array.from(document.body.childNodes);
     for (var i = 0; i < children.length; i++) {
@@ -256,7 +258,7 @@ window.hoshiReader = {
     if (!selectionProjectionFactory) {
       throw new Error('hoshiReaderVnSelectionProjection is required for visual novel reader');
     }
-    this.contentStream = contentStreamFactory(this.sourceRoot);
+    this.contentStream = contentStreamFactory(this.sourceRoot, { sasayakiBoundaries: this.sourceSasayakiBoundaries });
     this.rangeMap = rangeMapFactory(this);
     this.selectionProjection = selectionProjectionFactory(this);
     if (window.hoshiSelection && window.hoshiSelection.configure) {

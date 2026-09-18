@@ -43,3 +43,50 @@ test('reader text semantics classifies Japanese characters used for ruby-adjacen
     assert.equal(semantics.isJapaneseBreakCharacter('A'), false);
     assert.equal(semantics.isJapaneseBreakCharacter(' '), false);
 });
+
+test('Sasayaki punctuation index has stable directional ownership without changing matching', () => {
+    const semantics = loadTextSemantics();
+    const cases = [
+        ['……一――二。', ['……一――', '二。']],
+        ['一。「……二」', ['一。', '「……二」']],
+        ['一」……二', ['一」……', '二']],
+        ['一……「二', ['一……', '「二']],
+        ['一「」二', ['一', '二']],
+        ['一。\n……二', ['一。', '……二']],
+        ['一。　……二', ['一。', '……二']],
+        ['一🙂……二', ['一', '二']],
+        ['「一', ['「一']],
+        ['一」', ['一」']],
+        ['"一"', ['一']],
+        ['\'一\'', ['一']],
+        ['-一.', ['一']],
+        ['ー。', ['ー。']],
+    ];
+    for (const [text, expected] of cases) {
+        const chars = Array.from(text);
+        const index = semantics.createSasayakiTextIndex(chars.map((text) => ({ text })));
+        assert.deepEqual(expected.map((_, start) => {
+            const range = index.range(start, 1);
+            return chars.slice(range.start, range.end).join('');
+        }), expected, text);
+        assert.equal(semantics.countChars(text), expected.length, text);
+        for (const [start, length] of [[0, 0], [-1, 1], [0, 100], [1.5, 1], [0, NaN]]) {
+            assert.equal(index.range(start, length), null);
+        }
+    }
+    assert.equal(semantics.createSasayakiTextIndex([{ text: '……。' }]).range(0, 1), null);
+});
+
+test('Sasayaki punctuation whitelist handles every specified character', () => {
+    const semantics = loadTextSemantics();
+    for (const char of '「『（〔［｛〈《【〖〘〚“‘｢([{') {
+        const index = semantics.createSasayakiTextIndex([{ text: `一${char}二` }]);
+        assert.equal(index.range(0, 1).end, 1, char);
+        assert.equal(index.range(1, 1).start, 1, char);
+    }
+    for (const char of '」』）〕］｝〉》】〗〙〛”’｣)]}。、，．！？!?‼⁇⁈⁉､｡・･：；:;…‥—―–─〜～') {
+        const index = semantics.createSasayakiTextIndex([{ text: `一${char}二` }]);
+        assert.equal(index.range(0, 1).end, 2, char);
+        assert.equal(index.range(1, 1).start, 2, char);
+    }
+});
