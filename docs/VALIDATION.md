@@ -86,6 +86,97 @@ node --test app/src/test/js/*.test.mjs
 
 ## Reader And Lookup
 
+### Theme
+
+Preserve app data and cover all four tabs, every settings category, native Reader
+panels, dialogs, menus, and Process Text lookup:
+
+- Both switching modes show Light / Sepia / Custom Light and Dark / Warm Dark /
+  Custom Dark. Automatic mode has one selection per group; manual mode has one
+  selection across all six options. Change system night mode while foregrounded
+  and backgrounded: only automatic mode changes the active group. Editing the
+  inactive automatic slot must not change the current theme.
+  Use identical custom colors, and backgrounds opposite to their group's brightness:
+  Custom Light must use a light native interface and black-on-white dictionary
+  popups; Custom Dark must use a dark interface and white-on-black popups. Check
+  Reader, Dictionary, recursive lookup and Process Text, preserving reading
+  colors, position, selection and lookup history when switching groups.
+- Disabling automatic switching keeps the currently displayed palette. Re-enabling
+  uses both saved slots, including edits made in manual mode. Each of the two
+  slots retains its custom colors after preset changes. Canceling any editor
+  keeps the previous settings, including alpha.
+  Change palettes/accents while scrolled to the bottom, including delayed and
+  failed saves: swatches, preview, text brightness, row positions and scroll offset
+  must remain stable while saving; only confirmed settings change the theme.
+  `DisplaySettingsViewTest` covers the one-versus-two palette selections and
+  layout preservation during a suspended save using in-memory settings, without
+  writing the installed app's preferences.
+- Compare Theme with other grouped settings, including its Reader
+  panel: palette, accent and E-ink rows use the same 16dp inset dividers; E-ink
+  keeps the enclosing group outline continuous.
+  Open Theme from the Reader's bottom-right menu: the title scrolls away with
+  the settings and returns when scrolled to the top, while the drag handle stays
+  available. The full Theme settings page keeps its top app bar fixed.
+- Reading Settings selected segments form rounded capsules with a visible neutral
+  track around every edge and no vertical separators. Check text orientation,
+  furigana mode, reading mode, VN screen content and progress position in light/dark themes
+  with system/manual accents, and inverse selection in both E-ink modes.
+  Selecting another option must move the highlight without changing row size or
+  reducing the original clickable area. `ReaderAppearanceSelectionTest` checks
+  rendered fills, text and the visible track above selections for all five
+  controls, using temporary font storage and in-memory reading preferences.
+- System dynamic colors on Android 12+, the fixed fallback on older Android,
+  all eight accent seeds and extreme custom seeds. Reader background/text retain
+  their own colors while controls and native containers use the accent scheme.
+  Across all four tabs, check that bottom/side navigation has a consistent tint
+  and that the status-bar inset matches its page. Dictionary search must retain
+  this continuity both with the keyboard open and after showing results; its
+  field remains distinguishable, with explicit field/top-bar outlines in E-ink.
+  Compare strongly tinted system palettes and manual blue/red/green accents:
+  page, navigation, nested controls and overlays should keep a subtle neutral
+  tint and distinct tonal levels. Group dividers should remain visible without
+  dominating white cards; input outlines and active accents retain their contrast.
+  Repeat in dark mode and confirm E-ink still uses full black/white boundaries.
+- Light and dark E-ink: compare every tonal container with ordinary mode and
+  verify actual outlines on groups, nested controls, filled buttons, segmented
+  tracks/selections, popups, panels and navigation boundaries. Lazy groups need a
+  continuous closed outline with one row, multiple rows and during scrolling.
+  E-ink optimization sits directly below automatic switching. Enabling it hides
+  palette/accent choices and shows an explanation; automatic switching stays available. With
+  automatic switching off, only the light/dark choice appears below the switches.
+  Its selection survives restart without changing any stored palette or accent.
+  With automatic switching on, E-ink follows the system even if a custom palette
+  has the opposite brightness. Disabling automatic switching keeps the displayed
+  brightness; disabling E-ink restores the normal palette/accent choices and colors.
+- Upgrade from the v1.3.3 release settings format for every theme, including Sepia
+  inversion and alpha custom colors. Do not use intermediate development schemas
+  as upgrade baselines.
+  Start with a global profile and a different last-book profile, with automatic
+  book opening enabled: migration must use the global profile before opening the
+  book. Reopen, change language/profile, and create/copy profiles; colors and E-ink
+  must stay global. The custom editor has no legacy-palette import list.
+  Missing, empty, truncated or invalid profile settings must fall back to Reader
+  DataStore, then legacy SharedPreferences, then defaults, so both Activity hosts
+  can finish loading. Preserve source files. Failed migration writes must remain
+  unmarked and retry successfully; after migration, restart must preserve the user's
+  new global settings without reading or reapplying old profile colors.
+- Test narrow Chinese layouts and enlarged fonts, empty/loading/error/disabled
+  states, cold launch, restart, foreground/background, and opening both Reader
+  settings panels. Reading Settings identifies the effective profile. Changing
+  display settings preserves reading position, selection, and an open lookup.
+- Check initial loading/migration failures and retriable persistence failures:
+  no default-theme content flash, no lost confirmed setting, and localized errors.
+  Rapidly change two independent reading settings during delayed storage and
+  confirm that both survive; repeated stepper taps must accumulate every increment.
+  MainActivity and Process Text must agree on theme.
+
+Automated display regressions live in `features/display`, Reader settings/host
+tests, Reader display-update tests, and `ui/theme/HoshiSurfaceRolesTest`.
+Device inspection remains necessary for outlines and transitions; passing JVM
+tests does not establish visual acceptance.
+
+### Reading And Lookup Flows
+
 Reader work should compare against
 `reference/Hoshi-Reader-iOS/Features/Reader/ReaderWebView/ReaderWebView.swift`
 and the matching JS/CSS before adding Android-specific behavior.

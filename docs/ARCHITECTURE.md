@@ -1,6 +1,6 @@
 # Hoshi Android Current Architecture
 
-Date: 2026-08-24
+Date: 2026-09-18
 
 This document describes the current architecture that exists in the Android
 repo. It is not a future plan and should not track task status. Long-lived
@@ -10,6 +10,27 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
 
 - The app is a single Android application module under `app`.
 - UI is Jetpack Compose + Material 3.
+- `HoshiSurfaceRoles` owns native page, navigation, group, nested, and overlay colors derived
+  from Material 3 and the resolved brightness. Shared container helpers provide
+  E-ink outlines (including continuous lazy group edges) while ordinary groups
+  use tonal separation without decorative borders or elevation. Reader content
+  and dictionary HTML retain their existing color/style systems.
+  Bottom/side navigation uses `surfaceContainer`; page and top-bar backgrounds
+  remain continuous through the status-bar inset, including Dictionary search.
+  The search field uses `surfaceContainerHigh` to remain distinct on that page.
+  Reading Settings segments use inset rounded selections with the shared
+  `selected`/`onSelected` colors inside a continuous neutral nested track.
+  The full segment remains clickable; E-ink uses inverse black/white fills and
+  text with explicit outlines around the track and selected capsule.
+- Native accents default to Android 12+ dynamic color with the existing fixed
+  fallback on older Android. Manual opaque seeds use the standalone Material Color
+  Utilities 4.1.1 Tonal Spot algorithm to generate a complete Material 3 scheme;
+  E-ink overrides the result without overwriting the stored seed or palettes.
+  `withHoshiSurfaceColors` caps native surface HCT chroma at 4 while retaining
+  the source hue and tone. It softens `outlineVariant` toward the group fill;
+  accent, text and input `outline` roles retain their source colors. System,
+  manual, fallback and accent-preview schemes share this treatment. E-ink
+  bypasses it to retain pure black/white fills and boundaries.
 - Navigation uses Navigation3 typed route keys, `AppShell`, and `NavDisplay`.
   Top-level Books, Dictionary, Statistics, and Settings tabs each own an
   independent Nav3 back stack with its own saveable entry state and per-entry
@@ -74,7 +95,7 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   are persisted through book sidecar repositories and models.
 - Statistics is always available from its top-level tab. Its settings and
   folder-keyed daily editor use that tab's Navigation3 back stack and
-  entry-scoped Hilt ViewModels. Reader display preferences remain in Appearance;
+  entry-scoped Hilt ViewModels. Reader statistics display preferences remain in Reading Settings;
   the Sync and Statistics settings screens share the global sync preference.
 - `BookStatisticsStore` is the shared Hilt singleton for reader statistics,
   transactional sync imports, daily edits, archive/restore, and dashboard reads.
@@ -142,14 +163,55 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   restores merge the profile index and profile dictionary config/settings while
   preserving profile-owned Anki and Reader settings that are outside the
   dictionary payload.
-- Reader Appearance settings are stored per active/effective profile in
-  `Profiles/<profileId>/reader_settings.json`; Reader Behavior and statistics
-  sync settings remain global DataStore settings.
+- Reading Settings (font, layout, reading information, and lookup panel options)
+  are stored per active/effective profile in `Profiles/<profileId>/reader_settings.json`.
+  Reader Behavior and statistics sync settings remain global DataStore settings.
+- `AppDisplaySettingsRepository` owns global Theme settings in a separate
+  DataStore: system-driven switching, independent light/dark reading palettes
+  with remembered custom colors, the manually selected slot, accent source/seed,
+  E-ink mode and its independent manual brightness, and migration version.
+  `resolveDisplaySettings(settings, systemDark)` is the pure source for active
+  reading colors and native interface brightness. Both switching modes share the
+  same six choices in two groups: automatic mode selects one per group, manual
+  mode selects one across both. Disabling automatic switching keeps the active
+  slot; re-enabling retains both stored selections. Custom colors preserve alpha;
+  interface and popup brightness come from the selected group, never the custom
+  background's luminance. E-ink follows system brightness when automatic switching
+  is enabled; otherwise its remembered
+  manual brightness takes precedence, defaulting to the palette's brightness until
+  chosen. This override never changes stored palette or accent colors. Disabling
+  automatic switching in E-ink keeps the currently displayed brightness.
+  Display settings block repeated interactions while saving without removing
+  previews, dimming the page, or changing list geometry; colors come from confirmed
+  settings. The full settings page and Reader panel share this content. The Reader
+  panel title is inside its scrollable content; the drag handle remains outside.
+- Display migration targets the settings format shipped in Android v1.3.3. It reads
+  the global active profile before Reader profile initialization or book-specific
+  profile activation. If that profile's settings file is missing or unreadable,
+  it falls back to Reader DataStore, then legacy SharedPreferences, then defaults.
+  Other profiles are not read, and source settings are not rewritten by migration.
+  The new global display schema starts at migration version 1; only a successful
+  write marks migration complete. Completed migration never reapplies old profile
+  settings. Unreleased development schemas have no dedicated migration paths.
+  Background luminance is used only to assign v1.3.3 custom colors to a light/dark
+  group. Legacy Profile JSON color fields remain readable and are preserved on
+  writes, but no longer control runtime
+  display. Book sidecars, sync, and backup formats are unchanged.
+- `ReaderSettingsRepository` combines global display state with profile reading
+  preferences. Both MainActivity and Process Text use `ReaderSettingsHostViewModel`
+  and wait for its first confirmed value before rendering content. ViewModels expose
+  immutable state and localized load/save errors; profile changes never overwrite
+  global display settings. Reading setting events submit transformations against
+  the latest stored value, preserving successive edits during delayed persistence.
+  Display updates use the existing WebView appearance
+  bridge without rebuilding Reader content or lookup state. Both Activity hosts
+  handle `uiMode` changes in place; Compose observes the updated system
+  configuration and the existing WebViews receive the resolved appearance update.
 - Reader font selections retain the legacy display-name field and additionally
   persist stable family/variant IDs plus each profile's last variant per family.
 - Statistics daily target settings are global DataStore settings behind a
   repository.
-- Profile-scoped Reader Appearance, Dictionary, and Anki settings JSON reads and
+- Profile-scoped Reading Settings, Dictionary, and Anki settings JSON reads and
   writes use injected IO dispatchers and repository-owned serialization locks.
 - Frequency and pitch dictionaries are type-specific and are not treated as term
   fallback dictionaries.
