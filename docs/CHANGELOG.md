@@ -8,6 +8,19 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Preserve deleted books' reading statistics in an archive, restore them on
+  reimport, and edit daily records from book distribution rows. Single-day
+  deletion is available inside the day editor; deleting all records requires
+  confirmation. Daily records use compact grouped rows with dates and character
+  counts on the left, durations and navigation arrows on the right. Archived
+  books have a small trash marker in the book list. Local and archived book
+  headers use the dashboard title style, avoiding a font-size jump while loading.
+  E-ink mode outlines the daily-record group and its delete-all button.
+- Add natural calendar periods and all-time Statistics overview, with compact
+  period controls in the Reading Time card and the current week selected by default.
+  Tap chart bars to inspect a day within a week/month or a month within a
+  year/all-time period. Include elapsed-period averages and comparisons,
+  plus historical goal streaks and best-day summaries.
 - Support Anki tag handlebars such as `{document-title}` and `{expression}`,
   joining whitespace inside substituted values with underscores; new card
   formats default to the `hoshi` tag while saved tags stay unchanged.
@@ -43,8 +56,30 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Changed
 
-- Split Reader statistics autostart into independent Book Open and Page Turn
-  options that can be enabled together.
+- Keep Statistics always available and move its settings to the Stats tab's
+  upper-right corner. Statistics sync defaults on only when unset; saved daily goals,
+  sync opt-outs and Reader display preferences are preserved. Book Open and
+  Page Turn autostart remain independent and default off. Group settings into
+  autostart, reset time, Sync and Archive sections, with explanatory footers
+  and the archived-book count below the clear action.
+- Simplify Statistics to daily goals and reading-time results. Include a
+  display-only reading-intensity heatmap with fully visible, row-aligned weekday
+  labels in the daily card and a compact
+  goal popup with a scrollable value picker. Show reading-time
+  bars with calendar-aligned dashed grid lines, summary rows labeled Characters
+  Read and Reading Speed, and time-ranked books with per-book character counts
+  and reading times together instead of three tabs,
+  with consistent section headings, grouped cards and compact charts and rows.
+  Identify daily averages in Week/Month and monthly averages in Year/All.
+  Show complete period comparisons with larger text and direction arrows
+  alongside rounded percentages; keep Show More left-aligned with
+  a divider above it. In E-ink mode, chart bars are hollow until selected,
+  making the filled selection distinct; period and goal-type selectors use
+  outlined tracks with filled, inverse-text selections, and the goal value wheel
+  outlines its center selection. Remove the separate This Week
+  card and weekly goal; weekly totals and trends remain available through the
+  reading-time chart. Keep dashboard cards in memory while scrolling to avoid
+  rebuilding the heatmap and charts during fast vertical swipes.
 
 ### Fixed
 

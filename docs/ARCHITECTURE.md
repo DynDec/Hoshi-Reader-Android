@@ -72,10 +72,49 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   Android versions.
 - Book metadata, bookmarks, highlights, reading statistics, and Sasayaki data
   are persisted through book sidecar repositories and models.
-- The Statistics dashboard aggregates local book `statistics.json` sidecars
-  through a Hilt-backed repository and exposes dashboard state through a
-  Hilt-backed ViewModel. Reader tracking and the dashboard share an adjusted
-  local-date provider driven by the global minute-level statistics reset time.
+- Statistics is always available from its top-level tab. Its settings and
+  folder-keyed daily editor use that tab's Navigation3 back stack and
+  entry-scoped Hilt ViewModels. Reader display preferences remain in Appearance;
+  the Sync and Statistics settings screens share the global sync preference.
+- `BookStatisticsStore` is the shared Hilt singleton for reader statistics,
+  transactional sync imports, daily edits, archive/restore, and dashboard reads.
+  File operations run on the IO dispatcher behind one mutex and use atomic
+  replacement. Reader saves submit only changed days, merge by modification
+  timestamp, and respect in-process editor deletions so queued writes cannot
+  undo a later edit. No deletion markers are added to the sidecar/sync format.
+- Deleting a book first stores active dates and compatible metadata under
+  `Books/statistics_archive/<folder>/`, with an optional JPEG cover bounded to
+  240 px. Required archive failures preserve the source book. Import restores
+  after external sidecars are written; normalized folder identity joins active
+  and archived records by date without double counting. Equal timestamps keep
+  the first input: existing archive on deletion, current book on restore.
+  The archive directory is excluded from book discovery and TTU exports but is
+  included in Books `.hoshi` backups.
+- Statistics repositories combine local and archived sidecars for the dashboard
+  and all-date book editors. The daily goal card combines a semicircular gauge,
+  history metrics with shared text baselines, and a display-only reading-intensity
+  heatmap. Sparse active dates back a lazy week grid with viewport-only drawing;
+  heatmap scrolling and data are independent of chart selection. The fixed
+  dashboard sections share a regular scrolling column, retaining their
+  compositions and draw caches when they move offscreen. Book distribution
+  still expands in five-row increments. Target editing
+  uses an anchored popup with a snapping value wheel, independent remembered
+  character/time goals, immediate tap selection and persistence when scrolling
+  settles.
+  There is no separate calendar picker or weekly goal.
+- The reading-time card owns Week/Month/Year/All selection, initially showing
+  the current Week. A horizontal pager browses natural periods from first activity to
+  today, preparing chart data only for the selected and adjacent pages. Changing
+  mode returns to the current period. The chart uses a shared continuous calendar
+  scale for bar geometry and hit testing, locale week-aligned month ticks, and
+  cached draw geometry/text. Bars drill into a day for week/month or a
+  month for year/all; paging or changing mode clears that selection. The headline,
+  summary and time-ranked books follow the selected bucket, or the whole period
+  when none is selected. Calculations zero-fill buckets, use elapsed-period
+  averages and recompute historical goals across the entire history.
+  Heatmap and week periods follow the locale's first weekday. Reader tracking
+  and the dashboard share the reset-time local-date provider; historical date
+  keys are not rewritten.
 - Book metadata sidecars may include a forced profile id and parsed EPUB
   language. Reader opening resolves the effective profile from forced profile,
   then EPUB language primary profile, then the global active profile.
@@ -108,7 +147,7 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   sync settings remain global DataStore settings.
 - Reader font selections retain the legacy display-name field and additionally
   persist stable family/variant IDs plus each profile's last variant per family.
-- Statistics dashboard target settings are global DataStore settings behind a
+- Statistics daily target settings are global DataStore settings behind a
   repository.
 - Profile-scoped Reader Appearance, Dictionary, and Anki settings JSON reads and
   writes use injected IO dispatchers and repository-owned serialization locks.
