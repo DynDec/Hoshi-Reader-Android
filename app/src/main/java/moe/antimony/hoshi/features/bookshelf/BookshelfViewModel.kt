@@ -95,7 +95,12 @@ internal class BookshelfViewModel : ViewModel {
     fun changeSort(sortOption: BookSortOption) {
         workScope.launch {
             repository.changeSort(sortOption)
-            _uiState.update { it.copy(sortOption = sortOption) }
+            _uiState.update {
+                it.copy(
+                    sortOption = sortOption,
+                    remoteBookEntries = it.remoteBookEntries.sortedRemoteBooks(sortOption),
+                )
+            }
             reloadBookEntriesSync(sortOption)
         }
     }
@@ -723,6 +728,7 @@ internal class BookshelfViewModel : ViewModel {
                     sortOption = result.settings.sortOption,
                 ),
                 sortOption = result.settings.sortOption,
+                remoteBookEntries = it.remoteBookEntries.sortedRemoteBooks(result.settings.sortOption),
                 showReading = result.settings.showReading,
                 coverMode = result.settings.coverMode,
                 selectedBookIds = validSelectedIds,
@@ -783,7 +789,7 @@ internal class BookshelfViewModel : ViewModel {
                 if (generation != reloadGeneration) return@launch
                 _uiState.update {
                     it.copy(
-                        remoteBookEntries = remoteResult.remoteEntries,
+                        remoteBookEntries = remoteResult.remoteEntries.sortedRemoteBooks(it.sortOption),
                         remoteProgressById = remoteResult.remoteProgressById,
                         remoteCoverSourcesById = remoteResult.remoteCoverSourcesById,
                     )

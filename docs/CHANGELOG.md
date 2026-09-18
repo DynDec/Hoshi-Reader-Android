@@ -69,6 +69,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Changed
 
+- Apply the selected Recent/Title sort to Google Drive books. Recent uses the
+  latest reading or audiobook progress time, falling back to bookdata last access.
+
 - Separate global display settings from profile Reading Settings, which now show
   the edited profile name. Opening books or switching profiles keeps the same
   colors and E-ink setting.

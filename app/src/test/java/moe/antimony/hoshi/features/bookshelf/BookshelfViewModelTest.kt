@@ -412,6 +412,48 @@ class BookshelfViewModelTest {
     }
 
     @Test
+    fun remoteBooksFollowSelectedSortAndRefreshedAccessTimes() {
+        val older = remoteEntry("older", "Book 2")
+        val newer = remoteEntry("newer", "Book 10").let {
+            it.copy(syncFiles = it.syncFiles.copy(progress = DriveFile("progress", "progress_1_6_3000_0.5.json")))
+        }
+        val repository = FakeBookshelfRepository(remoteEntries = listOf(older, newer))
+        val viewModel = BookshelfViewModel(repository, testScope())
+
+        viewModel.reloadBookEntries()
+        assertEquals(listOf("newer", "older"), viewModel.uiState.value.remoteBookEntries.map { it.id })
+        viewModel.changeSort(BookSortOption.Title)
+        assertEquals(listOf("older", "newer"), viewModel.uiState.value.remoteBookEntries.map { it.id })
+        viewModel.changeSort(BookSortOption.Recent)
+        assertEquals(listOf("newer", "older"), viewModel.uiState.value.remoteBookEntries.map { it.id })
+
+        repository.remoteEntries = listOf(newer, older.copy(syncFiles = older.syncFiles.copy(
+            audioBook = DriveFile("audio", "audioBook_1_6_4000_0.json"),
+        )))
+        viewModel.reloadBookEntries()
+        assertEquals(listOf("older", "newer"), viewModel.uiState.value.remoteBookEntries.map { it.id })
+    }
+
+    @Test
+    fun changingRemoteSortReordersCachedBooksWhileRefreshWaits() {
+        val unknown = remoteEntry("unknown", "Book 1").let {
+            it.copy(syncFiles = it.syncFiles.copy(bookData = DriveFile("bad", "bookdata_invalid.zip")))
+        }
+        val recent = remoteEntry("recent", "Book 2")
+        val repository = FakeBookshelfRepository(remoteEntries = listOf(unknown, recent))
+        val viewModel = BookshelfViewModel(repository, testScope())
+        viewModel.reloadBookEntries()
+        assertEquals(listOf("recent", "unknown"), viewModel.uiState.value.remoteBookEntries.map { it.id })
+
+        val gate = CompletableDeferred<Unit>()
+        repository.remoteLoadGate = gate
+        viewModel.changeSort(BookSortOption.Title)
+        assertEquals(listOf("unknown", "recent"), viewModel.uiState.value.remoteBookEntries.map { it.id })
+        gate.complete(Unit)
+        assertEquals(listOf("unknown", "recent"), viewModel.uiState.value.remoteBookEntries.map { it.id })
+    }
+
+    @Test
     fun changingSortOptionReloadsBooksWithThatOption() {
         val repository = FakeBookshelfRepository()
         val viewModel = BookshelfViewModel(repository, testScope())

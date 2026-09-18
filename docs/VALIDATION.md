@@ -322,6 +322,11 @@ Validate relevant bookshelf/import changes with:
   intact. Verify Show/Blur/Hide persist across restart in dark and E-ink themes;
   Hide must not reveal the real cover, Blur must visibly blur on Android 12+
   and safely show fallback artwork on Android 8-11.
+- Google Drive bookshelf Recent/Title sorting: compare books with newer reading
+  progress, newer audiobook progress, only bookdata last access, and malformed or
+  missing timestamps. Recent places unknown times last; Title uses natural title
+  order. Switch sort while refresh is delayed/offline, then refresh and import a
+  remote book; remaining entries must retain the selected ordering.
 - dark and E-ink editable text fields, confirming visible cursors and horizontal
   scrolling for long values.
 - Android-created `Books` and `Dictionaries` `.hoshi` archives restored by iOS

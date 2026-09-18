@@ -295,40 +295,7 @@ Validation:
 - Automatic refresh offline, slow token/list requests, and connection loss;
   manual connect/refresh/import/export/delete must still show actionable errors.
 
-### 8. Remote bookshelf last-access ordering
-
-Status: pending Android sync.
-
-Commits: `e6e2b4b`.
-
-Dependency/value reasoning:
-
-- Independent of timeout slice 7; reuse the existing TTU filename timestamp
-  parsers and grouped Drive file discovery.
-
-iOS behavior to mirror:
-
-- Remote last access is the newest progress/audiobook timestamp, falling back
-  to bookdata last access when neither exists; Recent sort reflects it.
-
-Android current gap:
-
-- `RemoteBookEntry` has no last-access field. `BookshelfRepository.kt`
-  `loadRemoteBooksOnce()` builds remote entries and sorts by title regardless of
-  recent progress/audio filenames. `DriveSyncFiles` has no last-access projection.
-  `GoogleDriveClient.toDriveSyncFiles()` already selects latest files by type.
-
-Suggested slice:
-
-- Add the timestamp projection and apply selected bookshelf sorting to remote
-  entries without changing local metadata or downloading full books.
-
-Validation:
-
-- Progress versus audio newest timestamp, bookdata fallback, missing/malformed
-  names, multiple remote books, Recent/Title switch and refresh/import.
-
-### 9. Reader navigation and options toolbar
+### 8. Reader navigation and options toolbar
 
 Status: partial Android implementation; remaining visual/interaction parity.
 
@@ -367,7 +334,7 @@ Validation:
   routing, Sasayaki eligibility, focus toggles/history, horizontal/vertical
   continuous and paginated/VN content, custom/dark/e-ink themes and rotation.
 
-### 10. Reader WebView line-box CSS parity
+### 9. Reader WebView line-box CSS parity
 
 Status: pending Android sync.
 
@@ -400,7 +367,7 @@ Validation:
 - Paginated/continuous horizontal and vertical writing, ruby, cover and
   multi-image pages, line height, progress, and restore.
 
-### 11. App accent and stroke-order font attribution
+### 10. App accent and stroke-order font attribution
 
 Status: pending Android sync.
 
@@ -445,7 +412,6 @@ Validation:
 | `7d7321f` | 2026-08-05 | Restore after renderer termination | Pending WebView recreation/state restore |
 | `165992a`, `e849e36` | 2026-08-16 / 08-17 | Frequency sorting and final labels | Pending Kotlin/JNI/settings; remaining overview wording |
 | `222a72b`, `7dd3f49` | 2026-08-31 / 09-02 | Import diagnostics and automatic low-RAM updates | Pending per-file reasons and automatic import policy |
-| `e6e2b4b` | 2026-08-19 | Remote book last access | Pending timestamp projection/Recent ordering |
 | `42e7b81` | 2026-09-14 | Reader navigation/options toolbar | Pending final Compose action/information layout |
 | `bd21e24`, `8024df1` | 2026-08-09 / 08-22 | Blue accent and font attribution | Pending palette/About UI |
 
@@ -456,11 +422,16 @@ Validation:
 3. Popup layout/CSS isolation (5).
 4. Native frequency options/import diagnostics, then settings and automatic
    low-RAM update policy (6).
-5. Drive timeout/error suppression (7) and remote Recent sorting (8).
-6. Reader navigation/options toolbar (9), building on available statistics.
-7. Reader line-box CSS parity (10), app accent and font attribution (11).
+5. Drive timeout/error suppression (7).
+6. Reader navigation/options toolbar (8), building on available statistics.
+7. Reader line-box CSS parity (9), app accent and font attribution (10).
 
 ## Covered Or No Android Action
+
+- `e6e2b4b`: `DriveSyncFiles.lastAccessMillis` projects the newest progress/audio
+  timestamp, falling back to bookdata last access. Bookshelf ViewModel applies
+  Recent/Title sorting to cached and refreshed remote entries without downloading
+  books or changing local metadata.
 
 - `d8c086d`, `93ba3be` (statistics): Stats is always available, with tab-local
   settings, archived deletion/reimport, folder-keyed daily editing and natural
@@ -625,7 +596,7 @@ Validation:
   500/500 and permits height 1000, exceeding the iOS increase to 350/310.
   Statistics sync defaults on only when unset.
 - `8024df1` (SwiftLAME attribution): Android does not ship SwiftLAME; no action.
-  Attribution for the downloadable stroke-order font remains slice 11.
+  Attribution for the downloadable stroke-order font remains slice 10.
 - `efd89fc`, `e1b0854`: README/issue-template changes only.
 - `0425880`, `c71a2a9`, `d76127d`, `f86eb95`, `d8e150d`, `8137e1e`:
   iOS version metadata only.

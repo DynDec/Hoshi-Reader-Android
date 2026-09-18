@@ -54,7 +54,9 @@ data class RemoteBookEntry(
     val folderName: String,
     val title: String,
     val syncFiles: moe.antimony.hoshi.features.sync.DriveSyncFiles,
-)
+) {
+    val lastAccessMillis: Long? get() = syncFiles.lastAccessMillis
+}
 
 data class BookCoverSource(
     val path: String,

@@ -484,6 +484,12 @@ internal suspend fun loadRemoteBooksOnce(
     }.sortedWith(compareByIosLikeTitle { it.title })
 }
 
+internal fun List<RemoteBookEntry>.sortedRemoteBooks(sortOption: BookSortOption): List<RemoteBookEntry> =
+    when (sortOption) {
+        BookSortOption.Recent -> sortedByDescending { it.lastAccessMillis ?: Long.MIN_VALUE }
+        BookSortOption.Title -> sortedWith(compareByIosLikeTitle { it.title })
+    }
+
 private fun <T> compareByIosLikeTitle(selector: (T) -> String): Comparator<T> {
     val collator = Collator.getInstance(Locale.getDefault()).apply {
         strength = Collator.PRIMARY

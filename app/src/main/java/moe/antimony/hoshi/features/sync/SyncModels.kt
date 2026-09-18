@@ -94,7 +94,13 @@ data class DriveSyncFiles(
     val progress: DriveFile?,
     val statistics: DriveFile?,
     val audioBook: DriveFile?,
-)
+) {
+    val lastAccessMillis: Long?
+        get() = listOfNotNull(
+            TtuSyncRules.parseProgressTimestampMillis(progress),
+            TtuSyncRules.parseAudioBookTimestampMillis(audioBook),
+        ).maxOrNull() ?: TtuSyncRules.parseBookDataLastAccessMillis(bookData)
+}
 
 data class ResolvedBookPosition(
     val spineIndex: Int,
