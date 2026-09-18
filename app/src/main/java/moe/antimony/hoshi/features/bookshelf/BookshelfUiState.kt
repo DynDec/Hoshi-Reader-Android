@@ -34,6 +34,7 @@ data class BookshelfUiState(
     val sections: List<BookshelfSectionModel> = emptyList(),
     val sortOption: BookSortOption = BookSortOption.Recent,
     val showReading: Boolean = false,
+    val hideCollapsedShelfThumbnails: Boolean = false,
     val coverMode: BookshelfCoverMode = BookshelfCoverMode.Show,
     val isSelecting: Boolean = false,
     val selectedBookIds: Set<String> = emptySet(),

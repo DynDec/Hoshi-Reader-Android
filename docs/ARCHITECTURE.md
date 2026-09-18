@@ -91,6 +91,10 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   previews; Hide never submits the cover source to Coil, while Blur uses the
   platform effect on Android 12+ and safely uses the hidden fallback on older
   Android versions.
+  A separate DataStore-backed `hideCollapsedShelfThumbnails` preference defaults
+  to false. When enabled, local, Reading, and Google Drive collapsed sections
+  omit their preview rows entirely while retaining their title/count/toggle row;
+  expanded cards continue to follow the cover mode.
 - Book metadata, bookmarks, highlights, reading statistics, and Sasayaki data
   are persisted through book sidecar repositories and models.
 - Statistics is always available from its top-level tab. Its settings and

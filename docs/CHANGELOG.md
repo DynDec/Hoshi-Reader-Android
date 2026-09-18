@@ -8,6 +8,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Add an optional “Hide thumbnails when collapsed” switch in Manage Shelves.
+  It defaults off; when enabled, collapsed shelves show only their title row.
+
 - Add global Theme settings in Settings and Reader. Follow system
   brightness with one palette selected in each light/dark group, or choose one
   of the same six options manually. Custom Light and Custom Dark retain separate

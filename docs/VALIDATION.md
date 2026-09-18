@@ -322,6 +322,12 @@ Validate relevant bookshelf/import changes with:
   intact. Verify Show/Blur/Hide persist across restart in dark and E-ink themes;
   Hide must not reveal the real cover, Blur must visibly blur on Android 12+
   and safely show fallback artwork on Android 8-11.
+- Manage Shelves: “Hide thumbnails when collapsed” defaults off and persists
+  across restart. Enable it and confirm local, Reading, and Google Drive collapsed
+  sections show only one title/count/arrow row, with no preview placeholder.
+  Verify long shelf names stay on one line, headers still expand/collapse, and
+  disabling restores previews without changing expansion state. Check all three
+  cover modes, expanded cards, and Google Drive selection-mode restrictions.
 - Google Drive bookshelf Recent/Title sorting: compare books with newer reading
   progress, newer audiobook progress, only bookdata last access, and malformed or
   missing timestamps. Recent places unknown times last; Title uses natural title

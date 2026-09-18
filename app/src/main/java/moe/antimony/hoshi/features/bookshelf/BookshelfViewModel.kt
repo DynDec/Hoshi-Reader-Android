@@ -543,6 +543,13 @@ internal class BookshelfViewModel : ViewModel {
         }
     }
 
+    fun changeHideCollapsedShelfThumbnails(hide: Boolean) {
+        _uiState.update { it.copy(hideCollapsedShelfThumbnails = hide) }
+        workScope.launch {
+            repository.changeHideCollapsedShelfThumbnails(hide)
+        }
+    }
+
     fun changeCoverMode(coverMode: BookshelfCoverMode) {
         _uiState.update { it.copy(coverMode = coverMode) }
         workScope.launch {
@@ -731,6 +738,7 @@ internal class BookshelfViewModel : ViewModel {
                 remoteBookEntries = it.remoteBookEntries.sortedRemoteBooks(result.settings.sortOption),
                 showReading = result.settings.showReading,
                 coverMode = result.settings.coverMode,
+                hideCollapsedShelfThumbnails = result.settings.hideCollapsedShelfThumbnails,
                 selectedBookIds = validSelectedIds,
                 hasLoadedBooks = true,
                 isLoading = false,

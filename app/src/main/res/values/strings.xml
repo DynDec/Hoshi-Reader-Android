@@ -163,6 +163,7 @@
     <string name="bookshelf_no_shelf" comment="Shelf picker empty value, intentionally matching generic none.">None</string>
     <string name="bookshelf_delete_selected_books">Delete selected books</string>
     <string name="bookshelf_manage_shelves">Manage Shelves</string>
+    <string name="bookshelf_hide_collapsed_shelf_thumbnails">Hide thumbnails when collapsed</string>
     <string name="bookshelf_covers">Covers</string>
     <string name="bookshelf_cover_mode_show">Show</string>
     <string name="bookshelf_cover_mode_blur">Blur</string>

@@ -299,6 +299,7 @@ fun BookshelfView(
         coverSourcesById = uiState.coverSourcesById,
         remoteCoverSourcesById = uiState.remoteCoverSourcesById,
         coverMode = uiState.coverMode,
+        hideCollapsedShelfThumbnails = uiState.hideCollapsedShelfThumbnails,
         sortOption = uiState.sortOption,
         hasLoadedBooks = uiState.hasLoadedBooks,
         isLoading = uiState.isLoading,
@@ -539,8 +540,10 @@ fun BookshelfView(
             shelves = uiState.shelves,
             showReading = uiState.showReading,
             coverMode = uiState.coverMode,
+            hideCollapsedShelfThumbnails = uiState.hideCollapsedShelfThumbnails,
             onShowReadingChange = booksViewModel::changeShowReading,
             onCoverModeChange = booksViewModel::changeCoverMode,
+            onHideCollapsedShelfThumbnailsChange = booksViewModel::changeHideCollapsedShelfThumbnails,
             onCreateShelf = booksViewModel::createShelf,
             onDeleteShelf = booksViewModel::deleteShelf,
             onRenameShelf = booksViewModel::renameShelf,
@@ -773,6 +776,7 @@ private fun LazyGridScope.googleDriveSection(
     remoteBusyBookIds: Set<String>,
     remoteCoverSourcesById: Map<String, BookCoverSource>,
     coverMode: BookshelfCoverMode,
+    hideCollapsedShelfThumbnails: Boolean,
     layoutSpec: MainShellLayoutSpec,
     contentWidthDp: Int,
     fileTaskBlocked: Boolean,
@@ -831,7 +835,7 @@ private fun LazyGridScope.googleDriveSection(
                 )
             }
         }
-    } else {
+    } else if (!hideCollapsedShelfThumbnails) {
         item(
             key = "preview:google-drive",
             contentType = "collapsedPreview",
@@ -877,6 +881,7 @@ private fun BooksTab(
     coverSourcesById: Map<String, BookCoverSource>,
     remoteCoverSourcesById: Map<String, BookCoverSource>,
     coverMode: BookshelfCoverMode,
+    hideCollapsedShelfThumbnails: Boolean,
     sortOption: BookSortOption,
     hasLoadedBooks: Boolean,
     isLoading: Boolean,
@@ -1016,6 +1021,7 @@ private fun BooksTab(
                                     remoteImportProgressById = remoteImportProgressById,
                                     remoteBusyBookIds = remoteBusyBookIds,
                                     remoteCoverSourcesById = remoteCoverSourcesById,
+                                    hideCollapsedShelfThumbnails = hideCollapsedShelfThumbnails,
                                     coverMode = coverMode,
                                     layoutSpec = layoutSpec,
                                     contentWidthDp = contentWidthDp,
@@ -1097,7 +1103,7 @@ private fun BooksTab(
                                         )
                                     }
                                 }
-                            } else {
+                            } else if (!hideCollapsedShelfThumbnails) {
                                 item(
                                     key = "preview:${section.layoutKey}",
                                     contentType = "collapsedPreview",
@@ -1135,6 +1141,7 @@ private fun BooksTab(
                                 remoteImportProgressById = remoteImportProgressById,
                                 remoteBusyBookIds = remoteBusyBookIds,
                                 remoteCoverSourcesById = remoteCoverSourcesById,
+                                hideCollapsedShelfThumbnails = hideCollapsedShelfThumbnails,
                                 coverMode = coverMode,
                                 layoutSpec = layoutSpec,
                                 contentWidthDp = contentWidthDp,
@@ -1908,8 +1915,10 @@ internal fun ShelfManagementDialog(
     shelves: List<BookShelf>,
     showReading: Boolean,
     coverMode: BookshelfCoverMode,
+    hideCollapsedShelfThumbnails: Boolean,
     onShowReadingChange: (Boolean) -> Unit,
     onCoverModeChange: (BookshelfCoverMode) -> Unit,
+    onHideCollapsedShelfThumbnailsChange: (Boolean) -> Unit,
     onCreateShelf: (String) -> Unit,
     onDeleteShelf: (String) -> Unit,
     onRenameShelf: (String, String) -> Unit,
@@ -1963,6 +1972,22 @@ internal fun ShelfManagementDialog(
                                 }
                             }
                         }
+                    }
+                }
+                item(key = "hide-collapsed-shelf-thumbnails") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(R.string.bookshelf_hide_collapsed_shelf_thumbnails),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Switch(
+                            checked = hideCollapsedShelfThumbnails,
+                            onCheckedChange = onHideCollapsedShelfThumbnailsChange,
+                        )
                     }
                 }
                 item(key = "reading-shelf") {

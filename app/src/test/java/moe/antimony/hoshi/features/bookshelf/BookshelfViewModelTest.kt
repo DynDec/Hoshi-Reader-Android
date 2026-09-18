@@ -47,6 +47,7 @@ class BookshelfViewModelTest {
                 sortOption = BookSortOption.Title,
                 showReading = true,
                 coverMode = BookshelfCoverMode.Blur,
+                hideCollapsedShelfThumbnails = true,
             ),
         )
         val viewModel = BookshelfViewModel(repository, testScope())
@@ -58,11 +59,24 @@ class BookshelfViewModelTest {
         assertEquals(mapOf("book-a" to coverSource), viewModel.uiState.value.coverSourcesById)
         assertEquals(listOf(BookShelf("Manga", listOf("book-a"))), viewModel.uiState.value.shelves)
         assertEquals(BookSortOption.Title, viewModel.uiState.value.sortOption)
+        assertTrue(viewModel.uiState.value.hideCollapsedShelfThumbnails)
         assertTrue(viewModel.uiState.value.showReading)
         assertEquals(BookshelfCoverMode.Blur, viewModel.uiState.value.coverMode)
         assertTrue(viewModel.uiState.value.hasLoadedBooks)
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.errorMessage.testString())
+    }
+
+    @Test
+    fun changeCollapsedThumbnailsPublishesStateAndSurvivesReload() {
+        val viewModel = BookshelfViewModel(FakeBookshelfRepository(), testScope())
+        viewModel.changeHideCollapsedShelfThumbnails(true)
+        assertTrue(viewModel.uiState.value.hideCollapsedShelfThumbnails)
+        viewModel.reloadBookEntries()
+        assertTrue(viewModel.uiState.value.hideCollapsedShelfThumbnails)
+        viewModel.changeHideCollapsedShelfThumbnails(false)
+        viewModel.reloadBookEntries()
+        assertFalse(viewModel.uiState.value.hideCollapsedShelfThumbnails)
     }
 
     @Test
@@ -1409,6 +1423,10 @@ class BookshelfViewModelTest {
         override suspend fun changeShowReading(showReading: Boolean) {
             settings = settings.copy(showReading = showReading)
             showReadingUpdates += showReading
+        }
+
+        override suspend fun changeHideCollapsedShelfThumbnails(hide: Boolean) {
+            settings = settings.copy(hideCollapsedShelfThumbnails = hide)
         }
 
         override suspend fun changeCoverMode(coverMode: BookshelfCoverMode) {
