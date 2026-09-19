@@ -17,6 +17,9 @@ internal class ReaderWebViewStateHolder(
     var showAppearance by mutableStateOf(false)
         private set
 
+    var showDisplaySettings by mutableStateOf(false)
+        private set
+
     var showGoTo by mutableStateOf(false)
         private set
 
@@ -35,7 +38,7 @@ internal class ReaderWebViewStateHolder(
         private set
 
     val hasStatisticsBlockingSheet: Boolean
-        get() = showAppearance || showGoTo || showSasayaki || showStatistics
+        get() = showAppearance || showDisplaySettings || showGoTo || showSasayaki || showStatistics
 
     var showReaderMenu by mutableStateOf(false)
         private set
@@ -141,6 +144,15 @@ internal class ReaderWebViewStateHolder(
 
     fun dismissAppearance() {
         showAppearance = false
+    }
+
+    fun openDisplaySettingsFromMenu() {
+        showReaderMenu = false
+        showDisplaySettings = true
+    }
+
+    fun dismissDisplaySettings() {
+        showDisplaySettings = false
     }
 
     fun openSasayakiFromMenu(initialTab: SasayakiSheetTab) {
@@ -313,6 +325,7 @@ internal data class ReaderContentReloadKey(
     val fontSize: Int,
     val hideFurigana: Boolean,
     val adaptiveFurigana: Boolean,
+    val furiganaMode: FuriganaMode,
     val viewMode: ReaderViewMode,
     val visualNovelScreenMode: VisualNovelScreenMode,
     val visualNovelSentencesPerScreen: Int,
@@ -338,6 +351,7 @@ internal fun ReaderSettings.readerContentReloadKey(): ReaderContentReloadKey =
         fontSize = fontSize,
         hideFurigana = hideFurigana,
         adaptiveFurigana = adaptiveFurigana,
+        furiganaMode = furiganaMode,
         viewMode = viewMode,
         visualNovelScreenMode = visualNovelScreenMode,
         visualNovelSentencesPerScreen = visualNovelSentencesPerScreen.coerceIn(1, 12),

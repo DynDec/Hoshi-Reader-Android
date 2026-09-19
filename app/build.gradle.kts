@@ -113,8 +113,8 @@ android {
         applicationId = "moe.requited.hoshi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 104055
-        versionName = "1.4.5.5"
+        versionCode = 104060
+        versionName = "1.4.6"
         releaseVersionCode?.let { versionCode = it }
         releaseVersionName?.let { versionName = it }
 
@@ -193,6 +193,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.material.color.utilities)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)

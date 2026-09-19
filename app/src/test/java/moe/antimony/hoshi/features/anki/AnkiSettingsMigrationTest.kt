@@ -9,6 +9,34 @@ import kotlinx.serialization.json.Json
 
 class AnkiSettingsMigrationTest {
     @Test
+    fun newAndRebuiltFormatsStartWithHoshiTags() {
+        assertEquals("hoshi", defaultAnkiCardFormat("new").tags)
+        for (raw in listOf("not-json", """{"schemaVersion":2,"cardFormats":[]}""")) {
+            assertEquals("hoshi", decodeAnkiSettings(raw) { "rebuilt" }.settings.cardFormats.single().tags)
+        }
+    }
+
+    @Test
+    fun decodingAndDuplicatingSavedFormatsPreservesEmptyMissingAndCustomTags() {
+        for ((tagProperty, expected) in listOf(
+            "" to "",
+            """, "tags":""""" to "",
+            """, "tags":"custom {document-title}"""" to "custom {document-title}",
+        )) {
+            for (raw in listOf(
+                """{"schemaVersion":2,"cardFormats":[{"id":"saved","name":"Saved"$tagProperty}]}""",
+                """{"selectedDeckId":3$tagProperty}""",
+            )) {
+                val decoded = decodeAnkiSettings(raw) { "migrated" }.settings
+                assertEquals(expected, decoded.cardFormats.single().tags)
+                val duplicated = decoded.duplicateCardFormat(decoded.cardFormats.single().id, "copy", "Copy")
+                val restored = decodeAnkiSettings(Json { encodeDefaults = true }.encodeToString(duplicated)) { error("Unexpected migration") }.settings
+                assertEquals(listOf(expected, expected), restored.cardFormats.map { it.tags })
+            }
+        }
+    }
+
+    @Test
     fun duplicateCardFormatCopiesConfigurationWithANewIdentity() {
         val source = AnkiCardFormat(
             id = "source",

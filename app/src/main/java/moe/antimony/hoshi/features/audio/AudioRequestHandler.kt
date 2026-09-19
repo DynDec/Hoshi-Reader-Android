@@ -9,7 +9,8 @@ import java.net.URL
 class AudioRequestHandler(
     private val localAudioRepository: LocalAudioRepository,
     private val fetchRemoteAudioList: (String) -> ByteArray = ::fetchRemoteAudioList,
-    private val findLocalAudio: (term: String, reading: String) -> LocalAudioEntry? = localAudioRepository::findAudio,
+    private val findLocalAudioCandidates: (term: String, reading: String) -> List<LocalAudioCandidate> =
+        localAudioRepository::findAudioCandidates,
 ) {
     fun handleAudioRequest(url: String): WebResourceResponse? {
         val body = handleAudioRequestBody(url) ?: return null
@@ -33,9 +34,12 @@ class AudioRequestHandler(
         val query = queryParameters(uri.rawQuery.orEmpty())
         val term = query["term"].orEmpty()
         val reading = query["reading"].orEmpty()
-        val entry = findLocalAudio(term, reading) ?: return emptyAudioResponse()
-        val audioUrl = LocalAudioResolver.audioUrl(entry.source, entry.file)
-        return """{"type":"audioSourceList","audioSources":[{"name":${entry.source.jsonString()},"url":${audioUrl.jsonString()}}]}""".toByteArray()
+        val candidates = findLocalAudioCandidates(term, reading)
+        if (candidates.isEmpty()) return emptyAudioResponse()
+        val sources = candidates.joinToString(",") { candidate ->
+            """{"name":${candidate.name.jsonString()},"url":${candidate.url.jsonString()}}"""
+        }
+        return """{"type":"audioSourceList","audioSources":[$sources]}""".toByteArray()
     }
 
     private fun jsonResponse(body: ByteArray): WebResourceResponse =

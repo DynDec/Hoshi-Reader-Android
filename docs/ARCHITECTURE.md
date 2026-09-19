@@ -1,6 +1,6 @@
 # Hoshi Android Current Architecture
 
-Date: 2026-08-24
+Date: 2026-09-18
 
 This document describes the current architecture that exists in the Android
 repo. It is not a future plan and should not track task status. Long-lived
@@ -10,6 +10,27 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
 
 - The app is a single Android application module under `app`.
 - UI is Jetpack Compose + Material 3.
+- `HoshiSurfaceRoles` owns native page, navigation, group, nested, and overlay colors derived
+  from Material 3 and the resolved brightness. Shared container helpers provide
+  E-ink outlines (including continuous lazy group edges) while ordinary groups
+  use tonal separation without decorative borders or elevation. Reader content
+  and dictionary HTML retain their existing color/style systems.
+  Bottom/side navigation uses `surfaceContainer`; page and top-bar backgrounds
+  remain continuous through the status-bar inset, including Dictionary search.
+  The search field uses `surfaceContainerHigh` to remain distinct on that page.
+  Reading Settings segments use inset rounded selections with the shared
+  `selected`/`onSelected` colors inside a continuous neutral nested track.
+  The full segment remains clickable; E-ink uses inverse black/white fills and
+  text with explicit outlines around the track and selected capsule.
+- Native accents default to Android 12+ dynamic color with the existing fixed
+  fallback on older Android. Manual opaque seeds use the standalone Material Color
+  Utilities 4.1.1 Tonal Spot algorithm to generate a complete Material 3 scheme;
+  E-ink overrides the result without overwriting the stored seed or palettes.
+  `withHoshiSurfaceColors` caps native surface HCT chroma at 4 while retaining
+  the source hue and tone. It softens `outlineVariant` toward the group fill;
+  accent, text and input `outline` roles retain their source colors. System,
+  manual, fallback and accent-preview schemes share this treatment. E-ink
+  bypasses it to retain pure black/white fills and boundaries.
 - Navigation uses Navigation3 typed route keys, `AppShell`, and `NavDisplay`.
   Top-level Books, Dictionary, Statistics, and Settings tabs each own an
   independent Nav3 back stack with its own saveable entry state and per-entry
@@ -73,12 +94,55 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   previews; Hide never submits the cover source to Coil, while Blur uses the
   platform effect on Android 12+ and safely uses the hidden fallback on older
   Android versions.
+  A separate DataStore-backed `hideCollapsedShelfThumbnails` preference defaults
+  to false. When enabled, local, Reading, and Google Drive collapsed sections
+  omit their preview rows entirely while retaining their title/count/toggle row;
+  expanded cards continue to follow the cover mode.
 - Book metadata, bookmarks, highlights, reading statistics, and Sasayaki data
   are persisted through book sidecar repositories and models.
-- The Statistics dashboard aggregates local book `statistics.json` sidecars
-  through a Hilt-backed repository and exposes dashboard state through a
-  Hilt-backed ViewModel. Reader tracking and the dashboard share an adjusted
-  local-date provider driven by the global minute-level statistics reset time.
+- Statistics is always available from its top-level tab. Its settings and
+  folder-keyed daily editor use that tab's Navigation3 back stack and
+  entry-scoped Hilt ViewModels. Reader statistics display preferences remain in Reading Settings;
+  the Sync and Statistics settings screens share the global sync preference.
+- `BookStatisticsStore` is the shared Hilt singleton for reader statistics,
+  transactional sync imports, daily edits, archive/restore, and dashboard reads.
+  File operations run on the IO dispatcher behind one mutex and use atomic
+  replacement. Reader saves submit only changed days, merge by modification
+  timestamp, and respect in-process editor deletions so queued writes cannot
+  undo a later edit. No deletion markers are added to the sidecar/sync format.
+- Deleting a book first stores active dates and compatible metadata under
+  `Books/statistics_archive/<folder>/`, with an optional JPEG cover bounded to
+  240 px. Required archive failures preserve the source book. Import restores
+  after external sidecars are written; normalized folder identity joins active
+  and archived records by date without double counting. Equal timestamps keep
+  the first input: existing archive on deletion, current book on restore.
+  The archive directory is excluded from book discovery and TTU exports but is
+  included in Books `.hoshi` backups.
+- Statistics repositories combine local and archived sidecars for the dashboard
+  and all-date book editors. The daily goal card combines a semicircular gauge,
+  history metrics with shared text baselines, and a display-only reading-intensity
+  heatmap. Sparse active dates back a lazy week grid with viewport-only drawing;
+  heatmap scrolling and data are independent of chart selection. The fixed
+  dashboard sections share a regular scrolling column, retaining their
+  compositions and draw caches when they move offscreen. Book distribution
+  still expands in five-row increments. Target editing
+  uses an anchored popup with a snapping value wheel, independent remembered
+  character/time goals, immediate tap selection and persistence when scrolling
+  settles.
+  There is no separate calendar picker or weekly goal.
+- The reading-time card owns Week/Month/Year/All selection, initially showing
+  the current Week. A horizontal pager browses natural periods from first activity to
+  today, preparing chart data only for the selected and adjacent pages. Changing
+  mode returns to the current period. The chart uses a shared continuous calendar
+  scale for bar geometry and hit testing, locale week-aligned month ticks, and
+  cached draw geometry/text. Bars drill into a day for week/month or a
+  month for year/all; paging or changing mode clears that selection. The headline,
+  summary and time-ranked books follow the selected bucket, or the whole period
+  when none is selected. Calculations zero-fill buckets, use elapsed-period
+  averages and recompute historical goals across the entire history.
+  Heatmap and week periods follow the locale's first weekday. Reader tracking
+  and the dashboard share the reset-time local-date provider; historical date
+  keys are not rewritten.
 - Book metadata sidecars may include a forced profile id and parsed EPUB
   language. Reader opening resolves the effective profile from forced profile,
   then EPUB language primary profile, then the global active profile. After a
@@ -108,14 +172,55 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   restores merge the profile index and profile dictionary config/settings while
   preserving profile-owned Anki and Reader settings that are outside the
   dictionary payload.
-- Reader Appearance settings are stored per active/effective profile in
-  `Profiles/<profileId>/reader_settings.json`; Reader Behavior and statistics
-  sync settings remain global DataStore settings.
+- Reading Settings (font, layout, reading information, and lookup panel options)
+  are stored per active/effective profile in `Profiles/<profileId>/reader_settings.json`.
+  Reader Behavior and statistics sync settings remain global DataStore settings.
+- `AppDisplaySettingsRepository` owns global Theme settings in a separate
+  DataStore: system-driven switching, independent light/dark reading palettes
+  with remembered custom colors, the manually selected slot, accent source/seed,
+  E-ink mode and its independent manual brightness, and migration version.
+  `resolveDisplaySettings(settings, systemDark)` is the pure source for active
+  reading colors and native interface brightness. Both switching modes share the
+  same six choices in two groups: automatic mode selects one per group, manual
+  mode selects one across both. Disabling automatic switching keeps the active
+  slot; re-enabling retains both stored selections. Custom colors preserve alpha;
+  interface and popup brightness come from the selected group, never the custom
+  background's luminance. E-ink follows system brightness when automatic switching
+  is enabled; otherwise its remembered
+  manual brightness takes precedence, defaulting to the palette's brightness until
+  chosen. This override never changes stored palette or accent colors. Disabling
+  automatic switching in E-ink keeps the currently displayed brightness.
+  Display settings block repeated interactions while saving without removing
+  previews, dimming the page, or changing list geometry; colors come from confirmed
+  settings. The full settings page and Reader panel share this content. The Reader
+  panel title is inside its scrollable content; the drag handle remains outside.
+- Display migration targets the settings format shipped in Android v1.3.3. It reads
+  the global active profile before Reader profile initialization or book-specific
+  profile activation. If that profile's settings file is missing or unreadable,
+  it falls back to Reader DataStore, then legacy SharedPreferences, then defaults.
+  Other profiles are not read, and source settings are not rewritten by migration.
+  The new global display schema starts at migration version 1; only a successful
+  write marks migration complete. Completed migration never reapplies old profile
+  settings. Unreleased development schemas have no dedicated migration paths.
+  Background luminance is used only to assign v1.3.3 custom colors to a light/dark
+  group. Legacy Profile JSON color fields remain readable and are preserved on
+  writes, but no longer control runtime
+  display. Book sidecars, sync, and backup formats are unchanged.
+- `ReaderSettingsRepository` combines global display state with profile reading
+  preferences. Both MainActivity and Process Text use `ReaderSettingsHostViewModel`
+  and wait for its first confirmed value before rendering content. ViewModels expose
+  immutable state and localized load/save errors; profile changes never overwrite
+  global display settings. Reading setting events submit transformations against
+  the latest stored value, preserving successive edits during delayed persistence.
+  Display updates use the existing WebView appearance
+  bridge without rebuilding Reader content or lookup state. Both Activity hosts
+  handle `uiMode` changes in place; Compose observes the updated system
+  configuration and the existing WebViews receive the resolved appearance update.
 - Reader font selections retain the legacy display-name field and additionally
   persist stable family/variant IDs plus each profile's last variant per family.
-- Statistics dashboard target settings are global DataStore settings behind a
+- Statistics daily target settings are global DataStore settings behind a
   repository.
-- Profile-scoped Reader Appearance, Dictionary, and Anki settings JSON reads and
+- Profile-scoped Reading Settings, Dictionary, and Anki settings JSON reads and
   writes use injected IO dispatchers and repository-owned serialization locks.
 - Frequency and pitch dictionaries are type-specific and are not treated as term
   fallback dictionaries.
@@ -175,12 +280,22 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   and chapter time remaining derive from one Kotlin-owned TOC range model;
   Gallery thumbnails and the fullscreen viewer reuse the existing safe EPUB
   resource path.
+- Reader furigana mode is profile-scoped, with legacy hide-furigana booleans
+  migrated to Hidden or Off. Shared selection consumes Toggle reveal taps and
+  reveals whitespace-adjacent ruby groups; VN uses its existing source/clone
+  projection to retain reveals when a screen is rendered again.
 - Reader text semantics live in `reader-text-semantics.js` and are consumed by
   paginated, continuous, and VN assets for normalization, matchable character
-  counting, raw character counting, and matchable-character checks.
+  counting, raw character counting, and matchable-character checks. It also owns
+  Sasayaki boundary-punctuation ownership and the matchable-to-raw display index;
+  cue matching offsets remain unchanged.
 - Paginated and continuous share live DOM ruby/text normalization through
   `reader-dom-text.js`; the mode assets keep thin public wrapper methods so
-  existing reader commands and tests continue to call the same surface.
+  existing reader commands and tests continue to call the same surface. Its
+  Sasayaki DOM adapter reads paragraph, line-break, and media boundaries for all
+  three modes. VN captures CSS boundaries before detaching the chapter DOM,
+  builds and caches this index from the complete source stream
+  and projects expanded raw ranges through its existing screen range map.
 - Reader image setup semantics live in `reader-media-semantics.js` and are
   consumed by paginated, continuous, and VN assets for shared gaiji class
   recognition, transparent monochrome inline-image tinting, SVG image
@@ -229,6 +344,34 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   Kotlin owns popup payloads, resource handling, and native service bridges for
   audio, dictionary media, Anki, and external links; do not reintroduce Android
   native overlay popup fallback paths for these flows.
+- Popup audio sources cross the iframe boundary as ordered name/URL pairs.
+  `LocalAudioRepository` returns every enabled, ranked local candidate and
+  `AudioRequestHandler` exposes their descriptive labels and deduplicated URLs.
+  Popup JS owns the entry-scoped candidate cache and selected URL, so playback
+  and Anki mining use the same choice; replacing or restoring popup results
+  clears that state.
+- Shared iframe frame payloads accept optional root `sourceText` for Dictionary
+  search and Process Text; Reader and recursive child frames omit it. Shared
+  popup assets render character spans, look up exact suffixes on tap, mark the
+  match, and preserve scroll on successful source redirects. Popup geometry
+  converts the source-enabled entries minimum height to one visual viewport
+  under HTML zoom; keep that reserve while replacement entries load, and clear
+  it for ordinary/reset payloads. Profile-scoped
+  `DictionarySettings.searchTextSize` defaults to 22 and is normalized to 12–48.
+- Dictionary and Process Text root lookup state retain the complete original
+  query as the mining sentence. Successful redirects use the UTF-16 length
+  difference only when the requested query is an exact suffix, otherwise the
+  mining offset is null. Dictionary clears that offset on a new search; Process
+  Text initializes it to zero and also updates its root selection text/offset
+  after successful redirects. Failed redirects preserve native results,
+  selection/mining context, and history.
+  Shared popup history snapshots retain source match ranges and UTF-16 mining
+  offsets. Restoring a snapshot sends `sourceHistoryRestored` to update only the
+  Dictionary or Process Text root mining context; Reader and child popups ignore
+  this message. Source payloads also carry the initial `sourceSentenceOffset`
+  so restoring the initial Process Text snapshot preserves its zero offset.
+  Process Text creates its root even with no initial match, so source taps can
+  recover a lookup; recursive popup creation still requires results.
 - The shared popup term payload carries pitch entries as a numeric downstep or
   explicit H/L pattern plus 1-based nasal/devoice mora positions. Popup JS owns
   effective-pattern deduplication and visual rendering. A single Kanji in a term

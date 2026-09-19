@@ -118,6 +118,7 @@ data class AnkiSettings(
 )
 
 const val MaxAnkiCardFormats = 3
+internal const val DefaultAnkiTag = "hoshi"
 
 internal fun AnkiSettings.addCardFormat(format: AnkiCardFormat): AnkiSettings =
     if (cardFormats.size >= MaxAnkiCardFormats || cardFormats.any { it.id == format.id }) {
@@ -207,6 +208,7 @@ internal fun defaultAnkiCardFormat(id: String): AnkiCardFormat =
     AnkiCardFormat(
         id = id,
         name = "Default",
+        tags = DefaultAnkiTag,
     )
 
 private val ankiSettingsJson = Json {
@@ -322,6 +324,7 @@ internal data class AnkiTermDictionary(
 
 internal object AnkiHandlebarRenderer {
     private val handlebarRegex = Regex("\\{[^}]*\\}")
+    private val tagValueWhitespaceRegex = Regex("[\\p{Z}\\u0009-\\u000D\\u0085]+")
     private val glossaryHeaderRegex = Regex("""(<li data-dictionary="[^"]*">)<i>[^<]*</i> """)
     private val dictionaryLabelRegex = Regex("""<li data-dictionary="([^"]+)"><i>([^<]*)</i> """)
     private const val SingleGlossaryPrefix = "{single-glossary-"
@@ -336,6 +339,19 @@ internal object AnkiHandlebarRenderer {
         termDictionaries: List<AnkiTermDictionary> = emptyList(),
     ): String = handlebarRegex.replace(template) { match ->
         handlebarToValue(match.value, payload, context, selectedGlossaryFallback, termDictionaries)
+    }
+
+    fun renderTags(
+        template: String,
+        payload: AnkiMiningPayload,
+        context: AnkiMiningContext,
+        selectedGlossaryFallback: String = "",
+        termDictionaries: List<AnkiTermDictionary> = emptyList(),
+    ): String = handlebarRegex.replace(template) { match ->
+        handlebarToValue(match.value, payload, context, selectedGlossaryFallback, termDictionaries)
+            .split(tagValueWhitespaceRegex)
+            .filter { it.isNotEmpty() }
+            .joinToString("_")
     }
 
     private fun handlebarToValue(

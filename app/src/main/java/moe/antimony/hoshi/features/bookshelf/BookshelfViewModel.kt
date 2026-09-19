@@ -95,7 +95,12 @@ internal class BookshelfViewModel : ViewModel {
     fun changeSort(sortOption: BookSortOption) {
         workScope.launch {
             repository.changeSort(sortOption)
-            _uiState.update { it.copy(sortOption = sortOption) }
+            _uiState.update {
+                it.copy(
+                    sortOption = sortOption,
+                    remoteBookEntries = it.remoteBookEntries.sortedRemoteBooks(sortOption),
+                )
+            }
             reloadBookEntriesSync(sortOption)
         }
     }
@@ -290,9 +295,12 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     fun deleteBook(entry: BookEntry) {
-        workScope.launch {
-            repository.deleteBook(entry)
-            reloadBookEntriesSync()
+        runLoading(errorPrefix = UiText.Resource(R.string.bookshelf_delete_failed), preferErrorPrefix = true) {
+            try {
+                repository.deleteBook(entry)
+            } finally {
+                reloadBookEntriesSync()
+            }
         }
     }
 
@@ -384,10 +392,13 @@ internal class BookshelfViewModel : ViewModel {
     fun deleteSelectedBooks() {
         val selectedEntries = _uiState.value.bookEntries.filter { it.metadata.id in _uiState.value.selectedBookIds }
         if (selectedEntries.isEmpty()) return
-        workScope.launch {
-            repository.deleteBooks(selectedEntries)
-            clearSelection()
-            reloadBookEntriesSync()
+        runLoading(errorPrefix = UiText.Resource(R.string.bookshelf_delete_failed), preferErrorPrefix = true) {
+            try {
+                repository.deleteBooks(selectedEntries)
+                clearSelection()
+            } finally {
+                reloadBookEntriesSync()
+            }
         }
     }
 
@@ -529,6 +540,13 @@ internal class BookshelfViewModel : ViewModel {
                     ),
                 )
             }
+        }
+    }
+
+    fun changeHideCollapsedShelfThumbnails(hide: Boolean) {
+        _uiState.update { it.copy(hideCollapsedShelfThumbnails = hide) }
+        workScope.launch {
+            repository.changeHideCollapsedShelfThumbnails(hide)
         }
     }
 
@@ -717,8 +735,10 @@ internal class BookshelfViewModel : ViewModel {
                     sortOption = result.settings.sortOption,
                 ),
                 sortOption = result.settings.sortOption,
+                remoteBookEntries = it.remoteBookEntries.sortedRemoteBooks(result.settings.sortOption),
                 showReading = result.settings.showReading,
                 coverMode = result.settings.coverMode,
+                hideCollapsedShelfThumbnails = result.settings.hideCollapsedShelfThumbnails,
                 selectedBookIds = validSelectedIds,
                 hasLoadedBooks = true,
                 isLoading = false,
@@ -777,7 +797,7 @@ internal class BookshelfViewModel : ViewModel {
                 if (generation != reloadGeneration) return@launch
                 _uiState.update {
                     it.copy(
-                        remoteBookEntries = remoteResult.remoteEntries,
+                        remoteBookEntries = remoteResult.remoteEntries.sortedRemoteBooks(it.sortOption),
                         remoteProgressById = remoteResult.remoteProgressById,
                         remoteCoverSourcesById = remoteResult.remoteCoverSourcesById,
                     )

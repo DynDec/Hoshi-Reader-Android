@@ -262,7 +262,17 @@
     countChars: countChars,
     countRawChars: countRawChars,
 
+    sasayakiTextIndex: function() {
+      if (!this.cachedSasayakiTextIndex) {
+        this.cachedSasayakiTextIndex = global.hoshiReaderDomText.createSasayakiTextIndex(
+          this.root, this.textEntries, this.options.sasayakiBoundaries
+        );
+      }
+      return this.cachedSasayakiTextIndex;
+    },
+
     rebuild: function() {
+      this.cachedSasayakiTextIndex = null;
       this.textEntries = [];
       this.sourceTextOffsets = new WeakMap();
       this.sourceTextRawOffsets = new WeakMap();

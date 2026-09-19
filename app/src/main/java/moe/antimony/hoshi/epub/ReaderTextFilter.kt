@@ -13,7 +13,7 @@ internal fun String.filteredReaderText(): String {
 
 internal fun String.visibleReaderText(): String {
     var text = Regex("(?s)<body.*?</body>").find(this)?.value ?: this
-    text = text.replace(Regex("(?s)<rt[^>]*>.*?</rt>"), "")
+    text = text.replace(Regex("(?s)<(rt|rp)[^>]*>.*?</\\1>"), "")
     text = text.replace(Regex("(?s)<(script|style)[^>]*>.*?</\\1>"), "")
     text = text.replace(Regex("<[^>]+>"), "")
     text = text.replace(Regex("&#[xX]?[0-9A-Fa-f]+;"), "")
@@ -41,6 +41,8 @@ internal fun Int.isReaderMatchableCodePoint(): Boolean =
         in 'Ａ'.code..'Ｚ'.code,
         in 'ａ'.code..'ｚ'.code,
         in 'ｦ'.code..'ﾝ'.code,
+        in '가'.code..'힣'.code,
+        in 'ㄱ'.code..'ㆎ'.code,
         in 0x2E80..0x2FDF,
         in 0x3400..0x4DBF,
         in 0x4E00..0x9FFF,

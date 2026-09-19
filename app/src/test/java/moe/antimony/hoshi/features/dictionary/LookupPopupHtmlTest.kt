@@ -27,6 +27,34 @@ import org.junit.Test
 
 class LookupPopupHtmlTest {
     @Test
+    fun sourceContainerPrecedesEntriesAndUsesNormalizedConfiguredSize() {
+        listOf(9 to 12, 31 to 31, 60 to 48).forEach { (configured, expected) ->
+            val html = LookupPopupHtml.renderIframeDocument(settings = DictionarySettings(searchTextSize = configured))
+            val containers = mutableListOf<Pair<String, String>>()
+            var sourceHidden = false
+            javax.swing.text.html.parser.ParserDelegator().parse(
+                java.io.StringReader(html),
+                object : javax.swing.text.html.HTMLEditorKit.ParserCallback() {
+                    override fun handleStartTag(tag: javax.swing.text.html.HTML.Tag, attributes: javax.swing.text.MutableAttributeSet, position: Int) {
+                        if (tag == javax.swing.text.html.HTML.Tag.DIV) {
+                            if (attributes.getAttribute(javax.swing.text.html.HTML.Attribute.ID) == "search-text") {
+                                sourceHidden = attributes.getAttribute("hidden") != null
+                            }
+                            containers += (attributes.getAttribute(javax.swing.text.html.HTML.Attribute.ID)?.toString() ?: "") to
+                                (attributes.getAttribute(javax.swing.text.html.HTML.Attribute.STYLE)?.toString() ?: "")
+                        }
+                    }
+                },
+                true,
+            )
+            org.junit.Assert.assertEquals("search-text", containers[0].first)
+            assertTrue(sourceHidden)
+            org.junit.Assert.assertEquals("entries-container", containers[1].first)
+            org.junit.Assert.assertEquals("--hoshi-search-text-size: ${expected}px;", containers[0].second)
+        }
+    }
+
+    @Test
     fun iframePopupShellUsesDomButtonsAndAbsoluteAssets() {
         val html = LookupPopupHtml.renderIframeDocument(
             assets = null,
@@ -178,8 +206,18 @@ class LookupPopupHtmlTest {
         assertTrue(html.contains("window.ankiFormats = [{\"id\":\"format-a\",\"icon\":\"circle-small\",\"isValid\":true}];"))
         assertTrue(html.contains("window.disableShowNotes = true;"))
         assertTrue(html.contains("showNotes: { postMessage:"))
-        assertTrue(html.contains("hoshi-local-audio-source://get/?term={term}&reading={reading}"))
-        assertTrue(html.contains(AudioSettings.LocalAudioUrl))
+        assertTrue(
+            html.contains(
+                """window.audioSources = [{"name":"Local","url":"hoshi-local-audio-source://get/?term={term}&reading={reading}"},{"name":"Ankiconnect Android","url":"${AudioSettings.LocalAudioUrl}"}];""",
+            ),
+        )
+    }
+
+    @Test
+    fun iframePopupShellInjectsLocalizedNoAudioCandidateText() {
+        val html = LookupPopupHtml.renderIframeDocument(noAudioFoundText = "未找到音频")
+
+        assertTrue(html.contains("window.noAudioFoundText = \"未找到音频\";"))
     }
 
     @Test

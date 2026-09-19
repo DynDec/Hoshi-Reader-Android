@@ -28,6 +28,7 @@ import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.reader.ReaderLoadingPage
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.ReaderWebView
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import moe.antimony.hoshi.LocalHoshiUiDependencies
@@ -43,7 +44,7 @@ internal fun ReaderRouteDestination(
     bookId: String,
     stateHolder: ReaderRouteStateHolder,
     readerSettings: ReaderSettings,
-    onReaderSettingsChange: (ReaderSettings) -> Unit,
+    onReaderSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
     onReaderKeyEventHandlerChange: (((KeyEvent) -> Boolean)?) -> Unit,
     onBookmarkSaved: () -> Unit,
     onClose: () -> Unit,
@@ -52,6 +53,7 @@ internal fun ReaderRouteDestination(
     val appContainer = LocalHoshiUiDependencies.current
     val bookCoverWallpaperViewModel: BookCoverWallpaperViewModel = hiltViewModel()
     val bookCoverSnackbarHostState = remember { SnackbarHostState() }
+    val statisticsSaveFailedMessage = stringResource(R.string.statistics_operation_failed)
     val bookCoverPublishFailedMessage = stringResource(R.string.book_cover_wallpaper_publish_failed)
     val iReaderNotSelectedMessage =
         stringResource(R.string.book_cover_wallpaper_ireader_not_selected_error)
@@ -214,20 +216,26 @@ internal fun ReaderRouteDestination(
                     initialChapterIndex = readyState.bookmark?.chapterIndex ?: 0,
                     initialProgress = readyState.bookmark?.progress ?: 0.0,
                     readerSettings = routeReaderSettings,
-                    onReaderSettingsChange = { settings ->
-                        routeReaderSettings = settings
-                        onReaderSettingsChange(settings)
+                    onReaderSettingsChange = { transform ->
+                        routeReaderSettings = transform(routeReaderSettings)
+                        onReaderSettingsChange(transform)
                     },
                     onReaderKeyEventHandlerChange = onReaderKeyEventHandlerChange,
                     onSaveBookmark = { chapterIndex, progress, statistics ->
                         autoSyncExportController.launchSave {
-                            stateHolder.saveBookmark(
-                                state = readyState,
-                                chapterIndex = chapterIndex,
-                                progress = progress,
-                                statistics = statistics,
-                                onBookmarkSaved = onBookmarkSaved,
-                            )
+                            try {
+                                stateHolder.saveBookmark(
+                                    state = readyState,
+                                    chapterIndex = chapterIndex,
+                                    progress = progress,
+                                    statistics = statistics,
+                                    onBookmarkSaved = onBookmarkSaved,
+                                )
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                bookmarkScope.launch { bookCoverSnackbarHostState.showSnackbar(statisticsSaveFailedMessage) }
+                            }
                         }
                         scheduleExport(readyState.entry)
                     },

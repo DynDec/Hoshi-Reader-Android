@@ -46,6 +46,11 @@ For localization changes, run:
 ./gradlew :app:testDebugUnitTest --tests moe.antimony.hoshi.LocalizationResourceTest
 ```
 
+When separate translation contexts intentionally share an English string value,
+add a `comment` explaining the context to every duplicate entry, including the
+existing entry, and mirror those comments in Chinese resources.
+`DuplicateCrowdInStrings` still fails if only the new entry has a comment.
+
 For reader web asset changes, run the focused JavaScript tests:
 
 ```bash
@@ -80,6 +85,97 @@ node --test app/src/test/js/*.test.mjs
   fixtures instead of depending on these ignored local files.
 
 ## Reader And Lookup
+
+### Theme
+
+Preserve app data and cover all four tabs, every settings category, native Reader
+panels, dialogs, menus, and Process Text lookup:
+
+- Both switching modes show Light / Sepia / Custom Light and Dark / Warm Dark /
+  Custom Dark. Automatic mode has one selection per group; manual mode has one
+  selection across all six options. Change system night mode while foregrounded
+  and backgrounded: only automatic mode changes the active group. Editing the
+  inactive automatic slot must not change the current theme.
+  Use identical custom colors, and backgrounds opposite to their group's brightness:
+  Custom Light must use a light native interface and black-on-white dictionary
+  popups; Custom Dark must use a dark interface and white-on-black popups. Check
+  Reader, Dictionary, recursive lookup and Process Text, preserving reading
+  colors, position, selection and lookup history when switching groups.
+- Disabling automatic switching keeps the currently displayed palette. Re-enabling
+  uses both saved slots, including edits made in manual mode. Each of the two
+  slots retains its custom colors after preset changes. Canceling any editor
+  keeps the previous settings, including alpha.
+  Change palettes/accents while scrolled to the bottom, including delayed and
+  failed saves: swatches, preview, text brightness, row positions and scroll offset
+  must remain stable while saving; only confirmed settings change the theme.
+  `DisplaySettingsViewTest` covers the one-versus-two palette selections and
+  layout preservation during a suspended save using in-memory settings, without
+  writing the installed app's preferences.
+- Compare Theme with other grouped settings, including its Reader
+  panel: palette, accent and E-ink rows use the same 16dp inset dividers; E-ink
+  keeps the enclosing group outline continuous.
+  Open Theme from the Reader's bottom-right menu: the title scrolls away with
+  the settings and returns when scrolled to the top, while the drag handle stays
+  available. The full Theme settings page keeps its top app bar fixed.
+- Reading Settings selected segments form rounded capsules with a visible neutral
+  track around every edge and no vertical separators. Check text orientation,
+  furigana mode, reading mode, VN screen content and progress position in light/dark themes
+  with system/manual accents, and inverse selection in both E-ink modes.
+  Selecting another option must move the highlight without changing row size or
+  reducing the original clickable area. `ReaderAppearanceSelectionTest` checks
+  rendered fills, text and the visible track above selections for all five
+  controls, using temporary font storage and in-memory reading preferences.
+- System dynamic colors on Android 12+, the fixed fallback on older Android,
+  all eight accent seeds and extreme custom seeds. Reader background/text retain
+  their own colors while controls and native containers use the accent scheme.
+  Across all four tabs, check that bottom/side navigation has a consistent tint
+  and that the status-bar inset matches its page. Dictionary search must retain
+  this continuity both with the keyboard open and after showing results; its
+  field remains distinguishable, with explicit field/top-bar outlines in E-ink.
+  Compare strongly tinted system palettes and manual blue/red/green accents:
+  page, navigation, nested controls and overlays should keep a subtle neutral
+  tint and distinct tonal levels. Group dividers should remain visible without
+  dominating white cards; input outlines and active accents retain their contrast.
+  Repeat in dark mode and confirm E-ink still uses full black/white boundaries.
+- Light and dark E-ink: compare every tonal container with ordinary mode and
+  verify actual outlines on groups, nested controls, filled buttons, segmented
+  tracks/selections, popups, panels and navigation boundaries. Lazy groups need a
+  continuous closed outline with one row, multiple rows and during scrolling.
+  E-ink optimization sits directly below automatic switching. Enabling it hides
+  palette/accent choices and shows an explanation; automatic switching stays available. With
+  automatic switching off, only the light/dark choice appears below the switches.
+  Its selection survives restart without changing any stored palette or accent.
+  With automatic switching on, E-ink follows the system even if a custom palette
+  has the opposite brightness. Disabling automatic switching keeps the displayed
+  brightness; disabling E-ink restores the normal palette/accent choices and colors.
+- Upgrade from the v1.3.3 release settings format for every theme, including Sepia
+  inversion and alpha custom colors. Do not use intermediate development schemas
+  as upgrade baselines.
+  Start with a global profile and a different last-book profile, with automatic
+  book opening enabled: migration must use the global profile before opening the
+  book. Reopen, change language/profile, and create/copy profiles; colors and E-ink
+  must stay global. The custom editor has no legacy-palette import list.
+  Missing, empty, truncated or invalid profile settings must fall back to Reader
+  DataStore, then legacy SharedPreferences, then defaults, so both Activity hosts
+  can finish loading. Preserve source files. Failed migration writes must remain
+  unmarked and retry successfully; after migration, restart must preserve the user's
+  new global settings without reading or reapplying old profile colors.
+- Test narrow Chinese layouts and enlarged fonts, empty/loading/error/disabled
+  states, cold launch, restart, foreground/background, and opening both Reader
+  settings panels. Reading Settings identifies the effective profile. Changing
+  display settings preserves reading position, selection, and an open lookup.
+- Check initial loading/migration failures and retriable persistence failures:
+  no default-theme content flash, no lost confirmed setting, and localized errors.
+  Rapidly change two independent reading settings during delayed storage and
+  confirm that both survive; repeated stepper taps must accumulate every increment.
+  MainActivity and Process Text must agree on theme.
+
+Automated display regressions live in `features/display`, Reader settings/host
+tests, Reader display-update tests, and `ui/theme/HoshiSurfaceRolesTest`.
+Device inspection remains necessary for outlines and transitions; passing JVM
+tests does not establish visual acceptance.
+
+### Reading And Lookup Flows
 
 Reader work should compare against
 `reference/Hoshi-Reader-iOS/Features/Reader/ReaderWebView/ReaderWebView.swift`
@@ -135,6 +231,12 @@ Manual reader validation should cover:
   open the existing fullscreen copy/save/share viewer. Verify the tabs appear as
   Chapters, Highlights, Gallery, Search and none of their scrolling content
   stretches or glows past either edge.
+- furigana Off/Dimmed/Toggle/Hidden in paginated, continuous, and VN modes,
+  with horizontal/vertical writing and XHTML lowercase ruby nodes. Toggle first
+  taps reveal adjacent ruby separated only by ASCII whitespace without lookup or
+  page advance; punctuation or styled sibling elements stop the group. Second
+  taps perform lookup. Verify highlights, Sasayaki, progress/restore, VN return
+  to a revealed screen, profile switching/restart, and legacy boolean migration.
 - forward and backward chapter boundaries, including reverse landing at the
   previous chapter end.
 - page progress monotonicity, per-page progress updates, and restore landing
@@ -220,6 +322,17 @@ Validate relevant bookshelf/import changes with:
   intact. Verify Show/Blur/Hide persist across restart in dark and E-ink themes;
   Hide must not reveal the real cover, Blur must visibly blur on Android 12+
   and safely show fallback artwork on Android 8-11.
+- Manage Shelves: “Hide thumbnails when collapsed” defaults off and persists
+  across restart. Enable it and confirm local, Reading, and Google Drive collapsed
+  sections show only one title/count/arrow row, with no preview placeholder.
+  Verify long shelf names stay on one line, headers still expand/collapse, and
+  disabling restores previews without changing expansion state. Check all three
+  cover modes, expanded cards, and Google Drive selection-mode restrictions.
+- Google Drive bookshelf Recent/Title sorting: compare books with newer reading
+  progress, newer audiobook progress, only bookdata last access, and malformed or
+  missing timestamps. Recent places unknown times last; Title uses natural title
+  order. Switch sort while refresh is delayed/offline, then refresh and import a
+  remote book; remaining entries must retain the selected ordering.
 - dark and E-ink editable text fields, confirming visible cursors and horizontal
   scrolling for long values.
 - Android-created `Books` and `Dictionaries` `.hoshi` archives restored by iOS
@@ -239,6 +352,130 @@ Validate relevant bookshelf/import changes with:
   the Reader chrome back action.
 - bookmark restoration and bookshelf progress refresh after returning from
   Reader.
+
+## Statistics
+
+Preserve existing app data when validating statistics:
+
+- After upgrading with the former statistics and tab switches disabled, Stats
+  is still visible. Its upper-right Settings button opens the tab-local settings
+  route; returning from settings or a book editor preserves dashboard period,
+  selected chart bucket, heatmap scroll and page scroll. Advanced has no Statistics row.
+- Statistics settings groups both autostart switches together with the Reader
+  access hint below, then reset time in its own group. Sync has a heading and
+  Merge/Replace explanation below its two rows; Archive has a heading, a clear
+  action and a book-count footer. Verify Sync is absent when global sync is off,
+  Archive is absent when empty, and clear still requires confirmation. Check
+  English/Chinese narrow layouts, light/dark and E-ink borders.
+- Unset statistics sync defaults on; an explicit opt-out remains off. Both
+  autostart options default off and work independently. Opening Stats does not
+  start tracking, and existing daily goals and Reader display preferences stay
+  unchanged. Check manual start/stop, modal pause, foreground/background and
+  close-save paths alongside the Reader matrix above.
+- Delete one book and a selected batch with active dates, no activity and an
+  undecodable cover. Active history remains visible with an archive marker;
+  required archive write/read failures keep the affected book and show an error.
+  The distribution marks archived books with a small trash icon; their detail
+  page has the same book title and Days section as local books, without an extra
+  Archived label. Dashboard and book-page titles keep the same size and weight
+  during navigation and loading; long book titles remain on one ellipsized line.
+  Restore the same normalized folder via EPUB, Drive, TTU and Books `.hoshi`;
+  newer dates win, equal dates keep the specified first input, and interrupted
+  restore duplicates are counted once. Include NFC/NFD-equivalent paths and
+  iOS archives with omitted cover metadata or long folder names.
+- Open a distribution row from a short period and verify that the editor shows
+  all dates in ascending order. Verify grouped row dividers, date and character
+  count on the left, duration and chevron on the right, and matching chevrons in
+  the book distribution. Check half-minute rounding, character/hour/minute
+  editing, cancel, zero removal, single-day deletion from inside the edit sheet
+  (no delete action on the date list), confirmed delete-all,
+  last-archive cleanup and confirmed archive clearing. Failures retain input;
+  return/resume refreshes aggregates. Merge may restore remote deleted records;
+  deleting locally does not claim to clear the remote copy.
+  In light/dark E-ink, the date rows have one continuous rounded outer outline,
+  inset internal dividers, and an outlined delete-all button. Check one record,
+  several records, and scrolling a long list; normal themes keep filled groups.
+- The dashboard contains Daily Goal (gauge, history and display-only heatmap),
+  Reading Time, and Books, with uniform headings and grouped cards. There is no
+  separate calendar, heatmap date selection, yearly dropdown, Day segment,
+  This Week card or weekly target editor. Upgrades preserve daily goals and data.
+- Tap the daily goal to open the anchored value wheel without moving the page.
+  It starts at the saved value, snaps after scrolling, and supports tapping a
+  nearby value. Switching Characters/Duration preserves each saved target;
+  outside tap and Back dismiss it. Cover both ends of each range, reopen,
+  E-ink contrast and persistence failure/retry. In light and dark E-ink modes,
+  both goal types have a visible fixed center outline enclosing the snapped
+  value; normal mode retains its filled selection band.
+- Check the current Week as the initial reading-time period, including while
+  loading; returning from settings or a book editor preserves a manual selection.
+  Week/Month/Year/All switching
+  lives in Reading Time; each mode starts at the current period. Swipe the chart
+  to browse earlier natural periods, stopping at the first activity and today;
+  All does not page. Check cross-year weeks, leap February, locale week starts,
+  empty buckets and incomplete periods. Only selected/adjacent chart pages are
+  prepared even with decades of sparse history.
+- Reading-time axes follow the calendar: Week shows narrow weekday names,
+  Month marks locale week starts (April 2026 is 5/12/19/26 for Sunday-first
+  locales), Year marks every two months, and All starts at the earliest month
+  with three-month intervals, thinned for long histories. Dashed vertical grid
+  lines align with tick dates; bars and tap targets share the date scale,
+  including leap February and unequal month lengths. Bars have flat baselines.
+  Verify the average line, 0/top-hour labels, complete rounded comparison with
+  clearly distinguishable up/down arrows, and Characters Read / Reading Speed
+  rows in English, Chinese, narrow layouts and enlarged fonts. Long comparisons may move below the value,
+  but must not truncate. E-ink fills all bars without a single-bucket selection;
+  with a selection, only that bar stays filled and the others become hollow.
+  The unselected headline explicitly labels Week/Month as Daily Average and
+  Year/All as Monthly Average in both languages. Selecting a bar shows that
+  day's or month's total without an average label; clearing restores the label.
+- The heatmap shows all history and initially scrolls to the latest dates.
+  Reading intensity grows with character counts across all history; today
+  has a subtle outline and the Less/More legend matches. Taps have no action. Changing chart mode,
+  page or bucket must not move or recolor the heatmap. Manual heatmap scrolling
+  and settings/editor round trips preserve its position.
+- Heatmap weekday labels remain complete and centered on their corresponding
+  rows in English and Chinese, including larger system fonts and E-ink mode.
+  Their text height must not be clipped to the smaller heatmap cell height;
+  labels and cells follow the same locale-specific first day of the week.
+- Fast vertical dashboard swipes retain the fixed cards rather than recreating
+  their charts on re-entry; use the Statistics flow in `docs/PERFORMANCE.md` for
+  frame and trace comparisons. Heatmap horizontal position, chart selection,
+  expanded book count and vertical position survive settings/editor round trips.
+- Reading-time bars, summary rows and book rows display together. Within
+  week/month a bar selects a day; within year/all it selects a month. The
+  full chart remains while the headline, summary and books follow that bucket.
+  Re-tapping the bar or the close button clears it; paging or changing mode
+  also clears it. Settings/editor round trips and refresh preserve selection.
+  Check empty buckets, the first partial month and future-bucket rejection.
+  Book bars rank by time independently of goal type, five rows show initially,
+  and each row shows grouped character counts and duration for the current
+  period or selected bucket above its time bar. Check local and archived books,
+  English/Chinese, large counts and larger fonts: metadata wraps when needed
+  without clipping or squeezing the bar, and the whole row still opens the editor.
+  Show More is left-aligned with the card content, has the same inset divider
+  above it as the book rows, and expands the list. Once all books are visible,
+  both the button and its divider disappear.
+  No Books section appears for an empty result.
+- In light and dark E-ink modes, initial display and clearing selection fill all
+  reading-time bars, matching the full-period headline, summary and book list.
+  Selecting one bar keeps it filled and makes all other bars hollow, matching
+  the selected bucket's statistics. Re-tapping the bar, closing selection,
+  paging or changing period mode restores all filled bars. Check switching
+  between bars, short/narrow bars, and normal
+  color mode retaining its existing color-based selection.
+  Period and goal-type selectors have outlined tracks; the selected segment
+  has a solid fill with inverse text in both light and dark E-ink.
+- Compare average duration and prior-period percentages with missing reading
+  days/months, including prior average zero. Goal history spans active and
+  archived books regardless of selected period, recalculates after goal changes,
+  and picks the earliest equal longest streak or best day.
+- Exercise the daily-goal semicircle and its compact history metrics with both
+  goal types, zero/partial/over-goal values, Chinese narrow screens, large values,
+  the day-edit keyboard and E-ink contrast. Check that all section headings share
+  the same style and inset, that compact chart/summary/book rows stay legible,
+  and that history metric values and their detail rows align across both columns.
+  Archive JPEG decoding/scaling needs a device check in addition
+  to generated-file JVM tests.
 
 ## Dictionary, Audio, And Anki
 
@@ -264,7 +501,15 @@ Validate relevant dictionary/audio changes with:
   imported MP3 and Opus `android.db` files. Disable the highest-priority source
   and confirm lookup playback and Anki audio export use the next enabled source;
   disable every source and confirm both return no local audio; then re-enable
-  and reorder sources and confirm the preserved priority takes effect.
+  and reorder sources and confirm the preserved priority takes effect. In
+  Reader, Dictionary, Process Text, and recursive popups, long-press the audio
+  button and verify all local/remote candidates are named in source order,
+  duplicate names are numbered, the current choice is marked, and an empty or
+  failing source produces the disabled no-audio state. Select a non-default
+  candidate and confirm immediate playback and both Anki backends use that same
+  recording; autoplay, redirects, Kanji lookup, Back/Forward, and new popup
+  results must reset entry-scoped candidate state. Repeat in light, dark, and
+  light/dark E-ink themes at popup scales 0.8, 1, and 2.
 - Sasayaki MP3, M4B, and Opus imports from local or seekable SAF sources before pressing Play: confirm the total
   duration is already visible; M4B/Opus title, artist, cover, and chapters load
   together without a delayed artist row; playback preparation may subsequently
@@ -273,8 +518,48 @@ Validate relevant dictionary/audio changes with:
 - popup theme contrast for deinflection explanations and JMdict forms tables.
 - Dictionary tab and Process Text iframe popup cold paths after reader popup
   changes.
+- Source-text lookup in Dictionary and external `PROCESS_TEXT`, `SEND`, and
+  `TRANSLATE` entry points: use long/multiline text, leading punctuation with no
+  initial match, repeated words, and supplementary characters before the tapped
+  word. Verify the complete source stays visible; an empty Process Text root
+  remains open and tapping a later word finds results. Confirm successful taps
+  mark the matched span and preserve result scroll, while failed taps preserve
+  results, selection, mining context, and history. Exercise back/forward,
+  including `猫と猫` and `𠮟猫と猫`: tap the first then second occurrence and
+  verify Back/Forward restores both the marked occurrence and mined cloze
+  position. Test popup scales 0.8/1/2 with delayed result rendering while the
+  source is partially scrolled; the visual scroll position must survive the
+  temporarily empty entries container.
+  Also exercise recursive children, Kanji, audio, outside dismissal, and swipe
+  dismissal.
+  Repeat with source sizes 12/22/48, light/dark/E-ink themes and profile switching;
+  Reader and child popups must not gain source text. Mine through AnkiDroid and
+  AnkiConnect and verify the full original sentence and exact repeated-word
+  cloze position, including UTF-16 offsets after supplementary characters and
+  a successful non-suffix glossary redirect followed by a failed source tap.
 - Android AnkiConnect and AnkiDroid flows when Anki behavior changes, including
   duplicate checks, media references, add-note, and sync behavior.
+- Anki tag templates through both backends: mix literal tags with
+  `{document-title}` and `{expression}`; substituted spaces, tabs, newlines,
+  non-breaking spaces, and full-width spaces become underscores without
+  joining separate literal tags. Check missing title/unknown handlebars,
+  independent format tags, `hoshi` on new/rebuilt formats, and preservation of
+  saved empty/custom tags after duplication, restart, profile switch, and fetch.
+  Before diagnosing AnkiDroid availability, confirm the installed package with
+  `adb shell pm list packages anki`; the standard package is `com.ichi2.anki`.
+  The opt-in `AnkiTagsDeviceTest` requires initialized AnkiDroid and an existing
+  database-access grant for Hoshi Debug. It uses an existing deck/model, creates
+  one uniquely tagged note, reads its saved tags, and deletes only that note in
+  `finally`; it uses in-memory settings. Run it without connected Gradle tasks
+  that reinstall or clear app data:
+
+  ```bash
+  ./gradlew assembleDebug :app:assembleDebugAndroidTest
+  adb install -r app/build/outputs/apk/debug/app-debug.apk
+  adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiTagsDeviceTest -e ankiTagSmoke true moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
+  ```
+
 - Reader, Dictionary tab, and Process Text popups with one, two, and three Anki
   formats. Confirm button order and icon size, independent duplicate state,
   disabled formats whose first model field is unmapped, and safe failure after

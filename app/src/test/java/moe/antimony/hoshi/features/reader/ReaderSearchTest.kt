@@ -14,6 +14,25 @@ import org.junit.Test
 
 class ReaderSearchTest {
     @Test
+    fun koreanSearchUsesCodePointOffsetsAndExcludesRubyFallbackText() {
+        val book = EpubBook(
+            title = "Korean search",
+            chapters = listOf(chapter("c0.xhtml", "<body>𠮟가、<ruby>한글" +
+                "<rp>fallback</rp><rt>reading</rt><rp>주석</rp></ruby> A</body>")),
+        )
+        val engine = ReaderSearchEngine(book)
+
+        val result = engine.search("한글").single()
+
+        assertEquals(2, result.character)
+        assertEquals("𠮟가、한글 A", result.snippet)
+        assertEquals("한글", result.highlightedText())
+        for (query in listOf("fallback", "reading", "주석")) {
+            assertTrue(engine.search(query).isEmpty())
+        }
+    }
+
+    @Test
     fun searchReadsChapterResourcesWhenChapterHtmlIsEmptyAndIgnoresRuby() {
         val book = searchBook(
             chapters = listOf(

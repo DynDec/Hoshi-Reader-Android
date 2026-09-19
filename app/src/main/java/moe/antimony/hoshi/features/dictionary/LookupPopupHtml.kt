@@ -74,6 +74,7 @@ internal object LookupPopupHtml {
         darkMode: Boolean = false,
         eInkMode: Boolean = false,
         audioSettings: AudioSettings = AudioSettings(),
+        noAudioFoundText: String = "No audio found",
         ankiSettings: AnkiPopupSettings = AnkiPopupSettings(),
         fontFaceCss: String = "",
         popupScale: Double = 1.0,
@@ -190,6 +191,7 @@ internal object LookupPopupHtml {
                             showNotes: { postMessage: function(content) { return window.HoshiAndroidPopup.requestMessage('showNotes', content); } },
                             getEntry: { postMessage: function(index) { return window.HoshiAndroidPopup.requestMessage('getEntry', index); } },
                             lookupRedirect: { postMessage: function(query) { return window.HoshiAndroidPopup.requestMessage('lookupRedirect', query); } },
+                            sourceHistoryRestored: { postMessage: function(offset) { window.HoshiAndroidPopup.postMessage('sourceHistoryRestored', { sentenceOffset: offset }); } },
                             kanjiRedirect: { postMessage: function(kanji) { return window.HoshiAndroidPopup.requestMessage('kanjiRedirect', kanji); } },
                             kanjiRedirectCommitted: { postMessage: function() { window.HoshiAndroidPopup.postMessage('kanjiRedirectCommitted'); } }
                         }
@@ -205,6 +207,7 @@ internal object LookupPopupHtml {
                     window.deduplicatePitchAccents = ${normalizedSettings.deduplicatePitchAccents};
                     window.compactPitchAccents = ${normalizedSettings.compactPitchAccents};
                     window.audioSources = ${audioSourcesJson(audioSettings)};
+                    window.noAudioFoundText = ${JsonPrimitive(noAudioFoundText)};
                     window.audioRequestEndpoint = "https://appassets.androidplatform.net/audio";
                     window.dictionaryMediaRequestEndpoint = "https://appassets.androidplatform.net/image";
                     window.disablePopupImageViewportMaxHeight = true;
@@ -247,6 +250,7 @@ internal object LookupPopupHtml {
             </head>
             <body>
                 $popupGesturesJs
+                <div id="search-text" hidden style="--hoshi-search-text-size: ${normalizedSettings.searchTextSize}px;"></div>
                 <div id="entries-container"></div>
                 <div class="overlay">
                     <div class="overlay-close" onclick="closeOverlay()">×</div>
@@ -326,7 +330,7 @@ internal object LookupPopupHtml {
                                     }
                                 }
                                 if (window.replacePopupResults) {
-                                    window.replacePopupResults(window.entryCount, initialEntries);
+                                    window.replacePopupResults(window.entryCount, initialEntries, message.sourceText, message.sourceSentenceOffset);
                                 } else {
                                     window.lookupEntries = initialEntries;
                                     window.hoshiPopupObserveContentReady?.();
@@ -394,7 +398,19 @@ internal object LookupPopupHtml {
             settings.audioSources
                 .filter { it.isEnabled }
                 .forEach { source ->
-                    add(JsonPrimitive(if (source == AudioSettings.LocalAudioSource) AudioSettings.InternalLocalAudioUrl else source.url))
+                    add(
+                        buildJsonObject {
+                            put("name", source.name)
+                            put(
+                                "url",
+                                if (source == AudioSettings.LocalAudioSource) {
+                                    AudioSettings.InternalLocalAudioUrl
+                                } else {
+                                    source.url
+                                },
+                            )
+                        },
+                    )
                 }
         }.toString()
 
@@ -665,6 +681,23 @@ internal object LookupPopupHtml {
             outline-offset: -1px !important;
         }
 
+        html[data-hoshi-eink-mode="true"] .audio-candidate-menu {
+            background: #fff !important;
+            color: #000 !important;
+            border: 1px solid #000 !important;
+            border-radius: 0 !important;
+        }
+
+        html[data-hoshi-eink-mode="true"] .audio-candidate-menu-item {
+            border-radius: 0 !important;
+        }
+
+        html[data-hoshi-eink-mode="true"] .audio-candidate-menu-item:not(:disabled):active {
+            background: #fff !important;
+            outline: 1px solid #000 !important;
+            outline-offset: -1px !important;
+        }
+
         html[data-hoshi-eink-mode="true"] .glossary-group > summary::before {
             opacity: 1 !important;
         }
@@ -714,6 +747,7 @@ internal object LookupPopupHtml {
 
         html[data-hoshi-color-scheme="dark"][data-hoshi-eink-mode="true"] .frequency-values,
         html[data-hoshi-color-scheme="dark"][data-hoshi-eink-mode="true"] .button-slot,
+        html[data-hoshi-color-scheme="dark"][data-hoshi-eink-mode="true"] .audio-candidate-menu,
         html[data-hoshi-color-scheme="dark"][data-hoshi-eink-mode="true"] .overlay {
             background-color: #000 !important;
             color: #fff !important;
@@ -721,6 +755,16 @@ internal object LookupPopupHtml {
 
         html[data-hoshi-color-scheme="dark"][data-hoshi-eink-mode="true"] .button-slot:active {
             outline: 1px solid #fff !important;
+        }
+
+        html[data-hoshi-color-scheme="dark"][data-hoshi-eink-mode="true"] .audio-candidate-menu {
+            border-color: #fff !important;
+        }
+
+        html[data-hoshi-color-scheme="dark"][data-hoshi-eink-mode="true"] .audio-candidate-menu-item:not(:disabled):active {
+            background: #000 !important;
+            outline: 1px solid #fff !important;
+            outline-offset: -1px !important;
         }
 
         html[data-hoshi-color-scheme="dark"][data-hoshi-eink-mode="true"] .overlay {

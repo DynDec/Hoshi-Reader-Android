@@ -209,6 +209,7 @@ internal class AnkiViewModel @Inject constructor(
                         selectedNoteTypeId = noteType?.id,
                         selectedNoteTypeName = noteType?.name,
                         fieldMappings = noteType?.let(AnkiFieldTemplates::defaultMappings).orEmpty(),
+                        tags = DefaultAnkiTag,
                     ),
                 )
             }

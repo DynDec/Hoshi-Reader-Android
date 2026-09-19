@@ -134,3 +134,14 @@ __HOSHI_HIGHLIGHT_COLOR_CSS__
 a {
     color: rgba(66, 108, 245, 1) !important;
 }
+
+ruby.furigana-hidden > rt,
+ruby.furigana-hidden > rp {
+    visibility: hidden !important;
+}
+ruby.furigana-hidden {
+    text-decoration-line: underline !important;
+    text-decoration-style: dotted !important;
+    text-decoration-color: rgba(160, 160, 160, 0.8) !important;
+    text-underline-offset: 0.05em !important;
+}

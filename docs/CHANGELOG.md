@@ -16,6 +16,47 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Start fullscreen Reader image copy, save, share, and close controls hidden;
   reveal them on a single content tap, then continue toggling their visibility
   with fade transitions on subsequent taps.
+- Add an optional “Hide thumbnails when collapsed” switch in Manage Shelves.
+  It defaults off; when enabled, collapsed shelves show only their title row.
+
+- Add global Theme settings in Settings and Reader. Follow system
+  brightness with one palette selected in each light/dark group, or choose one
+  of the same six options manually. Custom Light and Custom Dark retain separate
+  reading colors and explicitly select light/dark interfaces and dictionary
+  popups. Customize background, text and secondary text colors with previews.
+  Choose system, preset or custom interface accents, and apply E-ink optimization
+  across the app. v1.3.3 display settings migrate from the active profile; missing
+  or unreadable profile settings fall back to legacy global preferences or defaults.
+  E-ink optimization sits below automatic switching and hides palette/accent
+  choices while enabled; follow system brightness or choose light/dark
+  independently of saved colors.
+  Color changes preserve the visible controls and scroll position while saving.
+  The Reader Theme panel's title scrolls with its settings.
+- Preserve deleted books' reading statistics in an archive, restore them on
+  reimport, and edit daily records from book distribution rows. Single-day
+  deletion is available inside the day editor; deleting all records requires
+  confirmation. Daily records use compact grouped rows with dates and character
+  counts on the left, durations and navigation arrows on the right. Archived
+  books have a small trash marker in the book list. Local and archived book
+  headers use the dashboard title style, avoiding a font-size jump while loading.
+  E-ink mode outlines the daily-record group and its delete-all button.
+- Add natural calendar periods and all-time Statistics overview, with compact
+  period controls in the Reading Time card and the current week selected by default.
+  Tap chart bars to inspect a day within a week/month or a month within a
+  year/all-time period. Include elapsed-period averages and comparisons,
+  plus historical goal streaks and best-day summaries.
+- Support Anki tag handlebars such as `{document-title}` and `{expression}`,
+  joining whitespace inside substituted values with underscores; new card
+  formats default to the `hoshi` tag while saved tags stay unchanged.
+- Long-press a lookup result's audio button to choose among named local and
+  remote audio candidates; the selected recording is also used for Anki cards.
+- Show source text above Dictionary and externally shared lookup results; tap a
+  character to look up from that position while keeping the full sentence for
+  Anki cards. Back/Forward restores the selected occurrence for mining, and
+  source text size is adjustable from 12 to 48.
+- Add Off, Dimmed, Toggle, and Hidden furigana modes in Reading Settings;
+  Toggle reveals whitespace-adjacent ruby annotations together on the first tap.
+
 - Add Show, Blur, and Hide privacy modes for bookshelf covers, plus deterministic
   title and author artwork when a book has no visible cover.
 - Warn users before enabling AnkiConnect that most setups can create cards
@@ -26,7 +67,7 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   import/management and popup lookup, a verified one-tap
   stroke-order font download for Kanji users, plus complete pitch data with H/L
   patterns and nasal/devoice markers.
-- Add downloadable recommended Japanese font families to Reader Appearance,
+- Add downloadable recommended Japanese font families to Reading Settings,
   including separate family and named variant selectors, real static and
   variable weight selection, verified app-private downloads, and family/variant
   grouping for imported TTF and OTF fonts, with compact one-level type grouping
@@ -51,6 +92,53 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Identify book sync completion dialogs as imports or exports without showing a
   character count.
 
+- Include surrounding Japanese quotation marks and punctuation in Sasayaki
+  sentence highlights across all Reader modes, with consistent ownership
+  between adjacent cues and across VN screens.
+
+- Apply the selected Recent/Title sort to Google Drive books. Recent uses the
+  latest reading or audiobook progress time, falling back to bookdata last access.
+
+- Separate global display settings from profile Reading Settings, which now show
+  the edited profile name. Opening books or switching profiles keeps the same
+  colors and E-ink setting.
+- Unify page, grouped card, nested control and popup colors across tabs, settings
+  and native Reader panels. Ordinary groups use tonal backgrounds, while E-ink
+  uses visible outlines and selection shapes, including continuous lazy lists.
+  Bottom and side navigation use a subtle theme tint, and Dictionary search
+  shares the page background through the status bar for a continuous top area.
+  Native backgrounds use a softer, more neutral tint and lighter separators,
+  while buttons and active states retain the selected accent color.
+  Theme uses the same inset row dividers as other settings pages.
+  Reading Settings uses inset rounded selections inside continuous neutral
+  segment tracks, keeping the current choice clear without vertical separators.
+- Keep Statistics always available and move its settings to the Stats tab's
+  upper-right corner. Statistics sync defaults on only when unset; saved daily goals,
+  sync opt-outs and Reader display preferences are preserved. Book Open and
+  Page Turn autostart remain independent and default off. Group settings into
+  autostart, reset time, Sync and Archive sections, with explanatory footers
+  and the archived-book count below the clear action.
+- Simplify Statistics to daily goals and reading-time results. Include a
+  display-only reading-intensity heatmap with fully visible, row-aligned weekday
+  labels in the daily card and a compact
+  goal popup with a scrollable value picker. Show reading-time
+  bars with calendar-aligned dashed grid lines, summary rows labeled Characters
+  Read and Reading Speed, and time-ranked books with per-book character counts
+  and reading times together instead of three tabs,
+  with consistent section headings, grouped cards and compact charts and rows.
+  Identify daily averages in Week/Month and monthly averages in Year/All.
+  Show complete period comparisons with larger text and direction arrows
+  alongside rounded percentages; keep Show More left-aligned with
+  a divider above it. In E-ink mode, chart bars are all filled until a single
+  bar is selected; then only that bar stays filled and the others become hollow.
+  Clearing selection restores all filled bars. Period and goal-type selectors use
+  outlined tracks with filled, inverse-text selections, and the goal value wheel
+  outlines its center selection. Remove the separate This Week
+  card and weekly goal; weekly totals and trends remain available through the
+  reading-time chart. Keep dashboard cards in memory while scrolling to avoid
+  rebuilding the heatmap and charts during fast vertical swipes.
+
+
 ### Fixed
 
 - Keep vertical paginated Reader pages from developing font- and ruby-dependent
@@ -59,6 +147,10 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   font-size floor and fits visible furigana from iOS-sized `0.45em` down to
   `0.30em` in `0.005em` steps per chapter without changing the configured line
   height; disabled, it preserves the former fixed `0.45em`/8px behavior.
+
+- Count Korean text consistently in Reader progress, book search, and new
+  Sasayaki subtitle matches, and exclude ruby fallback text from native counts
+  and search. Existing books refresh their cached counts when reopened.
 - Ask for confirmation before resetting Dictionary custom CSS to prevent
   accidental clearing.
 - Keep text and images reachable in every Reader mode when publisher CSS wraps
