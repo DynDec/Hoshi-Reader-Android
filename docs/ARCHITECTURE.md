@@ -258,7 +258,14 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   Noto display-name values remain compatibility keys only. Publisher leaves EPUB
   family, style, and weight declarations intact.
 - Reader rendering and lookup remain WebView-based to preserve iOS-aligned
-  visible behavior.
+  visible behavior. Renderer termination advances
+  `ReaderWebViewStateHolder`'s WebView generation, preserving the latest
+  accepted display position or pending navigation target. The host clears the
+  dead view reference, popup state and auto-page work; the chapter view
+  removes/destroys the old WebView and Compose creates a replacement. Existing
+  restore setup replays settings, highlights and cues, then releases queued
+  Sasayaki presentation. Released WebViews reject late JS results and
+  popup/selection bridge events.
 - Reader chapter WebViews expose an opt-in Adaptive Furigana appearance setting.
   Disabled chapters retain Android WebView's 8px minimum font size, fixed
   `0.45em` furigana, and no calibration. Enabled chapters use a 1px minimum
@@ -416,7 +423,11 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   repository/sync boundary. The Drive data source owns paginated folder listing,
   grouped sync-file discovery, bookdata upload/download, trash, cache clearing,
   and network preflight; Books keeps remote-only Google Drive books as
-  `RemoteBookEntry` models rather than local `BookEntry` placeholders.
+  `RemoteBookEntry` models rather than local `BookEntry` placeholders. OAuth
+  and Drive HTTP connections use 10-second connect/read timeouts. Sync-layer
+  network failure classification lets automatic bookshelf refresh ignore
+  offline, timeout and socket connection failures; manual operations still
+  report errors, as do HTTP, TLS and non-network failures.
 - Audio playback uses Media3/ExoPlayer with controller/repository boundaries.
 - Sasayaki accepts MP3, M4B, and Ogg Opus audiobook sources. One repository
   inspection returns format, metadata, chapters, and static duration for

@@ -204,6 +204,16 @@ text must open a cleared, focused Dictionary search instead of an empty popup.
 
 Manual reader validation should cover:
 
+- Renderer termination in paginated, continuous and VN modes: after moving
+  beyond the saved bookmark (including a continuous scroll before its idle
+  save), terminate the renderer and verify the loading frame restores the latest
+  accepted position, settings, highlights and Sasayaki cue. Repeat during
+  restore and after an internal fragment jump. Open lookup and native selection
+  before termination; neither may survive or reappear from a stale callback.
+  Check paused and playing Sasayaki, including an image auto-page hold, then
+  verify navigation and Close during/after recovery. Trigger renderer exit only
+  on the intended test WebView; do not force-stop the app or clear its data.
+
 - cover image pages and multi-image illustration pages.
 - paginated, continuous, and VN modes in vertical and horizontal writing.
 - VN block and sentence screens, reveal speed 0/45/120, blank-area click
@@ -664,7 +674,13 @@ Validate relevant sync/update/Sasayaki changes with:
   remote-only bookshelf list, pull-to-refresh, import, long-press delete,
   transient network behavior, manual import/export result dialogs,
   reader-open import-only behavior, auto-export timing, close/background flush,
-  statistics merge/replace, and Sasayaki last-position sync.
+  statistics merge/replace, and Sasayaki last-position sync. For automatic
+  bookshelf refresh, test offline/DNS failure, stalled OAuth token and Drive
+  list responses, and connection reset: cached entries remain visible without
+  an error dialog. Repeat via manual refresh/import/export and confirm a
+  localized error. HTTP authorization/server errors and TLS failures must stay
+  visible even during automatic refresh. OAuth and Drive connect/read waits
+  use 10-second timeouts (not a total-operation deadline).
 - GitHub update prompts, skip-version, manual checks, completed-download
   prompts, user-triggered install, same-version APK cleanup, and split APK
   updates on arm64-v8a and armeabi-v7a targets.
