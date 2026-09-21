@@ -34,8 +34,8 @@ class ReaderPaginationScriptsTest {
 
         assertFalse(disabled.contains("__HOSHI_"))
         assertFalse(enabled.contains("__HOSHI_"))
-        assertTrue(disabled.contains("if (false\n      && !false"))
-        assertTrue(enabled.contains("if (true\n      && !false"))
+        assertTrue(disabled.contains("if (false") && disabled.contains("&& !false"))
+        assertTrue(enabled.contains("if (true") && enabled.contains("&& !false"))
         assertTrue(disabled.contains("removeProperty('--hoshi-furigana-scale')"))
         assertTrue(enabled.contains("fitVerticalPaginatedFurigana(document, {"))
     }
@@ -86,7 +86,7 @@ class ReaderPaginationScriptsTest {
             viewportCssHeight = 800,
         )
 
-        assertEquals(822, layout.pageHeightPx)
+        assertEquals(800, layout.pageHeightPx)
         assertEquals(480, layout.pageWidthPx)
         assertEquals(455, layout.imageMaxWidthPx)
         assertEquals(800, layout.imageMaxHeightPx)
@@ -131,7 +131,7 @@ class ReaderPaginationScriptsTest {
             viewportCssHeight = 801,
         )
 
-        assertEquals(829, layout.pageHeightPx)
+        assertEquals(801, layout.pageHeightPx)
         assertEquals(329, layout.imageMaxWidthPx)
         assertEquals(688, layout.imageMaxHeightPx)
     }

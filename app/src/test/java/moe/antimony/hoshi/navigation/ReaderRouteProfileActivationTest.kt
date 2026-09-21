@@ -35,7 +35,7 @@ class ReaderRouteProfileActivationTest {
         var clearCount = 0
 
         runBlocking {
-            ReaderRouteLoadState.Error("Book not found.").publishProfileActivation(
+            ReaderRouteLoadState.Error.publishProfileActivation(
                 activateForBook = { metadata -> activatedMetadata = metadata },
                 clearLoadedProfile = { clearCount += 1 },
             )
@@ -50,7 +50,7 @@ class ReaderRouteProfileActivationTest {
         var activationCount = 0
         var clearCount = 0
 
-        val renderState = ReaderRouteLoadState.Error("Failed to open EPUB.")
+        val renderState = ReaderRouteLoadState.Error
             .activateProfileAndPrepareRender(
                 activateForBook = {
                     activationCount += 1
@@ -60,7 +60,7 @@ class ReaderRouteProfileActivationTest {
                 loadReaderSettings = { ReaderSettings() },
             )
 
-        assertEquals(ReaderRouteRenderState.Error("Failed to open EPUB."), renderState)
+        assertEquals(ReaderRouteRenderState.Error, renderState)
         assertEquals(0, activationCount)
         assertEquals(1, clearCount)
     }

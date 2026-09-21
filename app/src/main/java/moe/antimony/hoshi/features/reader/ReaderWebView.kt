@@ -65,12 +65,12 @@ import moe.antimony.hoshi.epub.ReaderHighlight
 import moe.antimony.hoshi.epub.SasayakiMatch
 import moe.antimony.hoshi.epub.SasayakiMatchData
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
-import moe.antimony.hoshi.features.audio.AudioRequestHandler
 import moe.antimony.hoshi.features.audio.AudioSettings
-import moe.antimony.hoshi.features.audio.LocalAudioRepository
+import moe.antimony.hoshi.features.audio.withLocalizedSourceNames
 import moe.antimony.hoshi.features.audio.WordAudioPlayer
 import moe.antimony.hoshi.features.anki.AnkiViewModel
 import moe.antimony.hoshi.features.dictionary.DictionaryImageRequestHandler
+import moe.antimony.hoshi.features.dictionary.lookupOptions
 import moe.antimony.hoshi.features.dictionary.DictionarySettings
 import moe.antimony.hoshi.features.dictionary.LookupPopupAssets
 import moe.antimony.hoshi.features.dictionary.LookupPopupHtml
@@ -235,6 +235,8 @@ fun ReaderWebView(
     val popupContentLanguageProfile = contentLanguageProfile
     val progressDisplay = readerProgressDisplay(contentLanguageProfile)
     val noAudioFoundText = stringResource(R.string.audio_no_audio_found)
+    val audioLoadingText = stringResource(R.string.loading)
+    val popupAudioSettings = audioSettings.withLocalizedSourceNames()
     val readerPopupIframeDocument = remember(
         dictionaryStyles,
         dictionarySettings,
@@ -245,13 +247,14 @@ fun ReaderWebView(
         effectiveSettings.popupReducedMotionSwipeThreshold,
         popupDarkMode,
         effectiveSettings.eInkMode,
-        audioSettings,
+        popupAudioSettings,
         ankiUiState.popupSettings,
         fontManager,
         fontLibraryState.revision,
         effectiveSettings.popupScale,
         popupContentLanguageProfile,
         noAudioFoundText,
+        audioLoadingText,
     ) {
         LookupPopupHtml.renderIframeDocument(
             assets = null,
@@ -264,8 +267,9 @@ fun ReaderWebView(
             reducedMotionSwipeThreshold = effectiveSettings.popupReducedMotionSwipeThreshold,
             darkMode = popupDarkMode,
             eInkMode = effectiveSettings.eInkMode,
-            audioSettings = audioSettings,
+            audioSettings = popupAudioSettings,
             noAudioFoundText = noAudioFoundText,
+            audioLoadingText = audioLoadingText,
             ankiSettings = ankiUiState.popupSettings,
             fontFaceCss = fontManager.popupFontFaceCss(),
             popupScale = effectiveSettings.popupScale,
@@ -295,7 +299,7 @@ fun ReaderWebView(
             context = context.applicationContext,
             assets = popupAssets,
             fontManager = fontManager,
-            audioRequestHandler = AudioRequestHandler(LocalAudioRepository.fromContext(context.applicationContext)),
+            audioRequestHandler = appContainer.audioRequestHandler,
             imageRequestHandler = DictionaryImageRequestHandler(dictionaryRepository::dictionaryMedia),
             iframeDocument = { currentReaderPopupIframeDocument.value },
         )
@@ -400,7 +404,11 @@ fun ReaderWebView(
             resumeAfterAutoPageHold = { sasayakiPlayer?.resumeAfterAutoPageHold() },
         )
     }
+    fun clearSearchHighlight() {
+        webView?.evaluateJavascript(ReaderPaginationScripts.clearSearchHighlightInvocation(), null)
+    }
     fun jumpToPositionWithHistory(position: ReaderChapterPosition, fragment: String? = null) {
+        clearSearchHighlight()
         cancelSasayakiAutoPage()
         val statistics = statisticsForSave()
         val savedPosition = stateHolder.jumpToWithHistory(position, fragment)
@@ -408,6 +416,7 @@ fun ReaderWebView(
         saveReaderPosition(savedPosition, statistics)
     }
     fun navigateJumpBack() {
+        clearSearchHighlight()
         cancelSasayakiAutoPage()
         val statistics = statisticsForSave()
         val savedPosition = stateHolder.navigateBackInJumpHistory() ?: return
@@ -415,6 +424,7 @@ fun ReaderWebView(
         saveReaderPosition(savedPosition, statistics)
     }
     fun navigateJumpForward() {
+        clearSearchHighlight()
         cancelSasayakiAutoPage()
         val statistics = statisticsForSave()
         val savedPosition = stateHolder.navigateForwardInJumpHistory() ?: return
@@ -430,7 +440,14 @@ fun ReaderWebView(
             bookRepository.saveHighlights(root, nextHighlights)
         }
     }
-    fun addHighlight(color: HighlightColor, id: String, creation: ReaderHighlightCreationResult) {
+    fun changeHighlight(color: HighlightColor, id: String, result: ReaderHighlightResult) {
+        if (result !is ReaderHighlightCreationResult) {
+            val current = highlights.orEmpty()
+            val next = ReaderHighlights.applyEdit(current, result, color)
+            if (next != current) persistHighlights(next)
+            return
+        }
+        val creation = result
         val chapter = currentLoadChapter()
         val info = book.bookInfo.chapterInfo[chapter.href] ?: return
         val highlight = ReaderHighlight(
@@ -438,6 +455,7 @@ fun ReaderWebView(
             character = info.currentTotal + creation.start,
             offset = creation.offset,
             text = creation.text,
+            textFurigana = creation.textFurigana,
             color = color,
             createdAt = bookRepository.currentAppleReferenceDateSeconds(),
         )
@@ -508,7 +526,7 @@ fun ReaderWebView(
         createLookupPopupItem(
             selection = selection,
             dictionaryStyles = dictionaryStyles,
-            lookup = dictionaryRepository::lookup,
+            lookup = { text, maxResults, scanLength -> dictionaryRepository.lookup(text, maxResults, scanLength, dictionarySettings.lookupOptions()) },
             options = LookupPopupOptions(
                 isVertical = effectiveSettings.verticalWriting,
                 isFullWidth = effectiveSettings.popupFullWidth,
@@ -536,7 +554,7 @@ fun ReaderWebView(
         createLookupPopupItem(
             selection = selection,
             dictionaryStyles = dictionaryStyles,
-            lookup = dictionaryRepository::lookup,
+            lookup = { text, maxResults, scanLength -> dictionaryRepository.lookup(text, maxResults, scanLength, dictionarySettings.lookupOptions()) },
             options = LookupPopupOptions(
                 isVertical = false,
                 isFullWidth = false,
@@ -796,6 +814,7 @@ fun ReaderWebView(
                     message.query,
                     popup.state.dictionarySettings.maxResults,
                     popup.state.dictionarySettings.scanLength,
+                    popup.state.dictionarySettings.lookupOptions(),
                 )
                 if (results.isNotEmpty()) {
                     setLookupPopups(
@@ -1730,6 +1749,8 @@ fun ReaderWebView(
                         systemDark = systemDarkTheme,
                     )
                     val generation = stateHolder.webViewGeneration
+                    val restoreEpoch = stateHolder.webViewRestoreEpoch
+                    val restoreChapterIndex = readerPosition.loadPosition.index
                     key(generation) {
                         ChapterWebView(
                             book = book,
@@ -1766,7 +1787,14 @@ fun ReaderWebView(
                             isWebViewRestoring = stateHolder.isWebViewRestoring,
                             webViewRestoreEpoch = stateHolder.webViewRestoreEpoch,
                             onRestoreStarted = stateHolder::markWebViewRestoring,
-                            onRestoreCompleted = stateHolder::markWebViewRestored,
+                            onRestoreCompleted = {
+                                if (generation == stateHolder.webViewGeneration && restoreEpoch == stateHolder.webViewRestoreEpoch) {
+                                    stateHolder.markWebViewRestored()
+                                    stateHolder.takeSearchHighlight(restoreChapterIndex, restoreEpoch)?.let { highlight ->
+                                        webView?.evaluateJavascript(ReaderPaginationScripts.showSearchHighlightInvocation(highlight), null)
+                                    }
+                                }
+                            },
                             onNextChapter = {
                                 goToNextChapter()
                             },
@@ -1809,7 +1837,7 @@ fun ReaderWebView(
                             onReaderTapOutside = ::handleReaderTapOutside,
                             onReaderInteraction = ::handleReaderInteraction,
                             onImageTapped = ::openFullscreenImage,
-                            onHighlightCreated = ::addHighlight,
+                            onHighlightChanged = ::changeHighlight,
                             readerPopupBridgeHolder = readerPopupBridgeHolder,
                             readerPopupResourceHandler = readerPopupResourceHandler,
                             readerPopupFrames = readerLookupPopupPayloads,
@@ -1963,8 +1991,20 @@ fun ReaderWebView(
                 },
                 onSearchResultJump = { result ->
                     closeLookupPopupsAndSelection()
-                    val target = ReaderHighlights.positionForCharacter(book.bookInfo, result.character)
-                    jumpToPositionWithHistory(target)
+                    clearSearchHighlight()
+                    cancelSasayakiAutoPage()
+                    val chapter = book.chapters[result.chapterIndex]
+                    val chapterInfo = book.bookInfo.chapterInfo[chapter.href]
+                    val offset = (result.character - (chapterInfo?.currentTotal ?: 0)).coerceAtLeast(0)
+                    val count = chapterInfo?.chapterCount ?: 0
+                    val target = ReaderChapterPosition(
+                        index = result.chapterIndex,
+                        progress = if (count > 0) (offset.toDouble() / count).coerceIn(0.0, 1.0) else 0.0,
+                    )
+                    val statistics = statisticsForSave()
+                    val savedPosition = stateHolder.jumpToSearchResult(target, offset, result.matchLength)
+                    resetStatisticsBaseline()
+                    saveReaderPosition(savedPosition, statistics)
                     stateHolder.dismissGoTo()
                 },
                 onHighlightJump = { highlight ->

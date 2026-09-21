@@ -164,6 +164,8 @@ window.hoshiReader = {
     }
     this.nodeStartOffsets = offsets;
     this.nodeStartRawOffsets = rawOffsets;
+    // Wrapping/unwrapping moves text nodes and invalidates live CSS Ranges.
+    if (window.hoshiHighlights?.searchRange) window.hoshiHighlights.refreshSearchHighlight();
   },
   waitForImages: function(scope) {
     var root = scope || this.sourceRoot;
@@ -1872,13 +1874,24 @@ window.hoshiReader = {
     var originalRemoveHighlight = typeof highlights.removeHighlight === 'function'
       ? highlights.removeHighlight.bind(highlights)
       : null;
+    highlights.searchRawRange = function(offset, length) {
+      return window.hoshiReaderTextSemantics.searchRawRange(reader.contentStream.textEntries, offset, length);
+    };
+    highlights.collectTextSegments = function(offset, length) {
+      return reader.contentStream.collectRawSegments(offset, length);
+    };
     highlights.collectSegments = function(offset, length) {
       return reader.highlightSegmentsForChapterRawRange(offset, length);
     };
     if (originalCreateHighlight) {
       highlights.createHighlight = function(color, id) {
         var result = originalCreateHighlight(color, id);
-        if (result) reader.rememberCreatedHighlight(id, color, result);
+        if (result && result.action === 'created') reader.rememberCreatedHighlight(id, color, result);
+        if (result && result.action === 'recolored') {
+          reader.initialHighlights = reader.initialHighlights.map(function(highlight) {
+            return highlight.id === result.id ? Object.assign({}, highlight, { color: color }) : highlight;
+          });
+        }
         return result;
       };
     }
@@ -1900,7 +1913,8 @@ window.hoshiReader = {
       id: id,
       color: color,
       offset: result.offset,
-      text: result.text
+      text: result.text,
+      textFurigana: result.textFurigana
     });
     this.initialHighlights = highlights;
   },
@@ -1912,12 +1926,12 @@ window.hoshiReader = {
   },
   clearCurrentHighlightWrappers: function() {
     var highlights = window.hoshiHighlights;
-    if (!highlights || !highlights.wrappers || typeof highlights.wrappers.forEach !== 'function') return;
+    if (!highlights || !highlights.highlights || typeof highlights.highlights.forEach !== 'function') return;
     var wrapperGroups = [];
-    highlights.wrappers.forEach(function(wrappers) {
-      wrapperGroups.push(wrappers);
+    highlights.highlights.forEach(function(entry) {
+      wrapperGroups.push(entry.wrappers);
     });
-    highlights.wrappers.clear();
+    highlights.highlights.clear();
     for (var i = 0; i < wrapperGroups.length; i++) {
       this.unwrap(wrapperGroups[i]);
     }
@@ -1925,11 +1939,12 @@ window.hoshiReader = {
   applyCurrentScreenHighlights: function() {
     var highlights = Array.isArray(this.initialHighlights) ? this.initialHighlights : [];
     this.patchHighlightsForVisualNovel();
-    if (!highlights.length || !window.hoshiHighlights || typeof window.hoshiHighlights.applyHighlights !== 'function') return;
+    if (!window.hoshiHighlights || typeof window.hoshiHighlights.applyHighlights !== 'function') return;
     this.clearCurrentHighlightWrappers();
     window.hoshiHighlights.applyHighlights(highlights);
   },
   paginate: function(direction) {
+    window.hoshiHighlights?.clearSearchHighlight?.();
     if (this.nativeSelectionActive) return "limit";
     if (!this.screens.length) return "limit";
     if (direction === "forward") {
@@ -2248,6 +2263,7 @@ window.hoshiReader = {
     return stops;
   },
   showSasayakiMediaStop: function(stop) {
+    window.hoshiHighlights?.clearSearchHighlight?.();
     var index = Number(stop && stop.screenIndex);
     if (!Number.isFinite(index) || !this.screens || !this.screens.length) return null;
     var safeIndex = Math.min(Math.max(0, Math.floor(index)), this.screens.length - 1);
@@ -2256,6 +2272,7 @@ window.hoshiReader = {
     return this.calculateProgress();
   },
   highlightSasayakiCue: function(cue, reveal) {
+    if (reveal) window.hoshiHighlights?.clearSearchHighlight?.();
     var cueObject = this.sasayakiCueForInput(cue);
     var cueId = typeof cue === 'string' ? cue : cueObject && cueObject.id;
     if (!cueId) return null;

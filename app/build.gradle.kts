@@ -113,8 +113,8 @@ android {
         applicationId = "moe.requited.hoshi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 104061
-        versionName = "1.4.6.1"
+        versionCode = 104070
+        versionName = "1.4.7"
         releaseVersionCode?.let { versionCode = it }
         releaseVersionName?.let { versionName = it }
 
@@ -189,6 +189,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.jsoup)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
