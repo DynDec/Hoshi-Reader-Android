@@ -19,7 +19,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 - Configure lookup frequency sorting per profile: Auto, Ascending, Descending,
   or Disabled, with an enabled frequency dictionary for explicit ordering.
-  Both controls share the Lookup settings card with the scan controls.
+  Both controls share the Lookup settings card with the scan controls, and the
+  matching native lookup bridge keeps Reader popup searches working.
 
 - Preserve furigana readings in Reader highlights and show them in Contents.
   Select an existing highlight's exact text range to change its color, or choose

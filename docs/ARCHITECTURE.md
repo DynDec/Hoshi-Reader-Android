@@ -150,8 +150,9 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   profile; a failed load does not change it.
 - Dictionary import, term/Kanji lookup, media, style extraction, deinflection,
   frequency, and complete pitch data are owned by
-  `third_party/hoshidicts-kotlin-bridge`. The parent Kotlin ABI copy must remain
-  constructor- and method-compatible with the bridge submodule.
+  `third_party/hoshidicts-kotlin-bridge`. The parent Kotlin ABI copy and
+  `app/src/main/cpp/hoshidicts_jni_compat.cpp` adapt the published bridge
+  revision and must remain constructor- and method-compatible.
 - `DictionaryLookupQueryService` owns the active native lookup session. Rebuilds
   construct a new native query session for the active profile's dictionary
   language and enabled Term/Frequency/Pitch/Kanji paths before swapping it into
@@ -527,8 +528,10 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
 
 The Android app currently has two native stacks:
 
-- `app/src/main/cpp/CMakeLists.txt` builds the hoshidicts JNI bridge from the
-  `third_party/hoshidicts-kotlin-bridge` submodule.
+- `app/src/main/cpp/CMakeLists.txt` builds the app-owned hoshidicts JNI
+  compatibility entry point, which includes the implementation from the
+  `third_party/hoshidicts-kotlin-bridge` submodule and adapts newer app ABI
+  methods that are not present in the published bridge revision.
 - `app/src/main/rust/hoshiepub` builds the Rust EPUB parser through UniFFI.
 
 Current build wiring lives in `app/build.gradle.kts`:

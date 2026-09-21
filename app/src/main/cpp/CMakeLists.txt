@@ -19,7 +19,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 add_library(hoshidicts_jni SHARED
-    "${HOSHIDICTS_BRIDGE_ROOT}/app/src/main/cpp/hoshidicts_jni.cpp"
+    "hoshidicts_jni_compat.cpp"
 )
 
 target_include_directories(hoshidicts_jni PRIVATE
