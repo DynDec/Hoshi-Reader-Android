@@ -51,8 +51,6 @@ internal const val ReaderBottomSafeAreaDefaultDp = 18
 internal const val ReaderBottomSafeAreaMinDp = ReaderBottomSafeAreaDefaultDp
 internal const val ReaderBottomSafeAreaMaxDp = 72
 internal const val ReaderBottomSafeAreaStepDp = 2
-internal const val ReaderBorderlessTopSafeAreaDp = 10
-internal const val ReaderBorderlessBottomSafeAreaDp = 6
 internal const val ReaderPageSwipeThresholdDefaultPx = 72
 internal const val ReaderPageSwipeThresholdMinPx = 0
 internal const val ReaderPageSwipeThresholdMaxPx = 360
@@ -96,7 +94,6 @@ data class ReaderSettings(
     val fontVariantSelections: Map<String, String> = emptyMap(),
     val fontSize: Int = 22,
     val furiganaMode: FuriganaMode = FuriganaMode.Off,
-    val adaptiveFurigana: Boolean = false,
     val viewMode: ReaderViewMode = ReaderViewMode.Paginated,
     val visualNovelRevealSpeed: Int = 45,
     val visualNovelScreenMode: VisualNovelScreenMode = VisualNovelScreenMode.Block,
@@ -154,9 +151,6 @@ data class ReaderSettings(
     val hideBookshelfProgress: Boolean = false,
     val displaySettings: AppDisplaySettings? = null,
 ) {
-    val hideFurigana: Boolean
-        get() = furiganaMode == FuriganaMode.Hidden
-
     val continuousMode: Boolean
         get() = viewMode == ReaderViewMode.Continuous
 
@@ -165,19 +159,6 @@ data class ReaderSettings(
 
     val imageWidthViewportRatio: Double
         get() = (100 - horizontalPadding).coerceAtLeast(1) / 100.0
-
-    /**
-     * The configured padding is retained while the border-removal mode is active so
-     * disabling it restores the user's normal layout immediately.
-     */
-    val effectiveVerticalPadding: Int
-        get() = if (removeVerticalBorders) 0 else verticalPadding
-
-    val effectiveTopSafeAreaDp: Int
-        get() = if (removeVerticalBorders) ReaderBorderlessTopSafeAreaDp else topSafeAreaDp.coerceReaderTopSafeAreaDp()
-
-    val effectiveBottomSafeAreaDp: Int
-        get() = if (removeVerticalBorders) ReaderBorderlessBottomSafeAreaDp else bottomSafeAreaDp.coerceReaderBottomSafeAreaDp()
 
     val imageHeightViewportRatio: Double
         get() = (100 - effectiveVerticalPadding).coerceAtLeast(1) / 100.0
@@ -453,7 +434,6 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             preferences.getString("furiganaMode", null),
             preferences.getBoolean("readerHideFurigana", false),
         ),
-        adaptiveFurigana = preferences.getBoolean("readerAdaptiveFurigana", false),
         viewMode = ReaderViewMode.fromStorage(
             preferences.getString("readerViewMode", null),
             legacyContinuousMode = preferences.getBoolean("continuousMode", false),
@@ -548,7 +528,6 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .putInt("fontSize", settings.fontSize)
             .putString("furiganaMode", settings.furiganaMode.name)
             .putBoolean("readerHideFurigana", settings.furiganaMode == FuriganaMode.Hidden)
-            .putBoolean("readerAdaptiveFurigana", settings.adaptiveFurigana)
             .putString("readerViewMode", settings.viewMode.rawValue)
             .putBoolean("continuousMode", settings.continuousMode)
             .putInt("visualNovelRevealSpeed", settings.visualNovelRevealSpeed.coerceVisualNovelRevealSpeed())
@@ -739,7 +718,6 @@ class ReaderSettingsRepository(
                 .orEmpty(),
             fontSize = this[KEY_FONT_SIZE] ?: 22,
             furiganaMode = FuriganaMode.fromStorage(this[KEY_FURIGANA_MODE], this[KEY_HIDE_FURIGANA] ?: false),
-            adaptiveFurigana = this[KEY_ADAPTIVE_FURIGANA] ?: false,
             viewMode = ReaderViewMode.fromStorage(
                 this[KEY_READER_VIEW_MODE],
                 legacyContinuousMode = this[KEY_CONTINUOUS_MODE] ?: false,
@@ -823,7 +801,6 @@ class ReaderSettingsRepository(
         this[KEY_FONT_SIZE] = settings.fontSize
         this[KEY_FURIGANA_MODE] = settings.furiganaMode.name
         this[KEY_HIDE_FURIGANA] = settings.furiganaMode == FuriganaMode.Hidden
-        this[KEY_ADAPTIVE_FURIGANA] = settings.adaptiveFurigana
         this[KEY_READER_VIEW_MODE] = settings.viewMode.rawValue
         this[KEY_CONTINUOUS_MODE] = settings.continuousMode
         this[KEY_VISUAL_NOVEL_REVEAL_SPEED] = settings.visualNovelRevealSpeed.coerceVisualNovelRevealSpeed()
@@ -950,7 +927,6 @@ class ReaderSettingsRepository(
         private val KEY_FONT_SIZE = intPreferencesKey("fontSize")
         private val KEY_FURIGANA_MODE = stringPreferencesKey("furiganaMode")
         private val KEY_HIDE_FURIGANA = booleanPreferencesKey("readerHideFurigana")
-        private val KEY_ADAPTIVE_FURIGANA = booleanPreferencesKey("readerAdaptiveFurigana")
         private val KEY_READER_VIEW_MODE = stringPreferencesKey("readerViewMode")
         private val KEY_CONTINUOUS_MODE = booleanPreferencesKey("continuousMode")
         private val KEY_VISUAL_NOVEL_REVEAL_SPEED = intPreferencesKey("visualNovelRevealSpeed")
@@ -1137,7 +1113,6 @@ private data class ProfileReaderAppearanceSettings(
     val fontSize: Int = 22,
     val furiganaMode: FuriganaMode? = null,
     val hideFurigana: Boolean = false,
-    val adaptiveFurigana: Boolean = false,
     val viewMode: ReaderViewMode? = null,
     val continuousMode: Boolean = false,
     val visualNovelRevealSpeed: Int = 45,
@@ -1201,7 +1176,6 @@ private fun ReaderSettings.toProfileAppearanceSettings(): ProfileReaderAppearanc
         fontSize = fontSize,
         furiganaMode = furiganaMode,
         hideFurigana = furiganaMode == FuriganaMode.Hidden,
-        adaptiveFurigana = adaptiveFurigana,
         viewMode = viewMode,
         continuousMode = continuousMode,
         visualNovelRevealSpeed = visualNovelRevealSpeed.coerceVisualNovelRevealSpeed(),
@@ -1264,7 +1238,6 @@ private fun ReaderSettings.withProfileAppearance(appearance: ProfileReaderAppear
         fontVariantSelections = appearance.fontVariantSelections,
         fontSize = appearance.fontSize,
         furiganaMode = appearance.furiganaMode ?: FuriganaMode.fromStorage(null, appearance.hideFurigana),
-        adaptiveFurigana = appearance.adaptiveFurigana,
         viewMode = appearance.viewMode ?: if (appearance.continuousMode) {
             ReaderViewMode.Continuous
         } else {

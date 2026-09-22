@@ -714,7 +714,6 @@ class ReaderWebViewStateHolderTest {
         assertEquals(4, furiganaKeys.toSet().size)
         assertFalse(base.readerContentReloadKey() == base.copy(verticalWriting = false).readerContentReloadKey())
         assertFalse(base.readerContentReloadKey() == base.copy(paragraphSpacing = 1.2).readerContentReloadKey())
-        assertFalse(base.readerContentReloadKey() == base.copy(adaptiveFurigana = true).readerContentReloadKey())
     }
 
     @Test

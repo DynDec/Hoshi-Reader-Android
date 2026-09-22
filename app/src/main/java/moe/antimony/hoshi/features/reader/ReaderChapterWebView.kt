@@ -56,7 +56,6 @@ import moe.antimony.hoshi.epub.HighlightColor
 import moe.antimony.hoshi.features.dictionary.DictionarySettings
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import moe.antimony.hoshi.webview.applyHoshiWebViewSecurityDefaults
-import moe.antimony.hoshi.webview.applyHoshiReaderTextDefaults
 
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
@@ -262,7 +261,6 @@ internal fun ChapterWebView(
         factory = { context ->
             HoshiReaderWebView(context).apply {
                 applyHoshiWebViewSecurityDefaults()
-                applyHoshiReaderTextDefaults(readerSettings.adaptiveFurigana)
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
                 this.onHighlightChanged = { color, id, result ->
@@ -490,7 +488,6 @@ internal fun ChapterWebView(
                         restoreToken = restoreToken,
                     )
                 }
-                webView.applyHoshiReaderTextDefaults(readerSettings.adaptiveFurigana)
                 webView.loadUrl(baseUrl)
             }
         },
@@ -1015,32 +1012,6 @@ private fun readerAppearanceScript(
         })();
     """.trimIndent()
 }
-
-private fun readerSelectionPreviewConfigurationScript(
-    darkMode: Boolean,
-    eInkMode: Boolean,
-    verticalWriting: Boolean,
-): String = """
-    window.hoshiSelection?.configure?.({
-      previewSelection: function(selectionApi) {
-        var payload = {
-          rects: selectionApi.selectionRects(1),
-          darkMode: $darkMode,
-          eInkMode: $eInkMode,
-          verticalWriting: $verticalWriting
-        };
-        if (window.hoshiReaderPopupHost?.previewRootSelection) {
-          window.hoshiReaderPopupHost.previewRootSelection(payload);
-        } else {
-          window.__hoshiPendingReaderSelectionPreview = payload;
-        }
-      },
-      clearSelectionPreview: function() {
-        window.__hoshiPendingReaderSelectionPreview = null;
-        window.hoshiReaderPopupHost?.clearRootSelectionPreview?.();
-      }
-    });
-""".trimIndent()
 
 private fun String.scriptTagBody(): String =
     substringAfter("<script>").substringBeforeLast("</script>").trim()

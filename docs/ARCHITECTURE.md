@@ -244,6 +244,14 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
 
 ## Reader
 
+- Fork-specific borderless inset policy lives in `ReaderBorderlessLayout.kt`.
+  `ReaderSettings` retains the existing persisted fields; effective values never
+  overwrite configured padding or safe areas, so disabling border removal restores
+  the normal layout. Its regression tests live in `ReaderBorderlessLayoutTest`.
+- Reader selection-preview callbacks live in `reader-selection-preview.js`, loaded
+  alongside shared selection by `ReaderWebAssets`. `ReaderSelectionPreview.kt`
+  sends typed appearance configuration on chapter setup and appearance updates;
+  the asset owns queuing and clearing previews while the popup host loads.
 - `ReaderFontManager` owns the app-private font library under `Fonts/`, exposes
   an immutable revisioned family/variant state, groups user TTF/OTF files by
   bounded SFNT metadata, and keeps legacy basename-only WOFF/WOFF2 and malformed
@@ -278,17 +286,6 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   restore setup replays settings, highlights and cues, then releases queued
   Sasayaki presentation. Released WebViews reject late JS results and
   popup/selection bridge events.
-- Reader chapter WebViews expose an opt-in Adaptive Furigana appearance setting.
-  Disabled chapters retain Android WebView's 8px minimum font size, fixed
-  `0.45em` furigana, and no calibration. Enabled chapters use a 1px minimum
-  font size; visible ruby in vertical paginated mode is calibrated after fonts
-  and images settle, measures the chapter's typography groups, and exposes one
-  chapter-wide `--hoshi-furigana-scale`, selecting the largest fitting value
-  from `0.45em` down to `0.30em` in `0.005em` steps when ruby advance is within
-  `0.5px` of plain text. At the lower bound it accepts residual widening rather
-  than increasing the configured line height. Horizontal, continuous, VN, and
-  hidden-furigana paths receive no adaptive calibration. Other Hoshi WebViews
-  keep their existing platform text defaults.
 - Reader layout modes are WebView-backed assets for paginated, continuous, and
   VN reading. Kotlin selects the asset, injects typed settings, and keeps
   persisted progress as chapter progress mapped to whole-book character count.

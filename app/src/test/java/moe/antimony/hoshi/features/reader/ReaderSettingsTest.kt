@@ -114,7 +114,6 @@ class ReaderSettingsTest {
         assertFalse(settings.eInkMode)
         assertEquals(true, settings.verticalWriting)
         assertEquals(22, settings.fontSize)
-        assertFalse(settings.adaptiveFurigana)
         assertEquals(5, settings.horizontalPadding)
         assertEquals(0, settings.verticalPadding)
         assertEquals(30, settings.topSafeAreaDp)
@@ -155,27 +154,6 @@ class ReaderSettingsTest {
         assertEquals(32, 31.coerceReaderTopSafeAreaDp())
         assertEquals(40, 39.coerceReaderTopSafeAreaDp())
         assertEquals(72, 73.coerceReaderTopSafeAreaDp())
-    }
-
-    @Test
-    fun removingVerticalBordersUsesCompactEffectiveInsetsAndRestoresConfiguredValues() {
-        val configured = ReaderSettings(
-            verticalPadding = 12,
-            topSafeAreaDp = 40,
-            bottomSafeAreaDp = 46,
-        )
-
-        val compact = configured.copy(removeVerticalBorders = true)
-
-        assertEquals(12, compact.verticalPadding)
-        assertEquals(40, compact.topSafeAreaDp)
-        assertEquals(46, compact.bottomSafeAreaDp)
-        assertEquals(0, compact.effectiveVerticalPadding)
-        assertEquals(10, compact.effectiveTopSafeAreaDp)
-        assertEquals(6, compact.effectiveBottomSafeAreaDp)
-        assertEquals(12, compact.copy(removeVerticalBorders = false).effectiveVerticalPadding)
-        assertEquals(40, compact.copy(removeVerticalBorders = false).effectiveTopSafeAreaDp)
-        assertEquals(46, compact.copy(removeVerticalBorders = false).effectiveBottomSafeAreaDp)
     }
 
     @Test
@@ -758,18 +736,6 @@ class ReaderSettingsTest {
         assertTrue(css.contains("ruby > rt, ruby > rp"))
         assertTrue(css.contains("-webkit-user-select: none;"))
         assertTrue(css.contains("user-select: none;"))
-        assertTrue(css.contains("--hoshi-furigana-scale: 0.45em;"))
-        assertTrue(css.contains("font-size: var(--hoshi-furigana-scale, 0.45em);"))
-    }
-
-    @Test
-    fun dimmedFuriganaKeepsAdaptiveSizingAndDimmedOpacity() {
-        val css = ReaderContentStyles.styleTag(
-            ReaderSettings(furiganaMode = FuriganaMode.Dimmed, adaptiveFurigana = true),
-        )
-
-        assertTrue(css.contains("font-size: var(--hoshi-furigana-scale, 0.45em);"))
-        assertTrue(css.contains("ruby > rt, ruby > rp { opacity: 0.4 !important; }"))
     }
 
     @Test

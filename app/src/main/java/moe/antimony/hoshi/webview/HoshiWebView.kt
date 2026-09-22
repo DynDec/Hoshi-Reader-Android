@@ -10,7 +10,6 @@ internal interface HoshiWebViewSettings {
     var domStorageEnabled: Boolean
     var allowFileAccess: Boolean
     var allowContentAccess: Boolean
-    var minimumFontSize: Int
     var forceDarkAllowed: Boolean
     var algorithmicDarkeningAllowed: Boolean
 }
@@ -24,22 +23,9 @@ internal fun HoshiWebViewSettings.applyHoshiWebViewSecurityDefaults() {
     algorithmicDarkeningAllowed = false
 }
 
-internal fun HoshiWebViewSettings.applyHoshiReaderTextDefaults() {
-    applyHoshiReaderTextDefaults(adaptiveFurigana = false)
-}
-
-internal fun HoshiWebViewSettings.applyHoshiReaderTextDefaults(adaptiveFurigana: Boolean) {
-    // Adaptive furigana needs CSS-sized ruby annotations below WebView's former 8px floor.
-    minimumFontSize = if (adaptiveFurigana) 1 else 8
-}
-
 fun WebView.applyHoshiWebViewSecurityDefaults() {
     AndroidHoshiWebViewSettings(this).applyHoshiWebViewSecurityDefaults()
     disableNativeOverscrollStretch()
-}
-
-fun WebView.applyHoshiReaderTextDefaults(adaptiveFurigana: Boolean = false) {
-    AndroidHoshiWebViewSettings(this).applyHoshiReaderTextDefaults(adaptiveFurigana)
 }
 
 fun WebView.disableNativeOverscrollStretch() {
@@ -74,12 +60,6 @@ private class AndroidHoshiWebViewSettings(
         get() = settings.allowContentAccess
         set(value) {
             settings.allowContentAccess = value
-        }
-
-    override var minimumFontSize: Int
-        get() = settings.minimumFontSize
-        set(value) {
-            settings.minimumFontSize = value
         }
 
     override var forceDarkAllowed: Boolean

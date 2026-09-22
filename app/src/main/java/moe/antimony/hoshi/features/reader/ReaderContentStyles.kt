@@ -206,8 +206,8 @@ internal object ReaderContentStyles {
         }
         val furiganaCss = when (settings.furiganaMode) {
             FuriganaMode.Hidden -> "rt { display: none !important; }"
-            FuriganaMode.Dimmed -> "rt { font-size: var(--hoshi-furigana-scale, 0.45em); } ruby > rt, ruby > rp { opacity: 0.4 !important; }"
-            FuriganaMode.Off, FuriganaMode.Toggle -> "rt { font-size: var(--hoshi-furigana-scale, 0.45em); }"
+            FuriganaMode.Dimmed -> "rt { font-size: 0.45em; } ruby > rt, ruby > rp { opacity: 0.4 !important; }"
+            FuriganaMode.Off, FuriganaMode.Toggle -> "rt { font-size: 0.45em; }"
         }
         val generatedLayout = ReaderGeneratedLayout.from(settings)
         val layoutCss = when (settings.viewMode) {

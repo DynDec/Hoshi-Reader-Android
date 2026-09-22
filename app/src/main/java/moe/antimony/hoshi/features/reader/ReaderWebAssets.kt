@@ -37,7 +37,8 @@ internal data class ReaderWebAssets(
                 languageJapaneseJs = context.readAsset("hoshi-web/shared/language-ja.js"),
                 selectionJapaneseJs = context.readAsset("hoshi-web/shared/selection-ja.js"),
                 selectionEnglishJs = context.readAsset("hoshi-web/shared/selection-en.js"),
-                selectionJs = context.readAsset("hoshi-web/shared/selection.js"),
+                selectionJs = context.readAsset("hoshi-web/shared/selection.js") + "\n" +
+                    context.readAsset("hoshi-web/reader/reader-selection-preview.js"),
                 readerPaginatedJs = context.readAsset("hoshi-web/reader/reader-paginated.js"),
                 readerContinuousJs = context.readAsset("hoshi-web/reader/reader-continuous.js"),
                 readerVisualNovelJs = context.readAsset("hoshi-web/reader/reader-visual-novel.js"),

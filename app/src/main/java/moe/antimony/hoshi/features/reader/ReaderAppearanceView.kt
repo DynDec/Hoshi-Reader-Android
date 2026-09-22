@@ -377,14 +377,6 @@ private fun ReaderAppearanceContent(
                         },
                         palette = palette,
                     )
-                    AppearanceDivider(palette)
-                    SwitchRow(
-                        label = stringResource(R.string.reader_appearance_adaptive_furigana),
-                        checked = settings.adaptiveFurigana,
-                        onCheckedChange = { checked ->
-                            onSettingsChange { current -> current.copy(adaptiveFurigana = checked) }
-                        },
-                    )
                 }
                 AppearanceSection(title = stringResource(R.string.reader_appearance_layout), palette = palette) {
                     val paginatedLabel = stringResource(R.string.reader_appearance_paginated)
