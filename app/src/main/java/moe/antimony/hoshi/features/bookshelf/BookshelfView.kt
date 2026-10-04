@@ -39,10 +39,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
@@ -71,7 +68,6 @@ import androidx.compose.material.icons.rounded.Translate
 import moe.antimony.hoshi.ui.HoshiAlertDialog as AlertDialog
 import moe.antimony.hoshi.ui.HoshiButton as Button
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import moe.antimony.hoshi.ui.HoshiDropdownMenu as DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -120,14 +116,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
@@ -143,7 +135,6 @@ import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.sync.DriveAuthStatus
 import moe.antimony.hoshi.features.sync.SyncDirection
 import moe.antimony.hoshi.features.sync.SyncMode
-import moe.antimony.hoshi.features.sync.SyncProvider
 import moe.antimony.hoshi.features.sync.SyncSettings
 import moe.antimony.hoshi.importing.DirectoryImportContent
 import moe.antimony.hoshi.importing.ImportFileType
@@ -165,7 +156,7 @@ import moe.antimony.hoshi.ui.theme.LocalHoshiEInkMode
 fun BookshelfView(
     pendingImportUri: Uri? = null,
     onPendingImportConsumed: () -> Unit = {},
-    onOpenReader: (String, Boolean) -> Unit,
+    onOpenReader: (String) -> Unit,
     refreshKey: Int = 0,
     layoutSpec: MainShellLayoutSpec,
     hideBookshelfProgress: Boolean,
@@ -251,9 +242,9 @@ fun BookshelfView(
         booksViewModel.reloadBookEntries()
     }
 
-    LaunchedEffect(syncSettings.enabled, syncSettings.provider, refreshKey) {
+    LaunchedEffect(syncSettings.enabled, refreshKey) {
         driveAuthStatus = if (syncSettings.enabled) {
-            appContainer.googleDriveAuth.status()
+            appContainer.deviceCodeDriveAuthorizer.status()
         } else {
             null
         }
@@ -271,7 +262,7 @@ fun BookshelfView(
 
     LaunchedEffect(uiState.openReaderBookId) {
         val bookId = uiState.openReaderBookId ?: return@LaunchedEffect
-        onOpenReader(bookId, uiState.openReaderSkipSync)
+        onOpenReader(bookId)
         booksViewModel.consumeOpenReaderEvent()
     }
 
@@ -417,31 +408,18 @@ fun BookshelfView(
             onDismissRequest = { deleteCandidate = null },
             title = { Text(stringResource(R.string.bookshelf_delete_book_title_format, candidate.displayTitle)) },
             confirmButton = {
-                Column(Modifier.fillMaxWidth()) {
-                    if (syncSettings.enabled && syncSettings.provider == SyncProvider.Gdrive && candidate.metadata.id in uiState.canDeleteLocalBookIds) {
-                        TextButton(
-                            onClick = {
-                                booksViewModel.deleteLocalBook(candidate)
-                                deleteCandidate = null
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(stringResource(R.string.sync_delete_local))
-                        }
-                    }
-                    TextButton(
-                        onClick = {
-                            booksViewModel.deleteBook(candidate)
-                            deleteCandidate = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    ) {
-                        Text(stringResource(if (syncSettings.enabled && syncSettings.provider == SyncProvider.Gdrive) R.string.sync_delete_everywhere else R.string.action_delete))
-                    }
-                    TextButton(onClick = { deleteCandidate = null }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.action_cancel))
-                    }
+                TextButton(
+                    onClick = {
+                        booksViewModel.deleteBook(candidate)
+                        deleteCandidate = null
+                    },
+                ) {
+                    Text(stringResource(R.string.action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteCandidate = null }) {
+                    Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -781,7 +759,7 @@ internal fun shouldEnableBookshelfPullRefresh(
     isSelecting: Boolean,
     fileTaskBlocked: Boolean,
 ): Boolean =
-    syncSettings.enabled && authStatus == DriveAuthStatus.Connected &&
+    shouldLoadRemoteBooks(syncSettings, authStatus ?: DriveAuthStatus.NotConnected) &&
         hasLoadedBooks &&
         !isSelecting &&
         !fileTaskBlocked
@@ -1090,7 +1068,6 @@ private fun BooksTab(
                                         BookGridCell(
                                             entry = entry,
                                             progress = bookProgressById[entry.metadata.id] ?: 0.0,
-                                            downloadProgress = remoteImportProgressById[entry.metadata.id],
                                             coverSource = coverSourcesById[entry.metadata.id],
                                             coverMode = coverMode,
                                             hideProgress = hideBookshelfProgress,
@@ -1456,7 +1433,6 @@ private fun BookshelfSectionHeader(
 private fun BookGridCell(
     entry: BookEntry,
     progress: Double,
-    downloadProgress: Double?,
     coverSource: BookCoverSource?,
     coverMode: BookshelfCoverMode,
     hideProgress: Boolean,
@@ -1530,34 +1506,13 @@ private fun BookGridCell(
             Spacer(Modifier.height(6.dp))
         }
         Text(
-            text = buildAnnotatedString {
-                if (entry.metadata.epub == null) {
-                    appendInlineContent("cloud")
-                    append(" ")
-                }
-                append(entry.displayTitle)
-            },
-            inlineContent = mapOf(
-                "cloud" to InlineTextContent(
-                    Placeholder(1.em, 1.em, PlaceholderVerticalAlign.TextCenter),
-                ) {
-                    Icon(
-                        Icons.Rounded.CloudDownload,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                },
-            ),
+            text = entry.displayTitle,
             style = layoutSpec.bookTitleTextStyle.toTextStyle(),
             fontWeight = layoutSpec.bookTitleFontWeight.toFontWeight(),
             color = MaterialTheme.colorScheme.onBackground,
-            maxLines = if (downloadProgress == null) 2 else 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        downloadProgress?.let { value ->
-            LinearProgressIndicator(progress = { value.toFloat() }, modifier = Modifier.fillMaxWidth())
-        }
     }
 }
 
@@ -1698,7 +1653,7 @@ private fun BookContextMenu(
         onDismissRequest = onDismiss,
     ) {
         if (syncSettings.enabled) {
-            if (syncSettings.provider == SyncProvider.Ttu && syncSettings.mode == SyncMode.Manual) {
+            if (syncSettings.mode == SyncMode.Manual) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bookshelf_sync)) },
                     trailingIcon = {
@@ -1753,7 +1708,6 @@ private fun BookContextMenu(
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.bookshelf_mark_read)) },
-            enabled = entry.metadata.epub != null,
             onClick = {
                 onMarkReadCandidate(entry)
                 onDismiss()
@@ -1761,7 +1715,6 @@ private fun BookContextMenu(
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.bookshelf_export_epub)) },
-            enabled = entry.metadata.epub != null,
             onClick = {
                 onExportCandidate(entry)
                 onDismiss()

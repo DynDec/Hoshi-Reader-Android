@@ -27,8 +27,6 @@ internal interface SasayakiPlaybackControllerContract {
     val rate: Float
     val audioStorageSummary: String
 
-    suspend fun flushSaves()
-    fun applySyncedPlayback(value: SasayakiPlaybackData)
     fun setDelay(value: Double)
     fun setRate(value: Float)
     fun importAudio(audioUri: Uri, copiedAudioFileName: String?)
@@ -153,17 +151,6 @@ internal class SasayakiPlaybackController(
         if (restoreAudioOnCreate) {
             restoreAudio()
         }
-    }
-
-    override suspend fun flushSaves() {
-        playbackPersistence.flush()
-    }
-
-    override fun applySyncedPlayback(value: SasayakiPlaybackData) {
-        playbackPersistence.applySyncedPlayback(value)
-        playbackState.applySyncedPosition(value.lastPosition)
-        playbackLifecycle.setRate(value.rate)
-        playbackLifecycle.beginSeek(value.lastPosition, startPlayback = isPlaying, updateCue = false, savePosition = false, displayCue = null)
     }
 
     override fun setDelay(value: Double) {

@@ -45,8 +45,6 @@ data class BookshelfUiState(
     val statusMessage: UiText? = null,
     val errorMessage: UiText? = null,
     val openReaderBookId: String? = null,
-    val openReaderSkipSync: Boolean = false,
-    val canDeleteLocalBookIds: Set<String> = emptySet(),
     val shelfCreationMoveStatus: ShelfCreationMoveStatus = ShelfCreationMoveStatus.Idle,
     val shelfCreationMoveDialog: ShelfCreationMoveDialogState? = null,
 )
@@ -72,7 +70,6 @@ data class BookshelfLoadResult(
     val coverSourcesById: Map<String, BookCoverSource>,
     val shelves: List<BookShelf>,
     val settings: BookshelfSettings,
-    val canDeleteLocalBookIds: Set<String> = emptySet(),
 )
 
 data class RemoteBookshelfLoadResult(

@@ -70,10 +70,6 @@ class SasayakiPlayer private constructor(
     val rate: Float get() = controller.rate
     val audioStorageSummary: String get() = controller.audioStorageSummary
 
-    suspend fun flushSaves() = controller.flushSaves()
-
-    fun applySyncedPlayback(value: SasayakiPlaybackData) = controller.applySyncedPlayback(value)
-
     fun setDelay(value: Double) {
         controller.setDelay(value)
     }

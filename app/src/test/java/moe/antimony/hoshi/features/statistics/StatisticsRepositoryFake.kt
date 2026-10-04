@@ -11,18 +11,23 @@ internal open class StatisticsRepositoryFake : StatisticsRepository {
         check(!failWrites)
         archiveCount = 0
     }
-    override suspend fun editSession(folder: String, id: String, characters: Int?, readingTime: Double?) {
+    override suspend fun updateDay(folder: String, dateKey: String, characters: Int, totalMinutes: Int) {
         check(!failWrites)
         storedBook = storedBook?.let { book ->
-            book.copy(sessions = book.sessions.mapValues { (key, change) ->
-                if (key == id) change.replacing(change.value!!.copy(charactersRead = characters ?: change.value.charactersRead, readingTime = readingTime ?: change.value.readingTime)) else change
+            book.copy(statistics = book.statistics.map {
+                if (it.dateKey == dateKey) it.copy(charactersRead = characters, readingTime = totalMinutes * 60.0) else it
             })
         }
     }
-    override suspend fun deleteSessions(folder: String, ids: Collection<String>) {
+    override suspend fun deleteDay(folder: String, dateKey: String) {
         check(!failWrites)
         storedBook = storedBook?.let { book ->
-            book.copy(sessions = book.sessions.mapValues { (id, change) -> if (id in ids) change.replacing(null) else change })
+            book.copy(statistics = book.statistics.filterNot { it.dateKey == dateKey })
+                .takeUnless { it.isArchived && it.statistics.isEmpty() }
         }
+    }
+    override suspend fun deleteAll(folder: String) {
+        check(!failWrites)
+        storedBook = storedBook?.copy(statistics = emptyList())?.takeUnless { it.isArchived }
     }
 }

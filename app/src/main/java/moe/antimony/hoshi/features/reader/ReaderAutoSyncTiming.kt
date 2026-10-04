@@ -1,7 +1,5 @@
 package moe.antimony.hoshi.features.reader
 
-import moe.antimony.hoshi.features.sync.SyncProvider
-
 internal enum class ReaderProgressPersistenceEvent {
     PaginatedPageTurnCompleted,
     ContinuousScrollChanged,
@@ -37,11 +35,10 @@ internal data class ReaderLifecycleAutoSyncPlan(
 internal fun readerLifecycleAutoSyncPlan(
     event: ReaderLifecycleAutoSyncEvent,
     inactiveElapsedMillis: Long? = null,
-    provider: SyncProvider = SyncProvider.Ttu,
 ): ReaderLifecycleAutoSyncPlan = when (event) {
     ReaderLifecycleAutoSyncEvent.Resume -> ReaderLifecycleAutoSyncPlan(
         importOnForeground = inactiveElapsedMillis != null &&
-            (provider == SyncProvider.Gdrive || inactiveElapsedMillis >= AutoSyncForegroundThresholdMillis),
+            inactiveElapsedMillis >= AutoSyncForegroundThresholdMillis,
     )
     ReaderLifecycleAutoSyncEvent.Pause,
     ReaderLifecycleAutoSyncEvent.Dispose -> ReaderLifecycleAutoSyncPlan(

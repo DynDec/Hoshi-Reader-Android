@@ -10,7 +10,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -25,7 +24,6 @@ class SasayakiPlaybackPersistenceState(
     var playback by mutableStateOf(initialPlayback ?: SasayakiPlaybackData(lastPosition = 0.0))
         private set
 
-    private var saveJob: Job? = null
     private val saveLock = Any()
     private var pendingSave: SasayakiPlaybackData? = null
     private var saveWorkerRunning = false
@@ -34,14 +32,6 @@ class SasayakiPlaybackPersistenceState(
     val rate: Float get() = playback.rate
     val audioStorageSummary: String
         get() = audioSourceRepository.storageSummary(playback)
-
-    suspend fun flush() {
-        saveJob?.join()
-    }
-
-    fun applySyncedPlayback(value: SasayakiPlaybackData) {
-        playback = value
-    }
 
     fun setDelay(value: Double) {
         playback = playback.copy(delay = value)
@@ -82,7 +72,7 @@ class SasayakiPlaybackPersistenceState(
             }
         }
         if (shouldStartWorker) {
-            saveJob = persistenceScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            persistenceScope.launch(start = CoroutineStart.UNDISPATCHED) {
                 drainSaves()
             }
         }

@@ -3,13 +3,12 @@ package moe.antimony.hoshi.navigation
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import moe.antimony.hoshi.features.sync.resolveTtuCharacterPosition
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.BookInfo
 import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubBookParser
-import moe.antimony.hoshi.epub.ReadingSessions
+import moe.antimony.hoshi.epub.ReadingStatistics
 import moe.antimony.hoshi.epub.ReaderRouteBookRepository
 import java.io.File
 
@@ -27,13 +26,12 @@ internal class ReaderRouteStateHolder(
                 ?: error("Book not found.")
             val cachedBookInfo = repository.loadReaderBookInfo(entry.root)
             val parsedBook = parser.parse(entry.root, cachedBookInfo)
-            val currentMetadata = repository.loadBookEntry(bookId)!!.metadata
-            val metadata = currentMetadata.copy(
-                title = currentMetadata.title ?: parsedBook.title,
-                cover = currentMetadata.cover ?: repository.metadataCoverPath(entry.root, parsedBook.coverHref),
+            val metadata = entry.metadata.copy(
+                title = parsedBook.title,
+                cover = repository.metadataCoverPath(entry.root, parsedBook.coverHref) ?: entry.metadata.cover,
                 folder = entry.root.name,
                 lastAccess = repository.currentAppleReferenceDateSeconds(),
-                bookLanguage = currentMetadata.bookLanguage ?: parsedBook.language,
+                bookLanguage = entry.metadata.bookLanguage ?: parsedBook.language,
             )
             repository.saveMetadata(
                 entry.root,
@@ -44,20 +42,13 @@ internal class ReaderRouteStateHolder(
             if (cachedBookInfo != displayBook.bookInfo) {
                 repository.saveBookInfo(entry.root, displayBook.bookInfo)
             }
-            if (cachedBookInfo == null) {
-                repository.loadBookmark(entry.root)?.let { bookmark ->
-                    val position = displayBook.bookInfo.resolveTtuCharacterPosition(bookmark.characterCount)
-                    repository.saveBookmark(entry.root, bookmark.copy(chapterIndex = position?.spineIndex ?: 0, progress = position?.progress ?: 0.0))
-                }
-            }
+            val bookCoverFile = resolveMetadataCoverFile(entry.root, metadata.cover)
             beforeBookmarkLoad(displayEntry)
-            val refreshed = repository.loadBookEntry(bookId)!!
-            val bookCoverFile = resolveMetadataCoverFile(entry.root, refreshed.metadata.cover)
             val bookmark = repository.loadBookmark(entry.root)
             ReaderRouteLoadState.Ready(
-                entry = refreshed,
+                entry = displayEntry,
                 bookRoot = entry.root,
-                book = displayBook.copy(title = refreshed.displayTitle),
+                book = displayBook,
                 bookCoverFile = bookCoverFile,
                 bookmark = bookmark,
             )
@@ -68,21 +59,19 @@ internal class ReaderRouteStateHolder(
         state: ReaderRouteLoadState.Ready,
         chapterIndex: Int,
         progress: Double,
-        statistics: ReadingSessions? = null,
+        statistics: List<ReadingStatistics>? = null,
         onBookmarkSaved: () -> Unit,
     ) {
         withContext(ioDispatcher) {
-            val old = repository.loadBookmark(state.bookRoot)
-            val count = state.book.characterCountAt(chapterIndex, progress)
             val bookmark = Bookmark(
                 chapterIndex = chapterIndex,
                 progress = progress,
-                characterCount = count,
-                lastModified = if (old?.characterCount == count) old.lastModified else repository.currentAppleReferenceDateSeconds(),
+                characterCount = state.book.characterCountAt(chapterIndex, progress),
+                lastModified = repository.currentAppleReferenceDateSeconds(),
             )
             repository.saveBookmark(state.bookRoot, bookmark)
             if (statistics != null) {
-                repository.saveTrackedSessions(state.bookRoot, statistics)
+                repository.saveTrackedStatistics(state.bookRoot, statistics)
             }
         }
         onBookmarkSaved()

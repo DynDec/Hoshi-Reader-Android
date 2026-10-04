@@ -23,18 +23,8 @@ class SyncSettingsRepositoryTest {
         repository().use { repository ->
             val settings = repository.settings.first()
 
-            assertEquals(SyncProvider.Gdrive, settings.provider)
             assertFalse(settings.enabled)
             assertTrue(settings.uploadBooks)
-        }
-    }
-
-    @Test
-    fun movesAnExistingLoginToTtuOnlyOnce() = runBlocking {
-        repository(hasTtuLogin = { true }).use { repository ->
-            assertEquals(SyncProvider.Ttu, repository.settings.first().provider)
-            repository.update { it.copy(provider = SyncProvider.Gdrive) }
-            assertEquals(SyncProvider.Gdrive, repository.settings.first().provider)
         }
     }
 
@@ -57,13 +47,13 @@ class SyncSettingsRepositoryTest {
         assertEquals(1, drive.clearCacheCalls)
     }
 
-    private fun repository(drive: DriveSyncDataSource = FakeDriveSyncDataSource(), hasTtuLogin: suspend () -> Boolean = { false }): RepositoryHandle {
+    private fun repository(drive: DriveSyncDataSource = FakeDriveSyncDataSource()): RepositoryHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
         val dataStore = PreferenceDataStoreFactory.create(
             scope = scope,
             produceFile = { tempFolder.newFile("sync-settings.preferences_pb") },
         )
-        return RepositoryHandle(SyncSettingsRepository(dataStore, drive, hasTtuLogin = hasTtuLogin), scope)
+        return RepositoryHandle(SyncSettingsRepository(dataStore, drive), scope)
     }
 
     private class RepositoryHandle(

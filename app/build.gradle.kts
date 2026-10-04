@@ -74,10 +74,6 @@ val sherpaOnnxArchive by configurations.creating {
     isCanBeConsumed = false
     isTransitive = false
 }
-val secrets = Properties().apply {
-    val secretsFile = rootProject.file("secrets.properties")
-    if (secretsFile.isFile) secretsFile.inputStream().use { load(it) }
-}
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_FILE").orNull
 val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
@@ -150,13 +146,6 @@ android {
     }
 
     buildTypes {
-        configureEach {
-            val key = "HOSHI_GOOGLE_CLIENT_ID_${name.uppercase()}"
-            val clientId = providers.environmentVariable(key).getOrElse(secrets.getProperty(key, "")).trim()
-            buildConfigField("String", "HOSHI_GOOGLE_CLIENT_ID", "\"$clientId\"")
-            manifestPlaceholders["googleOAuthRedirectScheme"] = clientId.split('.').reversed().joinToString(".")
-                .ifEmpty { "moe.antimony.hoshi.$name.oauth" }
-        }
         debug {
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "Hoshi Debug"
@@ -220,9 +209,6 @@ androidComponents.onVariants { variant ->
 dependencies {
     implementation(files(prepareSherpa.map { it.outputDirectory.file("bindings.jar").get() }))
     sherpaOnnxArchive(sherpaOnnxArtifact)
-    implementation(libs.google.play.services.auth)
-    implementation(libs.kotlinx.coroutines.play.services)
-    implementation(libs.androidx.browser)
     implementation(libs.jsoup)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(platform(libs.androidx.compose.bom))

@@ -11,30 +11,28 @@ class BookWorkRegistry @Inject constructor() {
     private val deleting = mutableSetOf<File>()
 
     fun register(root: File, cancelAndJoin: suspend () -> Unit): AutoCloseable {
-        val key = root.canonicalFile
         synchronized(this) {
-            check(key.isDirectory && key !in deleting) { "Book is unavailable" }
-            check(key !in work) { "Book work is already running" }
-            work[key] = cancelAndJoin
+            check(root.isDirectory && root !in deleting) { "Book is unavailable" }
+            check(root !in work) { "Book work is already running" }
+            work[root] = cancelAndJoin
         }
         return AutoCloseable {
             synchronized(this) {
-                if (work[key] === cancelAndJoin) work.remove(key)
+                if (work[root] === cancelAndJoin) work.remove(root)
             }
         }
     }
 
     suspend fun <T> delete(root: File, action: suspend () -> T): T {
-        val key = root.canonicalFile
         val cancel = synchronized(this) {
-            check(deleting.add(key)) { "Book deletion is already running" }
-            work[key]
+            check(deleting.add(root)) { "Book deletion is already running" }
+            work[root]
         }
         try {
             cancel?.invoke()
             return action()
         } finally {
-            synchronized(this) { deleting.remove(key) }
+            synchronized(this) { deleting.remove(root) }
         }
     }
 }

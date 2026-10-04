@@ -190,7 +190,7 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
         AdvancedSettingsSection(
             rows = listOf(
                 AdvancedSettingsRow(
-                    titleRes = R.string.sync_title,
+                    titleRes = R.string.sync_ttu_sync,
                     destination = AdvancedDestination.Syncing,
                     icon = AdvancedSettingsIcon.Cloud,
                 ),

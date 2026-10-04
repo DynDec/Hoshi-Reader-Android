@@ -31,9 +31,9 @@ internal fun MutableList<NavKey>.replaceWithTopLevelRoute(
     notifyReaderRouteRemoved(hadReaderRoute, onReaderRouteRemoved)
 }
 
-internal fun MutableList<NavKey>.openReaderRoute(bookId: String, skipSyncOnOpen: Boolean = false) {
+internal fun MutableList<NavKey>.openReaderRoute(bookId: String) {
     replaceWithTopLevelRoute(AppRoute.BooksRoute)
-    add(AppRoute.ReaderRoute(bookId, skipSyncOnOpen))
+    add(AppRoute.ReaderRoute(bookId))
 }
 
 internal fun MutableList<NavKey>.removeReaderRoutes(
@@ -57,7 +57,7 @@ internal fun MutableList<NavKey>.returnFromMediaSession(
     bookId: String,
     onReaderRouteRemoved: () -> Unit = {},
 ) {
-    if ((lastOrNull() as? AppRoute.ReaderRoute)?.bookId == bookId) {
+    if (lastOrNull() == AppRoute.ReaderRoute(bookId)) {
         return
     }
     replaceWithTopLevelRoute(
