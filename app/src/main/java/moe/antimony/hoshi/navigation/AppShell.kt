@@ -8,6 +8,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +42,8 @@ import moe.antimony.hoshi.features.bookshelf.MainTab
 import moe.antimony.hoshi.features.bookshelf.SettingsDestination
 import moe.antimony.hoshi.features.bookshelf.SettingsTab
 import moe.antimony.hoshi.features.diagnostics.DiagnosticsView
+import moe.antimony.hoshi.features.dictionary.DictionarySearchSession
+import moe.antimony.hoshi.features.dictionary.rememberDictionarySearchSession
 import moe.antimony.hoshi.features.dictionary.DictionarySearchView
 import moe.antimony.hoshi.features.dictionary.DictionaryView
 import moe.antimony.hoshi.features.dictionary.PendingDictionaryLookupRequest
@@ -91,6 +94,7 @@ fun AppShell(
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.Books) }
     val booksBackStack = rememberNavBackStack(AppRoute.BooksRoute)
     val dictionaryBackStack = rememberNavBackStack(AppRoute.DictionaryRoute)
+    val dictionarySession = rememberDictionarySearchSession()
     val statisticsBackStack = rememberNavBackStack(AppRoute.StatisticsRoute)
     val settingsBackStack = rememberNavBackStack(AppRoute.SettingsRoute)
     val bookRepository = appContainer.bookRepository
@@ -275,6 +279,8 @@ fun AppShell(
                 )
                 AppRoute.DictionaryRoute -> TopLevelRouteContent(
                     selectedTab = MainTab.Dictionary,
+                    dictionarySession = dictionarySession,
+                    isActive = selectedTab == MainTab.Dictionary,
                     pendingImportUri = currentPendingImportUri,
                     onPendingImportConsumed = currentOnPendingImportConsumed,
                     readerSettings = currentReaderSettings,
@@ -402,15 +408,30 @@ fun AppShell(
         MainTab.Settings -> settingsEntries
     }
 
-    NavDisplay(
-        entries = currentEntries,
-        modifier = modifier,
-        onBack = ::popRoute,
-        sceneDecoratorStrategies = listOf(mainShellSceneDecorator),
-        transitionSpec = NoNavContentTransition,
-        popTransitionSpec = NoNavContentTransition,
-        predictivePopTransitionSpec = NoPredictiveNavContentTransition,
-    )
+    Box(modifier) {
+        RetainedTabContent(active = selectedTab == MainTab.Dictionary) {
+            NavDisplay(
+                entries = dictionaryEntries,
+                modifier = Modifier.fillMaxSize(),
+                onBack = ::popRoute,
+                sceneDecoratorStrategies = listOf(mainShellSceneDecorator),
+                transitionSpec = NoNavContentTransition,
+                popTransitionSpec = NoNavContentTransition,
+                predictivePopTransitionSpec = NoPredictiveNavContentTransition,
+            )
+        }
+        if (selectedTab != MainTab.Dictionary) {
+            NavDisplay(
+                entries = currentEntries,
+                modifier = Modifier.fillMaxSize(),
+                onBack = ::popRoute,
+                sceneDecoratorStrategies = listOf(mainShellSceneDecorator),
+                transitionSpec = NoNavContentTransition,
+                popTransitionSpec = NoNavContentTransition,
+                predictivePopTransitionSpec = NoPredictiveNavContentTransition,
+            )
+        }
+    }
 }
 
 @Composable
@@ -445,6 +466,8 @@ private fun TopLevelRouteContent(
     dictionaryFocusRequestKey: Int,
     pendingDictionaryLookupRequest: PendingDictionaryLookupRequest? = null,
     onPendingDictionaryLookupConsumed: () -> Unit = {},
+    dictionarySession: DictionarySearchSession? = null,
+    isActive: Boolean = true,
     onSettingsDestination: (SettingsDestination) -> Unit = {},
     onOpenStatisticsSettings: () -> Unit = {},
     onOpenBookStatistics: (String) -> Unit = {},
@@ -461,6 +484,8 @@ private fun TopLevelRouteContent(
             modifier = Modifier.fillMaxSize(),
         )
         MainTab.Dictionary -> DictionarySearchView(
+            session = requireNotNull(dictionarySession),
+            isActive = isActive,
             readerSettings = readerSettings,
             focusRequestKey = dictionaryFocusRequestKey,
             pendingLookupRequest = pendingDictionaryLookupRequest,

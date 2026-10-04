@@ -43,6 +43,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import java.io.File
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.util.UUID
 import java.util.WeakHashMap
 import kotlin.math.abs
@@ -84,6 +86,7 @@ internal fun ChapterWebView(
     readerSettings: ReaderSettings,
     chapterHighlightsJson: String?,
     chapterSasayakiCuesJson: String?,
+    preserveSasayakiCueLayout: Boolean = false,
     sasayakiTextColor: Long,
     sasayakiBackgroundColor: Long,
     onTextSelected: (ReaderSelectionData, selectionRects: (Int, (List<ReaderSelectionRect>) -> Unit) -> Unit) -> Unit,
@@ -238,12 +241,12 @@ internal fun ChapterWebView(
             beforeVisible = currentOnBeforeRestoreVisible.value(restoredWebView),
         )
     }
-    LaunchedEffect(readerWebView, restoreToken, chapterSasayakiCuesJson, isWebViewRestoring) {
+    LaunchedEffect(readerWebView, restoreToken, chapterSasayakiCuesJson, preserveSasayakiCueLayout, isWebViewRestoring) {
         val webView = readerWebView ?: return@LaunchedEffect
         val cuesJson = chapterSasayakiCuesJson ?: return@LaunchedEffect
         if (isWebViewRestoring) return@LaunchedEffect
         if (webView.tag != restoreToken) return@LaunchedEffect
-        webView.applyReaderSasayakiCues(restoreToken, cuesJson)
+        webView.applyReaderSasayakiCues(restoreToken, cuesJson, preserveSasayakiCueLayout)
     }
     val handleRendererTerminated: (WebView) -> Unit = { view ->
         val readerView = view as HoshiReaderWebView
@@ -593,6 +596,9 @@ internal fun readerShouldReserveSasayakiTopToggle(bookRoot: File?, settings: Sas
 internal fun readerSelectionMaxLength(settings: DictionarySettings): Int =
     settings.normalized().scanLength
 
+internal fun WebView.readerNativeSelectionState(): StateFlow<Boolean>? =
+    (this as? HoshiReaderWebView)?.nativeSelectionState
+
 private class HoshiReaderWebView(context: Context) : WebView(context) {
     var isReleased = false
         private set
@@ -606,9 +612,12 @@ private class HoshiReaderWebView(context: Context) : WebView(context) {
 
     var onHighlightChanged: (HighlightColor, String, ReaderHighlightResult) -> Unit = { _, _, _ -> }
     private var nativeSelectionActionModeActive = false
+    private val nativeSelectionActivity = MutableStateFlow(false)
+    val nativeSelectionState: StateFlow<Boolean> get() = nativeSelectionActivity
     private var nativeSelectionActionMode: ActionMode? = null
     private var nativeSelectionContentRect: Rect? = null
     private var highlightColorPopup: PopupWindow? = null
+    private var selectionHighlightPending = false
 
     fun isNativeSelectionActionModeActive(): Boolean = nativeSelectionActionModeActive
     fun setNativeSelectionActionMode(mode: ActionMode?) {
@@ -619,6 +628,12 @@ private class HoshiReaderWebView(context: Context) : WebView(context) {
             nativeSelectionContentRect = null
             dismissHighlightColorPopup()
         }
+        updateNativeSelectionActivity()
+    }
+
+    private fun updateNativeSelectionActivity() {
+        nativeSelectionActivity.value =
+            nativeSelectionActionModeActive || selectionHighlightPending || highlightColorPopup != null
     }
 
     fun setNativeSelectionContentRect(rect: Rect) {
@@ -629,6 +644,7 @@ private class HoshiReaderWebView(context: Context) : WebView(context) {
         val anchor = nativeSelectionContentRect?.let { Rect(it) }
         evaluateJavascript(ReaderHighlightCommand.PrepareSelection.source) { result ->
             if (result?.trim() == "true") {
+                selectionHighlightPending = true
                 mode.finish()
                 post { showHighlightColorPicker(anchor) }
             }
@@ -667,7 +683,13 @@ private class HoshiReaderWebView(context: Context) : WebView(context) {
             isOutsideTouchable = true
             setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
             elevation = 8f * density
+            setOnDismissListener {
+                highlightColorPopup = null
+                updateNativeSelectionActivity()
+            }
         }
+        selectionHighlightPending = false
+        updateNativeSelectionActivity()
 
         val location = IntArray(2)
         getLocationOnScreen(location)
@@ -722,20 +744,25 @@ private class HoshiReaderWebView(context: Context) : WebView(context) {
     }
 
     fun createHighlightFromNativeSelection(color: HighlightColor) {
+        if (isReleased) return
         val mode = nativeSelectionActionMode
         val id = UUID.randomUUID().toString()
+        selectionHighlightPending = true
         dismissHighlightColorPopup()
         evaluateJavascript(ReaderHighlightCommand.Create(color, id).source) { result ->
             ReaderHighlightResult.fromWebViewResult(result)?.let { change ->
                 onHighlightChanged(color, id, change)
             }
             mode?.finish()
+            selectionHighlightPending = false
+            updateNativeSelectionActivity()
         }
     }
 
     private fun dismissHighlightColorPopup() {
         highlightColorPopup?.dismiss()
         highlightColorPopup = null
+        updateNativeSelectionActivity()
     }
 
     override fun startActionMode(callback: ActionMode.Callback): ActionMode? =
@@ -746,6 +773,7 @@ private class HoshiReaderWebView(context: Context) : WebView(context) {
 
     fun releaseForDestroy() {
         isReleased = true
+        selectionHighlightPending = false
         nativeSelectionActionMode?.finish()
         dismissHighlightColorPopup()
         setNativeSelectionActionMode(null)
@@ -1389,11 +1417,11 @@ private fun WebView.evaluateReaderSetupScript(
     evaluateJavascript(source, null)
 }
 
-private fun WebView.applyReaderSasayakiCues(loadKey: String, cuesJson: String) {
-    val appliedCues = ReaderAppliedSasayakiCues(loadKey, cuesJson)
+private fun WebView.applyReaderSasayakiCues(loadKey: String, cuesJson: String, preserveLayout: Boolean) {
+    val appliedCues = ReaderAppliedSasayakiCues(loadKey, cuesJson, preserveLayout)
     if (readerAppliedSasayakiCues[this] == appliedCues) return
     readerAppliedSasayakiCues[this] = appliedCues
-    evaluateJavascript(ReaderPaginationScripts.applySasayakiCuesInvocation(cuesJson), null)
+    evaluateJavascript(ReaderPaginationScripts.applySasayakiCuesInvocation(cuesJson, preserveLayout), null)
 }
 
 private fun releaseReaderWebView(webView: HoshiReaderWebView) {
@@ -1419,6 +1447,7 @@ private fun releaseReaderWebView(webView: HoshiReaderWebView) {
 private data class ReaderAppliedSasayakiCues(
     val loadKey: String,
     val cuesJson: String,
+    val preserveLayout: Boolean,
 )
 
 private val readerRestoreGenerations = WeakHashMap<WebView, Long>()
