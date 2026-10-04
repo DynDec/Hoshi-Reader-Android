@@ -339,6 +339,11 @@ Manual reader validation should cover:
   selections and a 10em buffer in both writing directions. Set
   `HOSHI_TEST_CHROMIUM` to a Chromium executable on hosts without the default
   Windows Chrome/Edge paths; missing Chromium is reported as a skipped test.
+  `ContinuousReaderBrowserTest` runs the Kotlin-composed document, generated CSS
+  and setup after actual browser navigation, including XHTML and decoded SVG
+  image resources. Set `HOSHI_TEST_EPUB_PATH` to optionally check a local EPUB.
+  On Android, open a book and switch chapters/modes while composition is pending;
+  confirm the source map, buffer and illustrations initialize together.
   On a data-preserving device, verify the localized toggle defaults off and is
   visible only in Continuous, then enable it and check restart restoration,
   bookmarks/search/highlights/lookup/Sasayaki, incoming synced source positions,

@@ -260,6 +260,12 @@ internal object ReaderContentStyles {
                     min-width: 0 !important;
                     min-height: 0 !important;
                 }
+                /* A merged source has an auto-sized body. Percentage SVG dimensions
+                   would resolve against that body and can collapse the illustration. */
+                [data-hoshi-source-index] svg[viewBox] {
+                    width: ${if (settings.verticalWriting) "auto" else "var(--hoshi-image-max-width, 100vw)"} !important;
+                    height: ${if (settings.verticalWriting) "var(--hoshi-image-max-height, 100vh)" else "auto"} !important;
+                }
                 """.trimIndent()
             }
             ReaderViewMode.VisualNovel -> {

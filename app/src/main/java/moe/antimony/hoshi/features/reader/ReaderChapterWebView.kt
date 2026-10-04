@@ -151,6 +151,9 @@ internal fun ChapterWebView(
             ContinuousGroupDocument.compose(book, readingGroup)
         }
     }
+    // Capture one composition snapshot: AndroidView callbacks must not read a newer
+    // document while retaining the setup script generated for the previous snapshot.
+    val preparedGroupDocument = groupDocument
     val currentOnContinuousSourcePosition = rememberUpdatedState(onContinuousSourcePosition)
     var readerWebView by remember { mutableStateOf<WebView?>(null) }
     val fontLibraryState by fontManager.libraryState.collectAsState()
@@ -229,7 +232,7 @@ internal fun ChapterWebView(
         chapterHighlightsJson,
         restoreToken,
         readerWebAssets,
-        groupDocument,
+        preparedGroupDocument,
     ) {
         readerSetupScript(
             initialProgress = chapterPosition.progress,
@@ -247,7 +250,7 @@ internal fun ChapterWebView(
             highlightsJson = chapterHighlightsJson,
             restoreToken = restoreToken,
             assets = readerWebAssets,
-            continuousSourcesJson = groupDocument?.sourcesJson,
+            continuousSourcesJson = preparedGroupDocument?.sourcesJson,
             continuousInitialSourceIndex = chapterPosition.index,
         )
     }
@@ -314,7 +317,7 @@ internal fun ChapterWebView(
                 ReaderLookupPopupWebBridge.install(this, readerPopupBridgeHolder, isActive = { !isReleased })
                 webViewClient = EpubWebViewClient(
                     book = book,
-                    mainDocument = groupDocument?.html?.let { baseUrl to it.toByteArray(Charsets.UTF_8) },
+                    mainDocument = preparedGroupDocument?.html?.let { baseUrl to it.toByteArray(Charsets.UTF_8) },
                     fontManager = fontManager,
                     onInternalLink = onInternalLink,
                     popupResourceHandler = { currentReaderPopupResourceHandler.value },
@@ -504,7 +507,7 @@ internal fun ChapterWebView(
                 }
             }
             webView.evaluateJavascript(readerAppearanceScript, null)
-            if (!readerWebViewReadyToLoad(webViewViewportSize) || readingGroup != null && groupDocument == null) return@AndroidView
+            if (!readerWebViewReadyToLoad(webViewViewportSize) || readingGroup != null && preparedGroupDocument == null) return@AndroidView
             if (webView.tag != restoreToken) {
                 if (!currentIsWebViewRestoring.value) {
                     currentOnRestoreStarted.value()
@@ -514,7 +517,7 @@ internal fun ChapterWebView(
                 webView.hideForReaderRestore()
                 webView.webViewClient = EpubWebViewClient(
                     book = book,
-                    mainDocument = groupDocument?.html?.let { baseUrl to it.toByteArray(Charsets.UTF_8) },
+                    mainDocument = preparedGroupDocument?.html?.let { baseUrl to it.toByteArray(Charsets.UTF_8) },
                     fontManager = fontManager,
                     onInternalLink = onInternalLink,
                     popupResourceHandler = { currentReaderPopupResourceHandler.value },
@@ -924,7 +927,7 @@ private class EpubWebViewClient(
     }
 }
 
-private fun readerSetupScript(
+internal fun readerSetupScript(
     initialProgress: Double,
     initialFragment: String?,
     settings: ReaderSettings,
