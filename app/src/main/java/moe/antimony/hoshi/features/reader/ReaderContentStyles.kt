@@ -243,6 +243,29 @@ internal object ReaderContentStyles {
                     $gridCss
                     text-orientation: mixed;
                 }
+                [data-hoshi-source-index], [data-hoshi-source-body] {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    color: var(--hoshi-text-color) !important;
+                    background: transparent !important;
+                    writing-mode: inherit !important;
+                }
+                [data-hoshi-source-body] {
+                    $bodyFontFamilyCss
+                    $bodyFontVariantCss
+                    font-size: ${settings.fontSize}px !important;
+                    $textSpacingCss
+                    width: auto !important;
+                    height: auto !important;
+                    min-width: 0 !important;
+                    min-height: 0 !important;
+                }
+                /* A merged source has an auto-sized body. Percentage SVG dimensions
+                   would resolve against that body and can collapse the illustration. */
+                [data-hoshi-source-index] svg[viewBox] {
+                    width: ${if (settings.verticalWriting) "auto" else "var(--hoshi-image-max-width, 100vw)"} !important;
+                    height: ${if (settings.verticalWriting) "var(--hoshi-image-max-height, 100vh)" else "auto"} !important;
+                }
                 """.trimIndent()
             }
             ReaderViewMode.VisualNovel -> {

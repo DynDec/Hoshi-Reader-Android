@@ -33,8 +33,8 @@ class ReaderGoToInputActionsTest {
     }
 
     @Test
-    fun goToSheetDefaultsToChapters() {
-        assertEquals(ReaderGoToTab.Chapters, readerGoToDefaultTab())
+    fun goToSheetDefaultsToGallery() {
+        assertEquals(ReaderGoToTab.Gallery, readerGoToDefaultTab())
     }
 
     @Test

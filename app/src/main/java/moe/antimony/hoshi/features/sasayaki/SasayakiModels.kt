@@ -15,6 +15,7 @@ data class SasayakiCueRange(
     val id: String,
     val start: Int,
     val length: Int,
+    val sourceIndex: Int? = null,
 )
 
 internal fun SasayakiMatchData.characterCoverageText(characterCount: Int): String {

@@ -43,10 +43,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import java.io.File
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import java.util.UUID
 import java.util.WeakHashMap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
@@ -65,6 +72,8 @@ internal fun ChapterWebView(
     book: EpubBook,
     chapterPosition: ReaderChapterPosition,
     chapterFragment: String?,
+    readingGroup: ContinuousReadingGroup? = null,
+    onContinuousSourcePosition: ((ReaderChapterPosition, Int, Boolean) -> Unit)? = null,
     webViewViewportSize: IntSize,
     onReaderViewportSizeChanged: (IntSize) -> Unit,
     onWebViewReady: (WebView) -> Unit,
@@ -136,6 +145,16 @@ internal fun ChapterWebView(
     }
     val continuousScrollProgressScheduler = remember { ReaderContinuousScrollProgressScheduler() }
     val chapter = book.chapters[chapterPosition.index]
+    var groupDocument by remember(book, readingGroup) { mutableStateOf<ContinuousGroupDocument?>(null) }
+    LaunchedEffect(book, readingGroup) {
+        if (readingGroup != null) groupDocument = withContext(Dispatchers.IO) {
+            ContinuousGroupDocument.compose(book, readingGroup)
+        }
+    }
+    // Capture one composition snapshot: AndroidView callbacks must not read a newer
+    // document while retaining the setup script generated for the previous snapshot.
+    val preparedGroupDocument = groupDocument
+    val currentOnContinuousSourcePosition = rememberUpdatedState(onContinuousSourcePosition)
     var readerWebView by remember { mutableStateOf<WebView?>(null) }
     val fontLibraryState by fontManager.libraryState.collectAsState()
     val fontRenderSpec = remember(
@@ -151,7 +170,10 @@ internal fun ChapterWebView(
         )
     }
     val fontFaceUrl = fontRenderSpec.faces.firstOrNull()?.url
-    val baseUrl = remember(chapter) { "https://appassets.androidplatform.net/epub/${chapter.href}" }
+    val baseUrl = remember(chapter, readingGroup) {
+        if (readingGroup != null && readingGroup.indices.size > 1) "https://appassets.androidplatform.net/epub/__hoshi_group_${readingGroup.indices.joinToString("_")}.html"
+        else "https://appassets.androidplatform.net/epub/${chapter.href}"
+    }
     val readerContentReloadKey = remember(readerSettings) {
         readerSettings.readerContentReloadKey()
     }
@@ -210,6 +232,7 @@ internal fun ChapterWebView(
         chapterHighlightsJson,
         restoreToken,
         readerWebAssets,
+        preparedGroupDocument,
     ) {
         readerSetupScript(
             initialProgress = chapterPosition.progress,
@@ -227,6 +250,8 @@ internal fun ChapterWebView(
             highlightsJson = chapterHighlightsJson,
             restoreToken = restoreToken,
             assets = readerWebAssets,
+            continuousSourcesJson = preparedGroupDocument?.sourcesJson,
+            continuousInitialSourceIndex = chapterPosition.index,
         )
     }
     val currentOnRestoreAccepted = rememberUpdatedState<(WebView, String) -> ReaderRestoreCompletionAction?> { restoredWebView, reportedRestoreToken ->
@@ -292,6 +317,7 @@ internal fun ChapterWebView(
                 ReaderLookupPopupWebBridge.install(this, readerPopupBridgeHolder, isActive = { !isReleased })
                 webViewClient = EpubWebViewClient(
                     book = book,
+                    mainDocument = preparedGroupDocument?.html?.let { baseUrl to it.toByteArray(Charsets.UTF_8) },
                     fontManager = fontManager,
                     onInternalLink = onInternalLink,
                     popupResourceHandler = { currentReaderPopupResourceHandler.value },
@@ -364,7 +390,17 @@ internal fun ChapterWebView(
                             isRestoring = currentIsWebViewRestoring.value,
                             restoreEpoch = currentWebViewRestoreEpoch.value,
                             evaluateProgress = { callback ->
-                                webView.evaluateJavascript(ReaderPaginationScripts.progressInvocation(), callback)
+                                webView.evaluateJavascript(
+                                    "JSON.stringify(window.hoshiReader.calculateSourcePosition ? window.hoshiReader.calculateSourcePosition() : null)",
+                                ) { result ->
+                                    val position = continuousSourcePositionResult(result)
+                                    if (position != null && currentOnContinuousSourcePosition.value != null) {
+                                        callback(result)
+                                    } else webView.evaluateJavascript(ReaderPaginationScripts.progressInvocation(), callback)
+                                }
+                            },
+                            onSourcePositionChanged = { position, epoch, save ->
+                                currentOnContinuousSourcePosition.value?.invoke(position, epoch, save)
                             },
                             onProgressChanged = { progress, restoreEpoch ->
                                 when (readerProgressPersistenceAction(ReaderProgressPersistenceEvent.ContinuousScrollChanged)) {
@@ -471,7 +507,7 @@ internal fun ChapterWebView(
                 }
             }
             webView.evaluateJavascript(readerAppearanceScript, null)
-            if (!readerWebViewReadyToLoad(webViewViewportSize)) return@AndroidView
+            if (!readerWebViewReadyToLoad(webViewViewportSize) || readingGroup != null && preparedGroupDocument == null) return@AndroidView
             if (webView.tag != restoreToken) {
                 if (!currentIsWebViewRestoring.value) {
                     currentOnRestoreStarted.value()
@@ -481,6 +517,7 @@ internal fun ChapterWebView(
                 webView.hideForReaderRestore()
                 webView.webViewClient = EpubWebViewClient(
                     book = book,
+                    mainDocument = preparedGroupDocument?.html?.let { baseUrl to it.toByteArray(Charsets.UTF_8) },
                     fontManager = fontManager,
                     onInternalLink = onInternalLink,
                     popupResourceHandler = { currentReaderPopupResourceHandler.value },
@@ -842,6 +879,7 @@ private class ReaderHighlightActionModeCallback(
 
 private class EpubWebViewClient(
     private val book: EpubBook,
+    private val mainDocument: Pair<String, ByteArray>? = null,
     private val fontManager: ReaderFontManager,
     private val onInternalLink: (ReaderInternalLinkTarget) -> Unit,
     private val popupResourceHandler: () -> ReaderLookupPopupResourceHandler?,
@@ -852,7 +890,16 @@ private class EpubWebViewClient(
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         if ((view as? HoshiReaderWebView)?.isReleased == true) return true
-        val target = book.resolveInternalReaderLink(request.url?.toString().orEmpty()) ?: return false
+        val rawUrl = request.url?.toString().orEmpty()
+        val uri = runCatching { java.net.URI(rawUrl) }.getOrNull()
+        val groupedFragment = uri?.takeIf { rawUrl.substringBefore('#') == mainDocument?.first }
+            ?.fragment?.let { Regex("hoshi-source-(\\d+)-(.*)").matchEntire(it) }
+        val sourceUrl = groupedFragment?.let { match ->
+            book.chapters.getOrNull(match.groupValues[1].toIntOrNull() ?: -1)?.let { chapter ->
+                java.net.URI("https", "appassets.androidplatform.net", "/epub/${chapter.href}", match.groupValues[2]).toASCIIString()
+            }
+        } ?: rawUrl
+        val target = book.resolveInternalReaderLink(sourceUrl) ?: return false
         onInternalLink(target)
         return true
     }
@@ -867,6 +914,9 @@ private class EpubWebViewClient(
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         val uri = request.url ?: return null
+        mainDocument?.takeIf { uri.toString().substringBefore('#') == it.first }?.let {
+            return ReaderWebResource("text/html", "UTF-8", it.second).toWebResourceResponse()
+        }
         return popupResourceHandler()?.handle(uri)
             ?: resourceBridge.resourceForUrl(uri.toString())?.toWebResourceResponse()
     }
@@ -877,7 +927,7 @@ private class EpubWebViewClient(
     }
 }
 
-private fun readerSetupScript(
+internal fun readerSetupScript(
     initialProgress: Double,
     initialFragment: String?,
     settings: ReaderSettings,
@@ -893,6 +943,8 @@ private fun readerSetupScript(
     highlightsJson: String?,
     restoreToken: String,
     assets: ReaderWebAssets,
+    continuousSourcesJson: String? = null,
+    continuousInitialSourceIndex: Int? = null,
 ): String {
     val eInkMode = readerJavaScriptStringLiteral(if (settings.eInkMode) "true" else "false")
     val selectionPreviewConfiguration = readerSelectionPreviewConfigurationScript(
@@ -957,6 +1009,8 @@ private fun readerSetupScript(
             document.head.appendChild(popupHostScript);
           }
           window.hoshiSelection.setupFurigana(${readerJavaScriptStringLiteral(settings.furiganaMode.name)});
+          window.__hoshiContinuousSources = ${continuousSourcesJson ?: "null"};
+          window.__hoshiContinuousInitialSourceIndex = ${continuousInitialSourceIndex ?: "null"};
           $paginationScript
         })();
     """.trimIndent()
@@ -1239,6 +1293,7 @@ internal class ReaderContinuousScrollProgressScheduler(
         removeCallback: (Runnable) -> Unit,
         cancelIdleSave: () -> Unit,
         scheduleIdleSave: (Runnable, Long) -> Unit,
+        onSourcePositionChanged: ((ReaderChapterPosition, Int, Boolean) -> Unit)? = null,
     ) {
         if (isRestoring) return
         cancelIdleSave()
@@ -1248,6 +1303,7 @@ internal class ReaderContinuousScrollProgressScheduler(
             evaluateProgress = evaluateProgress,
             onProgressChanged = onProgressChanged,
             onProgressIdle = onProgressIdle,
+            onSourcePositionChanged = onSourcePositionChanged,
             removeCallback = removeCallback,
             scheduleIdleSave = scheduleIdleSave,
         )
@@ -1299,6 +1355,10 @@ internal class ReaderContinuousScrollProgressScheduler(
         request.evaluateProgress { progressResult ->
             if (requestGeneration != generation) return@evaluateProgress
             progressInFlight = false
+            val sourcePosition = continuousSourcePositionResult(progressResult)
+            if (sourcePosition != null) {
+                request.onSourcePositionChanged?.invoke(sourcePosition, request.restoreEpoch, false)
+            }
             val progress = ReaderPaginationScripts.doubleResult(progressResult)
             if (progress != null) {
                 request.onProgressChanged(progress, request.restoreEpoch)
@@ -1307,6 +1367,11 @@ internal class ReaderContinuousScrollProgressScheduler(
             if (nextRequest != null) {
                 pendingRequest = null
                 startProgressRequest(nextRequest)
+            } else if (sourcePosition != null) {
+                request.scheduleIdleSave(
+                    Runnable { request.onSourcePositionChanged?.invoke(sourcePosition, request.restoreEpoch, true) },
+                    idleDelayMs,
+                )
             } else if (progress != null) {
                 request.scheduleIdleSave(
                     Runnable { request.onProgressIdle(progress, request.restoreEpoch) },
@@ -1326,6 +1391,7 @@ internal class ReaderContinuousScrollProgressScheduler(
         val evaluateProgress: (((String?) -> Unit) -> Unit),
         val onProgressChanged: (Double, Int) -> Unit,
         val onProgressIdle: (Double, Int) -> Unit,
+        val onSourcePositionChanged: ((ReaderChapterPosition, Int, Boolean) -> Unit)?,
         val removeCallback: (Runnable) -> Unit,
         val scheduleIdleSave: (Runnable, Long) -> Unit,
     )
@@ -1464,3 +1530,13 @@ private const val ReaderSasayakiPlaybackFileName = "sasayaki_playback.json"
 
 internal fun androidPixelsToCssPixels(value: Float, density: Float): Float =
     value / density.coerceAtLeast(1f)
+
+internal fun continuousSourcePositionResult(result: String?): ReaderChapterPosition? = runCatching {
+    val raw = result ?: return null
+    val value = if (raw.startsWith('"')) Json.decodeFromString<String>(raw) else raw
+    val payload = Json.parseToJsonElement(value).jsonObject
+    val index = payload.getValue("index").jsonPrimitive.int
+    val progress = payload.getValue("progress").jsonPrimitive.double
+    if (index < 0 || !progress.isFinite()) return null
+    ReaderChapterPosition(index, progress.coerceIn(0.0, 1.0))
+}.getOrNull()

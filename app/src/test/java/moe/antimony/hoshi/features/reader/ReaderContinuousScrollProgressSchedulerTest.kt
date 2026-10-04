@@ -5,6 +5,40 @@ import org.junit.Test
 
 class ReaderContinuousScrollProgressSchedulerTest {
     @Test
+    fun groupedScrollReportsOriginalIdentityAndRejectsCancelledEvaluation() {
+        val scheduler = ReaderContinuousScrollProgressScheduler(nowMillis = { 1_000L })
+        val evaluations = mutableListOf<(String?) -> Unit>()
+        val displayed = mutableListOf<ReaderChapterPosition>()
+        val saved = mutableListOf<ReaderChapterPosition>()
+        var idle: Runnable? = null
+        fun scroll(epoch: Int) = scheduler.onScrollChanged(
+            isRestoring = false, restoreEpoch = epoch,
+            evaluateProgress = { evaluations += it },
+            onProgressChanged = { _, _ -> error("Source payload must retain chapter identity") },
+            onProgressIdle = { _, _ -> error("Source payload must retain chapter identity") },
+            onSourcePositionChanged = { position, callbackEpoch, save ->
+                assertEquals(epoch, callbackEpoch)
+                if (save) saved += position else displayed += position
+            },
+            onClearLookupPopup = {}, postDelayed = { _, _ -> }, removeCallback = {},
+            cancelIdleSave = { idle = null }, scheduleIdleSave = { callback, _ -> idle = callback },
+        )
+        scroll(1)
+        evaluations.removeAt(0)("\"{\\\"index\\\":2,\\\"progress\\\":0.75}\"")
+        assertEquals(listOf(ReaderChapterPosition(2, 0.75)), displayed)
+        idle!!.run()
+        assertEquals(displayed, saved)
+        scheduler.reset {}
+        scroll(2)
+        val stale = evaluations.removeAt(0)
+        scheduler.reset {}
+        stale("{\"index\":1,\"progress\":0.9}")
+        assertEquals(1, displayed.size)
+        assertEquals(null, continuousSourcePositionResult("{\"index\":-1,\"progress\":0.2}"))
+        assertEquals(null, continuousSourcePositionResult("null"))
+        assertEquals(ReaderChapterPosition(1, 1.0), continuousSourcePositionResult("{\"index\":1,\"progress\":4}"))
+    }
+    @Test
     fun scrollEventsWhileProgressIsRunningRequestOnlyOneFollowUpEvaluation() {
         var now = 1_000L
         val scheduler = ReaderContinuousScrollProgressScheduler(nowMillis = { now })

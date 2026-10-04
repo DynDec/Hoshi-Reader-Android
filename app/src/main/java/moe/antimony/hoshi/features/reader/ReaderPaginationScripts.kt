@@ -23,7 +23,7 @@ internal enum class ReaderNavigationResult {
 
 internal object ReaderPaginationScripts {
     fun showSearchHighlightInvocation(highlight: ReaderSearchHighlight): String =
-        "window.hoshiHighlights.showSearchHighlight(${highlight.offset}, ${highlight.length})"
+        "window.hoshiHighlights.showSourceSearchHighlight ? window.hoshiHighlights.showSourceSearchHighlight(${highlight.chapterIndex}, ${highlight.offset}, ${highlight.length}) : window.hoshiHighlights.showSearchHighlight(${highlight.offset}, ${highlight.length})"
 
     fun clearSearchHighlightInvocation(): String =
         "if (window.hoshiHighlights) window.hoshiHighlights.clearSearchHighlight()"
@@ -114,6 +114,7 @@ internal object ReaderPaginationScripts {
         val generatedLayout = ReaderGeneratedLayout.from(settings)
         val body = template
             .replace("__HOSHI_HIGHLIGHTS_SCRIPT__", source.highlights)
+            .replace("__HOSHI_CONTINUOUS_GROUP_SCRIPT__", source.continuousGroup)
             .replace("__HOSHI_READER_VIEWPORT_SCRIPT__", source.readerViewport)
             .replace("__HOSHI_READER_SASAYAKI_SCRIPT__", source.readerSasayaki)
             .replace("__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__", source.readerTextSemantics)
@@ -169,6 +170,7 @@ private data class ReaderPaginationAssetSource(
     val readerVnRangeMap: String,
     val readerVnSelectionProjection: String,
     val highlights: String,
+    val continuousGroup: String,
 ) {
     companion object {
         fun load(assets: ReaderWebAssets?): ReaderPaginationAssetSource {
@@ -187,6 +189,7 @@ private data class ReaderPaginationAssetSource(
                     readerVnRangeMap = assets.readerVnRangeMapJs,
                     readerVnSelectionProjection = assets.readerVnSelectionProjectionJs,
                     highlights = assets.highlightsJs,
+                    continuousGroup = assets.readerContinuousGroupJs,
                 )
             }
             return SourceTreeReaderPaginationAssets.value
@@ -210,6 +213,7 @@ private object SourceTreeReaderPaginationAssets {
             readerVnRangeMap = readSourceAsset("hoshi-web/reader/reader-vn-range-map.js"),
             readerVnSelectionProjection = readSourceAsset("hoshi-web/reader/reader-vn-selection-projection.js"),
             highlights = readSourceAsset("hoshi-web/reader/highlights.js"),
+            continuousGroup = readSourceAsset("hoshi-web/reader/reader-continuous-group.js"),
         )
     }
 
@@ -264,4 +268,4 @@ private fun String.javaScriptSingleQuotedStringLiteral(): String =
     }
 
 private fun SasayakiCueRange.toJavaScriptObjectLiteral(): String =
-    "{id:${id.javaScriptStringLiteral()},start:$start,length:$length}"
+    "{id:${id.javaScriptStringLiteral()},start:$start,length:$length${sourceIndex?.let { ",sourceIndex:$it" }.orEmpty()}}"

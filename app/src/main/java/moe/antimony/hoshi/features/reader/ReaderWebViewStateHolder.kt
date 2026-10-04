@@ -28,6 +28,8 @@ internal class ReaderWebViewStateHolder(
     var selectedGoToTab by mutableStateOf(readerGoToDefaultTab())
         private set
 
+    val galleryState = ReaderGalleryState()
+
     var showSasayaki by mutableStateOf(false)
         private set
 
@@ -225,6 +227,11 @@ internal class ReaderWebViewStateHolder(
         return readerPosition.displayedPosition
     }
 
+    fun recordSourcePosition(position: ReaderChapterPosition): ReaderChapterPosition {
+        readerPosition = readerPosition.copy(displayedPosition = position)
+        return position
+    }
+
     fun recordContinuousScrollProgress(progress: Double, restoreEpoch: Int): ReaderChapterPosition? {
         if (isWebViewRestoring || restoreEpoch != webViewRestoreEpoch) return null
         return recordDisplayedProgress(progress)
@@ -264,6 +271,12 @@ internal class ReaderWebViewStateHolder(
         if (pending.chapterIndex != chapterIndex) return null
         pendingSearchHighlight = null
         return pending
+    }
+
+    fun applySyncedBookmark(position: ReaderChapterPosition) {
+        pendingSearchHighlight = null
+        readerPosition = readerPosition.jumpTo(position)
+        markWebViewRestoring()
     }
 
     fun jumpTo(position: ReaderChapterPosition, fragment: String? = null): ReaderChapterPosition {
@@ -362,6 +375,7 @@ internal data class ReaderContentReloadKey(
     val fontSize: Int,
     val furiganaMode: FuriganaMode,
     val viewMode: ReaderViewMode,
+    val mergeImageOnlyChapters: Boolean,
     val visualNovelScreenMode: VisualNovelScreenMode,
     val visualNovelSentencesPerScreen: Int,
     val visualNovelPreserveDialogueBubbles: Boolean,
@@ -386,6 +400,7 @@ internal fun ReaderSettings.readerContentReloadKey(): ReaderContentReloadKey =
         fontSize = fontSize,
         furiganaMode = furiganaMode,
         viewMode = viewMode,
+        mergeImageOnlyChapters = viewMode == ReaderViewMode.Continuous && mergeImageOnlyChapters,
         visualNovelScreenMode = visualNovelScreenMode,
         visualNovelSentencesPerScreen = visualNovelSentencesPerScreen.coerceIn(1, 12),
         visualNovelPreserveDialogueBubbles = visualNovelPreserveDialogueBubbles,

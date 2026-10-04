@@ -21,6 +21,40 @@ import org.junit.Test
 
 class ReaderWebViewStateHolderTest {
     @Test
+    fun groupingModeChangesAndSyncedPositionsKeepOriginalChaptersAndJumpHistory() {
+        val holder = stateHolder(initialIndex = 0)
+        holder.syncSettings(ReaderSettings(viewMode = ReaderViewMode.Continuous))
+        holder.markWebViewRestored()
+        holder.recordSourcePosition(ReaderChapterPosition(2, 0.75))
+        holder.syncSettings(ReaderSettings(viewMode = ReaderViewMode.Continuous, mergeImageOnlyChapters = true))
+        assertEquals(ReaderChapterPosition(2, 0.75), holder.readerPosition.loadPosition)
+        holder.markWebViewRestored()
+        holder.recordSourcePosition(ReaderChapterPosition(3, 0.4))
+        holder.syncSettings(ReaderSettings(viewMode = ReaderViewMode.VisualNovel, mergeImageOnlyChapters = true))
+        assertEquals(ReaderChapterPosition(3, 0.4), holder.readerPosition.loadPosition)
+        holder.markWebViewRestored()
+        holder.jumpToWithHistory(ReaderChapterPosition(4, 0.2))
+        holder.markWebViewRestored()
+        holder.applySyncedBookmark(ReaderChapterPosition(1, 0.5))
+        assertEquals(ReaderChapterPosition(1, 0.5), holder.readerPosition.loadPosition)
+        assertEquals(ReaderChapterPosition(3, 0.4), holder.backTargetPosition)
+    }
+    @Test
+    fun syncedBookmarkRestoresSamePositionWithoutAddingJumpHistory() {
+        val holder = stateHolder(initialIndex = 2)
+        holder.jumpToWithHistory(ReaderChapterPosition(3, 0.1))
+        holder.markWebViewRestored()
+        val epoch = holder.webViewRestoreEpoch
+        holder.applySyncedBookmark(ReaderChapterPosition(3, 0.1))
+        assertEquals(epoch + 1, holder.webViewRestoreEpoch)
+        assertTrue(holder.isWebViewRestoring)
+        assertEquals(ReaderChapterPosition(2, 0.0), holder.backTargetPosition)
+        assertNull(holder.recordContinuousScrollProgress(0.9, epoch))
+        holder.markWebViewRestored()
+        assertEquals(ReaderChapterPosition(3, 0.1), holder.readerPosition.displayedPosition)
+    }
+
+    @Test
     fun rendererRecoveryPreservesUnfinishedCueLandingButDoesNotRevealCompletedCue() {
         val cue = PendingSasayakiCue(sasayakiProgressCue(80), true, SasayakiCueRevealSource.DirectJump)
         val queued = cue.copy(cue = sasayakiProgressCue(120))
@@ -305,7 +339,7 @@ class ReaderWebViewStateHolderTest {
     @Test
     fun sasayakiChapterLoadResetsStatisticsBaselineAfterSavingHiddenJumpTarget() {
         val events = mutableListOf<String>()
-        val statistics = listOf(ReadingStatistics(title = "Book", dateKey = "2026-06-24", charactersRead = 12))
+        val statistics = mapOf("session" to moe.antimony.hoshi.features.sync.Timestamped<moe.antimony.hoshi.epub.ReadingSession?>(1, moe.antimony.hoshi.epub.ReadingSession(0, 1, 12)))
         val target = ReaderChapterPosition(index = 3, progress = 0.75)
 
         val saved = readerSasayakiChapterLoadPosition(
@@ -321,7 +355,7 @@ class ReaderWebViewStateHolderTest {
                 events += "reset"
             },
             saveReaderPosition = { position, savedStatistics ->
-                events += "save ${position.index}:${position.progress} ${savedStatistics?.single()?.charactersRead}"
+                events += "save ${position.index}:${position.progress} ${savedStatistics?.values?.single()?.value?.charactersRead}"
             },
         )
 
@@ -1020,13 +1054,14 @@ class ReaderWebViewStateHolderTest {
     fun contentsTabSelectionSurvivesSheetDismissalWithinReaderSession() {
         val holder = stateHolder()
 
-        assertEquals(ReaderGoToTab.Chapters, holder.selectedGoToTab)
+        assertEquals(ReaderGoToTab.Gallery, holder.selectedGoToTab)
         holder.openGoToFromMenu()
-        holder.selectGoToTab(ReaderGoToTab.Gallery)
+        assertEquals(ReaderGoToTab.Gallery, holder.selectedGoToTab)
+        holder.selectGoToTab(ReaderGoToTab.Chapters)
         holder.dismissGoTo()
         holder.openGoToFromMenu()
 
-        assertEquals(ReaderGoToTab.Gallery, holder.selectedGoToTab)
+        assertEquals(ReaderGoToTab.Chapters, holder.selectedGoToTab)
 
         holder.selectGoToTab(ReaderGoToTab.Search)
         holder.dismissGoTo()
@@ -1068,7 +1103,7 @@ class ReaderWebViewStateHolderTest {
 
         val newSession = stateHolder()
 
-        assertEquals(ReaderGoToTab.Chapters, newSession.selectedGoToTab)
+        assertEquals(ReaderGoToTab.Gallery, newSession.selectedGoToTab)
         newSession.openSasayakiFromMenu(SasayakiSheetTab.Resources)
         assertEquals(SasayakiSheetTab.Resources, newSession.selectedSasayakiTab)
     }

@@ -5,6 +5,14 @@ import org.junit.Test
 
 class ReaderSelectionBridgeTest {
     @Test
+    fun groupedLookupPayloadKeepsOriginalSourceAndLocalNormalizedOffset() {
+        val payload = """{"text":"犬","sentence":"犬です。","rect":{"x":0.0,"y":0.0,"width":10.0,"height":10.0},"sourceIndex":2,"normalizedOffset":4,"sentenceOffset":1}"""
+        val parsed = requireNotNull(ReaderSelectionBridgePayload.fromJson(payload))
+        assertEquals(2, parsed.sourceIndex)
+        assertEquals(4, parsed.normalizedOffset)
+        assertEquals(1, parsed.sentenceOffset)
+    }
+    @Test
     fun parsesTextSelectionPayloadLikeIosMessageBody() {
         val payload = """
             {

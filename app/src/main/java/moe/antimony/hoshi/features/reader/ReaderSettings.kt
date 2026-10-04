@@ -110,6 +110,7 @@ data class ReaderSettings(
     val showReadingSpeed: Boolean = false,
     val showReadingTime: Boolean = false,
     val chapterSwipeDistance: Int = 20,
+    val mergeImageOnlyChapters: Boolean = false,
     val pageSwipeThresholdPx: Int = ReaderPageSwipeThresholdDefaultPx,
     val horizontalPadding: Int = 5,
     val verticalPadding: Int = 0,
@@ -463,6 +464,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
         showReadingSpeed = preferences.getBoolean("readerShowReadingSpeed", false),
         showReadingTime = preferences.getBoolean("readerShowReadingTime", false),
         chapterSwipeDistance = preferences.getInt("chapterSwipeDistance", 20).coerceIn(10, 60),
+        mergeImageOnlyChapters = preferences.getBoolean("mergeImageOnlyChapters", false),
         pageSwipeThresholdPx = preferences.getInt(
             "pageSwipeThresholdPx",
             ReaderPageSwipeThresholdDefaultPx,
@@ -545,6 +547,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .putBoolean("readerShowReadingSpeed", settings.showReadingSpeed)
             .putBoolean("readerShowReadingTime", settings.showReadingTime)
             .putInt("chapterSwipeDistance", settings.chapterSwipeDistance)
+            .putBoolean("mergeImageOnlyChapters", settings.mergeImageOnlyChapters)
             .putInt("pageSwipeThresholdPx", settings.pageSwipeThresholdPx.coerceReaderPageSwipeThresholdPx())
             .putInt("layoutHorizontalPadding", settings.horizontalPadding)
             .putInt("layoutVerticalPadding", settings.verticalPadding)
@@ -737,6 +740,7 @@ class ReaderSettingsRepository(
             showReadingSpeed = this[KEY_SHOW_READING_SPEED] ?: false,
             showReadingTime = this[KEY_SHOW_READING_TIME] ?: false,
             chapterSwipeDistance = (this[KEY_CHAPTER_SWIPE_DISTANCE] ?: 20).coerceIn(10, 60),
+            mergeImageOnlyChapters = this[KEY_MERGE_IMAGE_ONLY_CHAPTERS] ?: false,
             pageSwipeThresholdPx = (
                 this[KEY_PAGE_SWIPE_THRESHOLD_PX] ?: ReaderPageSwipeThresholdDefaultPx
             ).coerceReaderPageSwipeThresholdPx(),
@@ -819,6 +823,7 @@ class ReaderSettingsRepository(
         this[KEY_SHOW_READING_SPEED] = settings.showReadingSpeed
         this[KEY_SHOW_READING_TIME] = settings.showReadingTime
         this[KEY_CHAPTER_SWIPE_DISTANCE] = settings.chapterSwipeDistance
+        this[KEY_MERGE_IMAGE_ONLY_CHAPTERS] = settings.mergeImageOnlyChapters
         this[KEY_PAGE_SWIPE_THRESHOLD_PX] = settings.pageSwipeThresholdPx.coerceReaderPageSwipeThresholdPx()
         this[KEY_HORIZONTAL_PADDING] = settings.horizontalPadding
         this[KEY_VERTICAL_PADDING] = settings.verticalPadding
@@ -949,6 +954,7 @@ class ReaderSettingsRepository(
         private val KEY_SHOW_READING_SPEED = booleanPreferencesKey("readerShowReadingSpeed")
         private val KEY_SHOW_READING_TIME = booleanPreferencesKey("readerShowReadingTime")
         private val KEY_CHAPTER_SWIPE_DISTANCE = intPreferencesKey("chapterSwipeDistance")
+        private val KEY_MERGE_IMAGE_ONLY_CHAPTERS = booleanPreferencesKey("mergeImageOnlyChapters")
         private val KEY_PAGE_SWIPE_THRESHOLD_PX = intPreferencesKey("pageSwipeThresholdPx")
         private val KEY_HORIZONTAL_PADDING = intPreferencesKey("layoutHorizontalPadding")
         private val KEY_VERTICAL_PADDING = intPreferencesKey("layoutVerticalPadding")
@@ -1125,6 +1131,7 @@ private data class ProfileReaderAppearanceSettings(
     val showReadingSpeed: Boolean = false,
     val showReadingTime: Boolean = false,
     val chapterSwipeDistance: Int = 20,
+    val mergeImageOnlyChapters: Boolean = false,
     val pageSwipeThresholdPx: Int = ReaderPageSwipeThresholdDefaultPx,
     val horizontalPadding: Int = 5,
     val verticalPadding: Int = 0,
@@ -1188,6 +1195,7 @@ private fun ReaderSettings.toProfileAppearanceSettings(): ProfileReaderAppearanc
         showReadingSpeed = showReadingSpeed,
         showReadingTime = showReadingTime,
         chapterSwipeDistance = chapterSwipeDistance,
+        mergeImageOnlyChapters = mergeImageOnlyChapters,
         pageSwipeThresholdPx = pageSwipeThresholdPx.coerceReaderPageSwipeThresholdPx(),
         horizontalPadding = horizontalPadding,
         verticalPadding = verticalPadding,
@@ -1253,6 +1261,7 @@ private fun ReaderSettings.withProfileAppearance(appearance: ProfileReaderAppear
         showReadingSpeed = appearance.showReadingSpeed,
         showReadingTime = appearance.showReadingTime,
         chapterSwipeDistance = appearance.chapterSwipeDistance.coerceIn(10, 60),
+        mergeImageOnlyChapters = appearance.mergeImageOnlyChapters,
         pageSwipeThresholdPx = appearance.pageSwipeThresholdPx.coerceReaderPageSwipeThresholdPx(),
         horizontalPadding = appearance.horizontalPadding,
         verticalPadding = appearance.verticalPadding,

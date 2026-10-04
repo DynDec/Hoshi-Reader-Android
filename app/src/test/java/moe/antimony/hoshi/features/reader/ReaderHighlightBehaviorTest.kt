@@ -1,6 +1,9 @@
 package moe.antimony.hoshi.features.reader
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubChapter
 import moe.antimony.hoshi.epub.HighlightColor
@@ -10,6 +13,17 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ReaderHighlightBehaviorTest {
+    @Test
+    fun groupHighlightsAnnotateSourceIdentityWithoutChangingPersistedRawOffsetsOrCharacters() {
+        val book = readerBook()
+        val originals = listOf(highlight("first", 3, 1, "abc"), highlight("second", 13, 1, "mn"))
+        val group = ContinuousReadingGroup(listOf(0, 1), listOf(10, 5))
+        val items = Json.parseToJsonElement(ReaderHighlights.groupHighlightsJson(originals, book, group)!!).jsonArray
+        assertEquals(listOf("0", "1"), items.map { it.jsonObject.getValue("sourceIndex").jsonPrimitive.content })
+        assertEquals(listOf("1", "1"), items.map { it.jsonObject.getValue("offset").jsonPrimitive.content })
+        assertEquals(listOf("3", "13"), items.map { it.jsonObject.getValue("character").jsonPrimitive.content })
+        assertEquals(listOf(3, 13), originals.map { it.character })
+    }
     @Test
     fun chapterHighlightsSerializesOnlyCurrentChapterHighlightsSortedByCharacter() {
         val book = readerBook()

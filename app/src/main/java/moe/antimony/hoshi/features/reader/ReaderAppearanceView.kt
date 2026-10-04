@@ -404,6 +404,14 @@ private fun ReaderAppearanceContent(
                         palette = palette,
                     )
                     if (settings.viewMode == ReaderViewMode.Continuous) {
+                        SwitchRow(
+                            label = stringResource(R.string.reader_merge_image_only_chapters),
+                            checked = settings.mergeImageOnlyChapters,
+                            onCheckedChange = { enabled ->
+                                onSettingsChange { current -> current.copy(mergeImageOnlyChapters = enabled) }
+                            },
+                        )
+
                         AppearanceDivider(palette)
                         SliderRow(
                             label = stringResource(R.string.reader_appearance_chapter_swipe_distance),

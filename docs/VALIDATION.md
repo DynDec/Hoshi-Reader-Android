@@ -71,6 +71,47 @@ For reader web asset changes, run the focused JavaScript tests:
 node --test app/src/test/js/*.test.mjs
 ```
 
+## Google Drive OAuth Build Configuration
+
+Copy `secrets.properties.example` to ignored `secrets.properties` and set
+`HOSHI_GOOGLE_CLIENT_ID_DEBUG` and `HOSHI_GOOGLE_CLIENT_ID_RELEASE` to the
+corresponding Android OAuth client IDs. Use the same Google Cloud project as iOS,
+register each build's package and signing certificate, and enable Custom URI
+scheme in each client's advanced settings for browser authorization. These are
+public client IDs; no OAuth client secret is needed. Environment variables with
+the same names override the file.
+
+The release workflow reads the repository secret `HOSHI_GOOGLE_CLIENT_ID_RELEASE`
+and requires it before building. The test/lint workflow needs no OAuth values,
+including for fork pull requests. Browser sign-in reports missing configuration
+when its client ID is absent. Play Services authorization continues to use
+package/signing registration independently.
+
+When changing auth, check both generated `BuildConfig` values and merged manifest
+redirect schemes, including a build with empty environment values. Run
+`GoogleDriveBrowserAuthTest` and `GoogleDriveBrowserAuthActivityTest` on a device
+using a separately built test APK and the explicit instrumentation runner. Their
+token fixtures, DataStore files and intercepted browser launches are test-owned;
+they do not change the user's connection or contact Google. Require `OK (18 tests)`.
+Run the activity tests through the debug caller fixture so callback routing uses
+an app-owned task. Keep the external browser fixture framework-only Java: an
+activity launched in the test APK's own process cannot rely on Kotlin or other
+target-app dependencies being packaged in that APK.
+The tests cover PKCE/state/redirect validation, one-time exchange, cancellation,
+activity recreation, pending-request persistence, token persistence and
+refresh failure handling. `GoogleDriveBrowserTokenTest` uses a local HTTP server
+to verify form encoding, token responses, failures and rejected HTTP redirects.
+Also verify real Custom Tab sign-in, Back/close cancellation and return to Sync
+settings on a device without Play Services.
+
+Run `GoogleDriveAuthTest` with the explicit instrumentation runner and require
+`OK (5 tests)`. It uses in-memory credentials to check independent Hoshi/TTU
+logins, provider token routing, cancellation, and provider-scoped sign-out for
+both account-picker and browser connections without touching saved accounts.
+For real sign-in, connect TTU then Hoshi, and Hoshi then TTU; switch providers
+and confirm both retain their connection. Sign out of each provider and confirm
+the other remains connected. Cover both Play Services and browser authorization.
+
 ## Sasayaki Subtitle Export
 
 - From Resources, export the current match using both Subtitles and Transcription.
@@ -119,6 +160,15 @@ build script. Do not regenerate the catalog for a CRLF-only difference.
   fixtures instead of depending on these ignored local files.
 
 ## Reader And Lookup
+
+- Gallery: Previous/Next moves exactly one image without wrapping, including rapid
+  taps and after manual scrolling. Buttons stay above the image viewport; portrait
+  and wide previews retain their full proportions at 70% of the former size.
+  Contents dismissal, tab changes, and fullscreen viewing preserve Gallery's
+  image and pixel offset; leaving Reader and opening a new book session resets it.
+  `ReaderGalleryTest` uses generated in-memory images without opening user books
+  or modifying preferences. Build its APK separately and run the explicit class
+  with `adb install -r` and `am instrument`, preserving device data.
 
 - Dictionary tab history: search A, follow a definition link to B, swipe back to
   A, switch to Settings and return. A and its scroll/expanded definitions must
@@ -294,6 +344,31 @@ and show the keyboard while preserving results and navigation history.
 
 Manual reader validation should cover:
 
+- Continuous chapter grouping: `ContinuousReadingGroupsTest` generates EPUBs and
+  covers text-image-text, consecutive/first/last images, one-sided/nested/fragment
+  TOC boundaries, duplicate labels, absent navigation, captions, SVGs and cached
+  chapter shells. Run the profile, state-holder and scroll scheduler tests for
+  profile persistence, source positions, mode changes and incoming sync updates.
+  `reader-continuous-group.test.mjs` covers source-local offsets, cross-file
+  highlight splitting, zero-text positions and source-scoped Sasayaki media stops.
+  The optional `reader-continuous-browser.test.mjs` uses an isolated headless
+  Chromium profile for real CSSOM/layout, publisher fonts/animations, cross-file
+  selections and a 10em buffer in both writing directions. Set
+  `HOSHI_TEST_CHROMIUM` to a Chromium executable on hosts without the default
+  Windows Chrome/Edge paths; missing Chromium is reported as a skipped test.
+  `ContinuousReaderBrowserTest` runs the Kotlin-composed document, generated CSS
+  and setup after actual browser navigation, including XHTML and decoded SVG
+  image resources. Set `HOSHI_TEST_EPUB_PATH` to optionally check a local EPUB.
+  On Android, open a book and switch chapters/modes while composition is pending;
+  confirm the source map, buffer and illustrations initialize together.
+  On a data-preserving device, verify the localized toggle defaults off and is
+  visible only in Continuous, then enable it and check restart restoration,
+  bookmarks/search/highlights/lookup/Sasayaki, incoming synced source positions,
+  previous/next beyond the entire group, and unchanged Paginated/VN behavior.
+  Check one reader-font 10em buffer below horizontal or left of vertical text,
+  including a text group ending in images; image-only displays have none. The
+  buffer must add scroll extent without adding characters or progress, and the
+  existing chapter-swipe threshold must trigger only at the far edge.
 - Renderer termination in paginated, continuous and VN modes: after moving
   beyond the saved bookmark (including a continuous scroll before its idle
   save), terminate the renderer and verify the loading frame restores the latest
@@ -444,6 +519,11 @@ Validate relevant bookshelf/import changes with:
   missing timestamps. Recent places unknown times last; Title uses natural title
   order. Switch sort while refresh is delayed/offline, then refresh and import a
   remote book; remaining entries must retain the selected ordering.
+- Hoshi cloud-book titles: check long titles wrap to two lines with the cloud
+  icon inline on the first line and the second line using the full card width.
+  Open the delete dialog for an uploaded local book and check Delete Local,
+  Delete Everywhere, and Cancel stack vertically at narrow widths and large
+  font sizes; dismiss without deleting during layout checks.
 - dark and E-ink editable text fields, confirming visible cursors and horizontal
   scrolling for long values.
 - Android-created `Books` and `Dictionaries` `.hoshi` archives restored by iOS
@@ -837,9 +917,43 @@ Validate relevant settings/theme changes with:
 
 ## Sync, Updates, And Sasayaki
 
+`GoogleDriveRetryTest` uses fake HTTP responses to cover rate-limit/server retries,
+non-idempotent creates, token-refresh limits, backoff cancellation and the shared
+eight-connection cap. `GoogleDriveBrowserAuthTest` uses an in-memory DataStore
+and fixture tokens to check missing configuration, canceled/invalid/denied
+callbacks, PKCE, one-time exchange, token restoration and sign-out without
+reading installed credentials. Build the instrumentation APK separately; run
+that explicit class only on an available device using data-preserving installs.
+
+
 Validate relevant sync/update/Sasayaki changes with:
 
-- Google Drive Device Code connect/sign-out, clear cached Drive folders/covers,
+- Large Hoshi uploads: run `GoogleDriveStreamingUploadTest`, `GoogleDriveRetryTest`
+  and `GoogleDriveSyncManagerTest`. Verify bounded file writes, fixed-length HTTP
+  streaming, complete replay after authentication/rate-limit retries, and stream
+  cleanup on cancellation or failure. On a device, sync a library containing
+  multiple 100 MB EPUBs while reading; uploads must not allocate whole-file or
+  whole-multipart buffers or publish file state before successful completion.
+- Hoshi sync: verify GIS consent for the installed package/signing certificate and
+  `drive.file` access to the same Hoshi Reader folder as iOS. Cancel the account
+  picker and test a rejected authorization: both must show a localized error
+  dialog and re-enable Connect. Pass every GIS activity result to
+  `getAuthorizationResultFromIntent`, including non-`RESULT_OK` results, so SDK
+  failures are surfaced. On a device without Play Services, Connect must open a
+  browser, return through the build's custom URI scheme and show Connected only
+  after token exchange. Check browser cancellation, denied consent, restart,
+  expired/rejected tokens and local sign-out. A browser login must keep working
+  if Play Services later becomes available. Test first upload,
+  cloud-only download on tap, canceled downloads, Delete Local/Everywhere,
+  offline metadata/bookmark/highlight/shelf/session conflicts, session deletion,
+  reimport generations, live reader updates/deletion, Sasayaki position/matches,
+  sign-out, cache clearing and Books backup restore. Check foreground activation,
+  release 120-second polling/30-second local-edit debounce, debug 5-second
+  polling/2-second debounce, background final pass and
+  network restoration. Unsupported `formatVersion` must block file transfers and
+  cursor advancement until a successful full pass; restart must retain cursor
+  and version skips. Preserve both devices' app data.
+- TTU Google Drive Device Code connect/sign-out, clear cached Drive folders/covers,
   remote-only bookshelf list, pull-to-refresh, import, long-press delete,
   transient network behavior, manual import/export result dialogs,
   reader-open import-only behavior, auto-export timing, close/background flush,
