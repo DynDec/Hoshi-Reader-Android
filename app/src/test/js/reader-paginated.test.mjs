@@ -26,6 +26,7 @@ function readerMediaSemanticsSource() {
 function readerSource(url, options = {}) {
     const readerSasayaki = fs.readFileSync(readerSasayakiUrl, 'utf8');
     return fs.readFileSync(url, 'utf8')
+        .replace('__HOSHI_CONTINUOUS_GROUP_SCRIPT__', fs.readFileSync(new URL('../../main/assets/hoshi-web/reader/reader-continuous-group.js', import.meta.url), 'utf8'))
         .replace('__HOSHI_HIGHLIGHTS_SCRIPT__', options.highlightsScript ?? '')
         .replace('__HOSHI_READER_VIEWPORT_SCRIPT__', fs.readFileSync(readerViewportUrl, 'utf8'))
         .replace('__HOSHI_READER_SASAYAKI_SCRIPT__', readerSasayaki)

@@ -225,6 +225,11 @@ internal class ReaderWebViewStateHolder(
         return readerPosition.displayedPosition
     }
 
+    fun recordSourcePosition(position: ReaderChapterPosition): ReaderChapterPosition {
+        readerPosition = readerPosition.copy(displayedPosition = position)
+        return position
+    }
+
     fun recordContinuousScrollProgress(progress: Double, restoreEpoch: Int): ReaderChapterPosition? {
         if (isWebViewRestoring || restoreEpoch != webViewRestoreEpoch) return null
         return recordDisplayedProgress(progress)
@@ -368,6 +373,7 @@ internal data class ReaderContentReloadKey(
     val fontSize: Int,
     val furiganaMode: FuriganaMode,
     val viewMode: ReaderViewMode,
+    val mergeImageOnlyChapters: Boolean,
     val visualNovelScreenMode: VisualNovelScreenMode,
     val visualNovelSentencesPerScreen: Int,
     val visualNovelPreserveDialogueBubbles: Boolean,
@@ -392,6 +398,7 @@ internal fun ReaderSettings.readerContentReloadKey(): ReaderContentReloadKey =
         fontSize = fontSize,
         furiganaMode = furiganaMode,
         viewMode = viewMode,
+        mergeImageOnlyChapters = viewMode == ReaderViewMode.Continuous && mergeImageOnlyChapters,
         visualNovelScreenMode = visualNovelScreenMode,
         visualNovelSentencesPerScreen = visualNovelSentencesPerScreen.coerceIn(1, 12),
         visualNovelPreserveDialogueBubbles = visualNovelPreserveDialogueBubbles,

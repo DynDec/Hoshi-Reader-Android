@@ -327,6 +327,26 @@ and show the keyboard while preserving results and navigation history.
 
 Manual reader validation should cover:
 
+- Continuous chapter grouping: `ContinuousReadingGroupsTest` generates EPUBs and
+  covers text-image-text, consecutive/first/last images, one-sided/nested/fragment
+  TOC boundaries, duplicate labels, absent navigation, captions, SVGs and cached
+  chapter shells. Run the profile, state-holder and scroll scheduler tests for
+  profile persistence, source positions, mode changes and incoming sync updates.
+  `reader-continuous-group.test.mjs` covers source-local offsets, cross-file
+  highlight splitting, zero-text positions and source-scoped Sasayaki media stops.
+  The optional `reader-continuous-browser.test.mjs` uses an isolated headless
+  Chromium profile for real CSSOM/layout, publisher fonts/animations, cross-file
+  selections and a 10em buffer in both writing directions. Set
+  `HOSHI_TEST_CHROMIUM` to a Chromium executable on hosts without the default
+  Windows Chrome/Edge paths; missing Chromium is reported as a skipped test.
+  On a data-preserving device, verify the localized toggle defaults off and is
+  visible only in Continuous, then enable it and check restart restoration,
+  bookmarks/search/highlights/lookup/Sasayaki, incoming synced source positions,
+  previous/next beyond the entire group, and unchanged Paginated/VN behavior.
+  Check one reader-font 10em buffer below horizontal or left of vertical text,
+  including a text group ending in images; image-only displays have none. The
+  buffer must add scroll extent without adding characters or progress, and the
+  existing chapter-swipe threshold must trigger only at the far edge.
 - Renderer termination in paginated, continuous and VN modes: after moving
   beyond the saved bookmark (including a continuous scroll before its idle
   save), terminate the renderer and verify the loading frame restores the latest

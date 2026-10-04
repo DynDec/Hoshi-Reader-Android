@@ -1,3 +1,4 @@
+__HOSHI_CONTINUOUS_GROUP_SCRIPT__
 __HOSHI_READER_VIEWPORT_SCRIPT__
 __HOSHI_READER_TEXT_SEMANTICS_SCRIPT__
 __HOSHI_READER_DOM_TEXT_SCRIPT__
@@ -82,7 +83,7 @@ __HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__
   createWalker: function(rootNode) {
     var root = rootNode || document.body;
     return document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => this.isFurigana(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+      acceptNode: (n) => this.isFurigana(n) || n.parentElement?.closest('script,style,metadata,title,desc,[data-hoshi-continuous-buffer]') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
     });
   },
   getRect: function(target) {
@@ -353,7 +354,12 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
   stabilizeRubyAdjacentTextNodes: function(root) {
     this.domText().stabilizeRubyAdjacentTextNodes(this, root);
   },
+  calculateSourcePosition: function() {
+    return window.hoshiContinuousGroup.sourcePosition();
+  },
   calculateProgress: function() {
+    var sourcePosition = this.calculateSourcePosition();
+    if (sourcePosition) return window.hoshiContinuousGroup.renderedProgress(sourcePosition);
     var vertical = this.isVertical();
     var walker = this.createWalker();
     var totalChars = 0;
@@ -368,21 +374,34 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
   },
   restoreProgress: async function(progress) {
     await document.fonts.ready;
+    var restored = window.hoshiContinuousGroup.restoreSource(progress);
+    var sourceRoot = restored && restored.source.element;
+    if (restored) progress = restored.progress;
+    var scrollToStart = () => {
+      if (sourceRoot && sourceRoot !== document.body) sourceRoot.scrollIntoView({block:'start',inline:'start',behavior:'instant'});
+      else this.scrollToChapterStart();
+    };
     if (progress <= 0) {
-      this.scrollToChapterStart();
+      scrollToStart();
       requestAnimationFrame(() => {
-        this.scrollToChapterStart();
+        scrollToStart();
         this.notifyRestoreComplete();
       });
       return;
     }
-    var walker = this.createWalker();
+    var walker = this.createWalker(sourceRoot);
     var totalChars = 0;
     var node;
     while (node = walker.nextNode()) {
       totalChars += this.countChars(node.textContent);
     }
     if (totalChars <= 0) {
+      if (sourceRoot) {
+        sourceRoot.scrollIntoView({block:'start',inline:'start',behavior:'instant'});
+        var rect = sourceRoot.getBoundingClientRect();
+        if (this.isVertical()) window.scrollBy({left:-rect.width * progress,behavior:'instant'});
+        else window.scrollBy({top:rect.height * progress,behavior:'instant'});
+      }
       this.notifyRestoreComplete();
       return;
     }
@@ -391,7 +410,7 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
     var targetNode = null;
     var targetOffset = 0;
     var lastTargetNode = null;
-    walker = this.createWalker();
+    walker = this.createWalker(sourceRoot);
     while (node = walker.nextNode()) {
       var nodeLen = this.countChars(node.textContent);
       if (nodeLen > 0) lastTargetNode = node;
@@ -467,6 +486,7 @@ __HOSHI_HIGHLIGHTS_SCRIPT__
 window.hoshiReader.initialize = function() {
   if (window.hoshiReader.didInitialize) return;
   window.hoshiReader.didInitialize = true;
+  window.hoshiContinuousGroup.install(window.hoshiReader, window.__hoshiContinuousSources);
   window.hoshiReaderViewport.ensureDeviceViewport();
   document.documentElement.style.setProperty('--hoshi-vertical-padding-block', (window.innerHeight * __HOSHI_VERTICAL_PADDING_BLOCK_RATIO__) + 'px');
   document.documentElement.style.setProperty('--hoshi-vertical-padding-gap', (window.innerHeight * __HOSHI_VERTICAL_PADDING_GAP_RATIO__) + 'px');

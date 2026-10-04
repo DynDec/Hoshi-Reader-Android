@@ -916,4 +916,5 @@
     </plurals>
     <string name="sync_delete_local">删除本地副本</string>
     <string name="sync_delete_everywhere">在所有设备上删除</string>
+    <string name="reader_merge_image_only_chapters">合并纯图片章节</string>
 </resources>

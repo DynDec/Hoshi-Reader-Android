@@ -8,6 +8,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Add a 10em blank buffer after text in Continuous reading and an optional
+  profile setting to merge image-only files with adjacent chapters within the
+  same table-of-contents section, retaining original reading positions.
 - Add a Reader Appearance Layout toggle to remove vertical borders, preserving
   the saved padding while using the fork's safe areas and hiding border shortcuts
   and bottom progress.

@@ -919,4 +919,5 @@
     </plurals>
     <string name="sync_delete_local">Delete Local</string>
     <string name="sync_delete_everywhere">Delete Everywhere</string>
+    <string name="reader_merge_image_only_chapters">Merge image-only chapters</string>
 </resources>

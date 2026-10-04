@@ -3,6 +3,11 @@ package moe.antimony.hoshi.features.reader
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import moe.antimony.hoshi.epub.BookInfo
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubChapter
@@ -38,6 +43,14 @@ internal object ReaderHighlights {
             .sortedBy { it.character }
         if (chapterHighlights.isEmpty()) return null
         return json.encodeToString(chapterHighlights)
+    }
+
+    fun groupHighlightsJson(highlights: List<ReaderHighlight>, book: EpubBook, group: ContinuousReadingGroup): String? {
+        val items = group.indices.flatMap { index ->
+            val chapterJson = chapterHighlightsJson(highlights, book.bookInfo, book.chapters[index]) ?: return@flatMap emptyList()
+            json.parseToJsonElement(chapterJson).jsonArray.map { JsonObject(it.jsonObject + ("sourceIndex" to JsonPrimitive(index))) }
+        }
+        return items.takeIf { it.isNotEmpty() }?.let { JsonArray(it).toString() }
     }
 
     fun chapterContains(
@@ -122,7 +135,18 @@ internal data class ReaderHighlightCreationResult(
     val offset: Int,
     val text: String,
     val textFurigana: String? = null,
+    val parts: List<ReaderHighlightSourcePart> = emptyList(),
 ) : ReaderHighlightResult
+
+@Serializable
+internal data class ReaderHighlightSourcePart(
+    val id: String,
+    val sourceIndex: Int,
+    val start: Int,
+    val offset: Int,
+    val text: String,
+    val textFurigana: String? = null,
+)
 
 @Serializable
 internal sealed interface ReaderHighlightResult {

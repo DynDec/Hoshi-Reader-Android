@@ -29,4 +29,11 @@ internal object ReaderSasayakiCues {
         if (cues.isEmpty()) return null
         return json.encodeToString(ListSerializer(SasayakiCueRange.serializer()), cues)
     }
+
+    fun groupCuesJson(matchData: SasayakiMatchData?, group: ContinuousReadingGroup): String? {
+        val cues = matchData?.matches?.filter { it.chapterIndex in group.indices }?.map {
+            SasayakiCueRange(it.id, it.start, it.length, sourceIndex = it.chapterIndex)
+        }.orEmpty()
+        return cues.takeIf { it.isNotEmpty() }?.let { json.encodeToString(ListSerializer(SasayakiCueRange.serializer()), it) }
+    }
 }

@@ -19,6 +19,7 @@ data class EpubBook(
     val rootDirectory: File? = null,
     val bookInfo: BookInfo = buildBookInfo(chapters),
     val author: String? = null,
+    val navigationDocumentHref: String? = null,
 ) {
     fun readResource(path: String): ByteArray? {
         val normalized = path.normalizeResourceHref()
@@ -181,6 +182,12 @@ class EpubBookParser @Inject constructor(
             rootDirectory = root,
             bookInfo = reusableBookInfo ?: buildBookInfo(chapters, tocItems, root),
             author = author()?.trim()?.takeIf { it.isNotEmpty() },
+            navigationDocumentHref = manifest.values.filter { item ->
+                item.properties?.split(Regex("\\s+"))?.contains("nav") == true
+            }.let { navigationItems ->
+                (if (navigationItems.isEmpty()) manifest.values.filter { it.mediaType == "application/x-dtbncx+xml" }.singleOrNull()
+                else navigationItems.singleOrNull())?.href?.let { contentDirectoryPrefix.resolveManifestHref(it) }
+            },
         )
     }
 }

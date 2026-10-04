@@ -257,6 +257,21 @@ fun ReaderWebView(
     }
     val effectiveSettings = stateHolder.effectiveSettings
     val readerPosition = stateHolder.readerPosition
+    val mergeImages = effectiveSettings.viewMode == ReaderViewMode.Continuous && effectiveSettings.mergeImageOnlyChapters
+    var readingGroups by remember(book, mergeImages) {
+        mutableStateOf(if (mergeImages) null else ContinuousReadingGroups.build(book, false))
+    }
+    LaunchedEffect(book, mergeImages) {
+        if (mergeImages) readingGroups = withContext(Dispatchers.IO) { ContinuousReadingGroups.build(book, true) }
+    }
+    fun currentReadingGroup(): ContinuousReadingGroup? = if (effectiveSettings.viewMode == ReaderViewMode.Continuous) {
+        readingGroups?.firstOrNull { stateHolder.readerPosition.loadPosition.index in it.indices }
+    } else null
+    fun sourcePosition(progress: Double): ReaderChapterPosition =
+        currentReadingGroup()?.sourcePosition(progress, stateHolder.readerPosition.displayedPosition.index)
+            ?: stateHolder.readerPosition.loadPosition.withProgress(progress)
+    fun recordRenderedProgress(progress: Double): ReaderChapterPosition =
+        stateHolder.recordSourcePosition(sourcePosition(progress))
     val lookupPopups = stateHolder.lookupPopups
     var readerPopupHistories by remember { mutableStateOf<Map<String, ReaderPopupHistoryCounts>>(emptyMap()) }
     var rootSelectionHighlight by remember { mutableStateOf<ReaderRootSelectionHighlight?>(null) }
@@ -497,6 +512,21 @@ fun ReaderWebView(
             return
         }
         val creation = result
+        if (creation.parts.isNotEmpty()) {
+            val group = currentReadingGroup() ?: return
+            val parts = creation.parts.mapNotNull { part ->
+                if (part.sourceIndex !in group.indices || part.start < 0 || part.offset < 0 || part.text.isEmpty()) return@mapNotNull null
+                val chapter = book.chapters[part.sourceIndex]
+                val info = book.bookInfo.chapterInfo[chapter.href] ?: return@mapNotNull null
+                ReaderHighlight(
+                    id = part.id, character = info.currentTotal + part.start, offset = part.offset,
+                    text = part.text, textFurigana = part.textFurigana, color = color,
+                    createdAt = bookRepository.currentAppleReferenceDateSeconds(),
+                )
+            }
+            if (parts.isNotEmpty()) persistHighlights(highlights.orEmpty() + parts)
+            return
+        }
         val chapter = currentLoadChapter()
         val info = book.bookInfo.chapterInfo[chapter.href] ?: return
         val highlight = ReaderHighlight(
@@ -512,7 +542,7 @@ fun ReaderWebView(
     }
     fun removeHighlight(highlight: ReaderHighlight) {
         persistHighlights(highlights.orEmpty().filterNot { it.id == highlight.id })
-        if (ReaderHighlights.chapterContains(highlight, book.bookInfo, currentLoadChapter())) {
+        if (currentReadingGroup()?.indices?.any { ReaderHighlights.chapterContains(highlight, book.bookInfo, book.chapters[it]) } == true || ReaderHighlights.chapterContains(highlight, book.bookInfo, currentLoadChapter())) {
             webView?.evaluateJavascript(ReaderHighlightCommand.Remove(highlight.id).source, null)
         }
     }
@@ -570,7 +600,7 @@ fun ReaderWebView(
         val player = sasayakiPlayer ?: return null
         val offset = selection.normalizedOffset ?: return null
         if (!sasayakiSettings.enabled || !player.hasAudio) return null
-        return player.findCue(chapterIndex = stateHolder.readerPosition.displayedPosition.index, offset = offset)
+        return player.findCue(chapterIndex = selection.sourceIndex ?: stateHolder.readerPosition.displayedPosition.index, offset = offset)
     }
     fun lookupRootPopup(selection: ReaderSelectionData): Pair<LookupPopupItem, Int>? =
         createLookupPopupItem(
@@ -708,7 +738,9 @@ fun ReaderWebView(
         if (!stateHolder.canAcceptReaderNavigationInput()) return false
         cancelSasayakiAutoPage()
         startStatisticsForProgressChangeIfNeeded()
-        val next = stateHolder.goToNextChapter(book.chapters.lastIndex)
+        val group = currentReadingGroup()
+        val next = if (group == null) stateHolder.goToNextChapter(book.chapters.lastIndex)
+            else group.nextPosition(book.chapters.lastIndex)?.let { stateHolder.jumpTo(it) }
         if (next != null) {
             stateHolder.clearForwardHistoryAfterManualMovement()
             recordStatisticsAtDisplayedPosition()
@@ -721,7 +753,9 @@ fun ReaderWebView(
         if (!stateHolder.canAcceptReaderNavigationInput()) return false
         cancelSasayakiAutoPage()
         startStatisticsForProgressChangeIfNeeded()
-        val previous = stateHolder.goToPreviousChapter()
+        val group = currentReadingGroup()
+        val previous = if (group == null) stateHolder.goToPreviousChapter()
+            else group.previousPosition()?.let { stateHolder.jumpTo(it) }
         if (previous != null) {
             stateHolder.clearForwardHistoryAfterManualMovement()
             recordStatisticsAtDisplayedPosition()
@@ -734,7 +768,7 @@ fun ReaderWebView(
         if (applyingBookmark || bookDeleted) return
         stateHolder.enterFocusModeForReaderInteraction()
         startStatisticsForProgressChangeIfNeeded()
-        val savedPosition = stateHolder.recordDisplayedProgress(progress)
+        val savedPosition = recordRenderedProgress(progress)
         stateHolder.clearForwardHistoryAfterManualMovement()
         recordStatisticsAtDisplayedPosition()
         saveReaderPosition(savedPosition)
@@ -743,21 +777,23 @@ fun ReaderWebView(
         if (applyingBookmark || bookDeleted) return
         stateHolder.enterFocusModeForReaderInteraction()
         startStatisticsForProgressChangeIfNeeded()
-        stateHolder.recordDisplayedProgress(progress)
+        recordRenderedProgress(progress)
         stateHolder.clearForwardHistoryAfterManualMovement()
         recordStatisticsAtDisplayedPosition()
     }
     fun displayContinuousScrollProgress(progress: Double, restoreEpoch: Int) {
         if (applyingBookmark || bookDeleted) return
+        if (stateHolder.isWebViewRestoring || restoreEpoch != stateHolder.webViewRestoreEpoch) return
         startStatisticsForProgressChangeIfNeeded()
-        stateHolder.recordContinuousScrollDisplayProgress(progress, restoreEpoch) ?: return
+        recordRenderedProgress(progress)
         stateHolder.clearForwardHistoryAfterManualMovement()
         recordStatisticsAtDisplayedPosition()
     }
     fun saveContinuousScrollProgress(progress: Double, restoreEpoch: Int) {
         if (applyingBookmark || bookDeleted) return
+        if (stateHolder.isWebViewRestoring || restoreEpoch != stateHolder.webViewRestoreEpoch) return
         startStatisticsForProgressChangeIfNeeded()
-        val savedPosition = stateHolder.recordContinuousScrollProgress(progress, restoreEpoch) ?: return
+        val savedPosition = recordRenderedProgress(progress)
         stateHolder.clearForwardHistoryAfterManualMovement()
         recordStatisticsAtDisplayedPosition()
         saveReaderPosition(savedPosition)
@@ -1061,7 +1097,7 @@ fun ReaderWebView(
         )
     }
     fun commitSasayakiRestoreLanding(progress: Double?) {
-        val savedPosition = progress?.let(stateHolder::recordDisplayedProgress)
+        val savedPosition = progress?.let(::recordRenderedProgress)
             ?: stateHolder.readerPosition.displayedPosition
         resetStatisticsBaseline()
         saveReaderPosition(savedPosition, statisticsTracker?.statisticsForPersistenceOrNull())
@@ -1069,7 +1105,7 @@ fun ReaderWebView(
     fun recordSasayakiDisplayedProgress(progress: Double, countStatistics: Boolean = true) {
         if (countStatistics) {
             startStatisticsForProgressChangeIfNeeded()
-            val savedPosition = stateHolder.recordDisplayedProgress(progress)
+            val savedPosition = recordRenderedProgress(progress)
             recordStatisticsAtDisplayedPosition()
             saveReaderPosition(savedPosition)
         } else {
@@ -1892,7 +1928,8 @@ fun ReaderWebView(
                         rootSelectionHighlight = rootSelectionHighlight,
                     )
                 }
-                if (highlights != null) {
+                if (highlights != null && readingGroups != null) {
+                    val group = currentReadingGroup()
                     val loadChapter = currentLoadChapter()
                     val currentSasayakiColors = readerSasayakiColors(
                         settings = effectiveSettings,
@@ -1905,8 +1942,18 @@ fun ReaderWebView(
                     key(generation) {
                         ChapterWebView(
                             book = book,
-                            chapterPosition = readerPosition.loadPosition,
-                            chapterFragment = readerPosition.loadFragment,
+                            chapterPosition = readerPosition.loadPosition.copy(progress = group?.renderedProgress(readerPosition.loadPosition) ?: readerPosition.loadPosition.progress),
+                            chapterFragment = readerPosition.loadFragment?.let { group?.fragment(readerPosition.loadPosition.index, it) ?: it },
+                            readingGroup = group,
+                            onContinuousSourcePosition = { position, epoch, save ->
+                                if (!stateHolder.isWebViewRestoring && epoch == stateHolder.webViewRestoreEpoch && position.index in group?.indices.orEmpty()) {
+                                    startStatisticsForProgressChangeIfNeeded()
+                                    stateHolder.recordSourcePosition(position)
+                                    stateHolder.clearForwardHistoryAfterManualMovement()
+                                    recordStatisticsAtDisplayedPosition()
+                                    if (save) saveReaderPosition(position)
+                                }
+                            },
                             webViewViewportSize = stateHolder.webViewViewportSize,
                             onReaderViewportSizeChanged = { size ->
                                 val shouldResumeLookupAudio = stateHolder.lookupPopups.isNotEmpty() &&
@@ -1976,12 +2023,12 @@ fun ReaderWebView(
                             selectionScanLength = readerSelectionMaxLength(dictionarySettings),
                             contentLanguageProfile = popupContentLanguageProfile,
                             readerSettings = effectiveSettings,
-                            chapterHighlightsJson = ReaderHighlights.chapterHighlightsJson(
+                            chapterHighlightsJson = if (group != null) ReaderHighlights.groupHighlightsJson(highlights.orEmpty(), book, group) else ReaderHighlights.chapterHighlightsJson(
                                 highlights = highlights.orEmpty(),
                                 bookInfo = book.bookInfo,
                                 chapter = loadChapter,
                             ),
-                            chapterSasayakiCuesJson = ReaderSasayakiCues.chapterCuesJson(
+                            chapterSasayakiCuesJson = if (group != null) ReaderSasayakiCues.groupCuesJson(sasayakiMatchData, group) else ReaderSasayakiCues.chapterCuesJson(
                                 matchData = sasayakiMatchData,
                                 chapterIndex = readerPosition.loadPosition.index,
                             ),
@@ -2255,7 +2302,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 private fun SasayakiMatch.toCueRange(): SasayakiCueRange =
-    SasayakiCueRange(id = id, start = start, length = length)
+    SasayakiCueRange(id = id, start = start, length = length, sourceIndex = chapterIndex)
 
 internal fun readerSasayakiChapterLoadPosition(
     saveStatistics: () -> ReadingSessions?,

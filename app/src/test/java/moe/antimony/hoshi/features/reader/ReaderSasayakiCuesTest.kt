@@ -12,6 +12,16 @@ import org.junit.Test
 
 class ReaderSasayakiCuesTest {
     @Test
+    fun groupCuesCarryOriginalChapterIdentityWithoutChangingSourceMatchOffsets() {
+        val original = listOf(match("first", 0, 3, 2), match("last", 2, 1, 1), match("outside", 3, 4, 2))
+        val data = SasayakiMatchData(matches = original, unmatched = 0)
+        val group = ContinuousReadingGroup(listOf(0, 1, 2), listOf(10, 0, 5))
+        val cues = Json.parseToJsonElement(ReaderSasayakiCues.groupCuesJson(data, group)!!).jsonArray
+        assertEquals(listOf("0", "2"), cues.map { it.jsonObject.getValue("sourceIndex").jsonPrimitive.content })
+        assertEquals(listOf("3", "1"), cues.map { it.jsonObject.getValue("start").jsonPrimitive.content })
+        assertEquals(original, data.matches)
+    }
+    @Test
     fun chapterCuesSerializesOnlyCurrentChapterCuesSortedByStart() {
         val matchData = SasayakiMatchData(
             matches = listOf(

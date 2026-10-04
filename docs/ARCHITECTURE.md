@@ -306,6 +306,23 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   Paginated page height and page steps use the visible WebView viewport height;
   vertical padding and column gaps contain only configured user spacing, with
   no extra font-size overlap strip.
+- Continuous display groups retain ordered spine indices and original chapter
+  counts. `ContinuousReadingGroups` resolves the metadata-selected EPUB3 nav or
+  EPUB2 NCX document and treats every named nested/fragment target as a section
+  boundary. Only adjacent supported image-only files and text in the same
+  unambiguous section join; missing navigation and spanning files stay separate.
+  `ContinuousGroupDocument` composes group content on the existing HTTPS resource
+  bridge, namespacing fragment IDs and source styles. The Continuous web asset
+  scopes publisher selectors, font faces and animations before layout and adds
+  one reader-font 10em buffer only when the displayed content contains text.
+  Buffers contain no text and source character counts remain unchanged.
+  `reader-continuous-group.js` maps scroll progress, selections, search, highlights
+  and Sasayaki ranges to original source chapters, including zero-text files.
+  Cross-file highlights become independently editable source-local records.
+  Bookmarks, jump history, statistics and sync continue using the original spine
+  representation. The profile-scoped merge preference applies only in Continuous;
+  settings reloads retain the displayed source position and group navigation
+  steps beyond the group's first/last source.
 - Reader `bookinfo.json` sidecars persist whole-book/spine character counts plus
   optional iOS-compatible TOC fragment offsets and a first-appearance raster
   image inventory. A reader-facts schema version invalidates stale derived

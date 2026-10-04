@@ -22,6 +22,7 @@ internal data class ReaderWebAssets(
     val readerSasayakiJs: String,
     val highlightsJs: String,
     val readerCss: String,
+    val readerContinuousGroupJs: String = "",
 ) {
     companion object {
         @Volatile
@@ -53,6 +54,7 @@ internal data class ReaderWebAssets(
                 readerSasayakiJs = context.readAsset("hoshi-web/reader/reader-sasayaki.js"),
                 highlightsJs = context.readAsset("hoshi-web/reader/highlights.js"),
                 readerCss = context.readAsset("hoshi-web/reader/reader.css"),
+                readerContinuousGroupJs = context.readAsset("hoshi-web/reader/reader-continuous-group.js"),
             )
 
         private fun Context.readAsset(path: String): String =

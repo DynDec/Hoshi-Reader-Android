@@ -11,6 +11,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import moe.antimony.hoshi.profiles.ProfileRepository
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -18,6 +19,29 @@ import org.junit.rules.TemporaryFolder
 
 class ReaderProfileCompatibilityTest {
     @get:Rule val temporaryFolder = TemporaryFolder()
+
+    @Test
+    fun continuousMergeDefaultsOffPersistsPerProfileAndSurvivesModeChanges() = runBlocking {
+        val profiles = ProfileRepository(temporaryFolder.newFolder("merge-profiles"))
+        val originalProfile = profiles.currentEffectiveProfileId
+        val store = InMemoryPreferences()
+        val repository = ReaderSettingsRepository(store, profileRepository = profiles)
+        assertFalse(repository.settings.first().mergeImageOnlyChapters)
+        repository.update { it.copy(viewMode = ReaderViewMode.Continuous, mergeImageOnlyChapters = true) }
+        repository.update { it.copy(viewMode = ReaderViewMode.Paginated) }
+        assertTrue(repository.settings.first().mergeImageOnlyChapters)
+        assertFalse(repository.settings.first().readerContentReloadKey().mergeImageOnlyChapters)
+        val alternate = profiles.createProfile("Alternate", "ja")
+        profiles.activateGlobal(alternate.id)
+        repository.update { it.copy(mergeImageOnlyChapters = false) }
+        profiles.activateGlobal(originalProfile)
+        val reopened = ReaderSettingsRepository(store, profileRepository = profiles)
+        assertTrue(reopened.settings.first().mergeImageOnlyChapters)
+        reopened.update { it.copy(viewMode = ReaderViewMode.Continuous) }
+        assertTrue(reopened.settings.first().readerContentReloadKey().mergeImageOnlyChapters)
+        profiles.activateGlobal(alternate.id)
+        assertFalse(reopened.settings.first().mergeImageOnlyChapters)
+    }
 
     @Test
     fun retiredAdaptiveFuriganaPreservesProfileSettingsOnLoadSaveAndReopen() = runBlocking {

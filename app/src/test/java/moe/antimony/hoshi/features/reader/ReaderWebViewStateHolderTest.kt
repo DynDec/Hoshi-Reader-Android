@@ -21,6 +21,25 @@ import org.junit.Test
 
 class ReaderWebViewStateHolderTest {
     @Test
+    fun groupingModeChangesAndSyncedPositionsKeepOriginalChaptersAndJumpHistory() {
+        val holder = stateHolder(initialIndex = 0)
+        holder.syncSettings(ReaderSettings(viewMode = ReaderViewMode.Continuous))
+        holder.markWebViewRestored()
+        holder.recordSourcePosition(ReaderChapterPosition(2, 0.75))
+        holder.syncSettings(ReaderSettings(viewMode = ReaderViewMode.Continuous, mergeImageOnlyChapters = true))
+        assertEquals(ReaderChapterPosition(2, 0.75), holder.readerPosition.loadPosition)
+        holder.markWebViewRestored()
+        holder.recordSourcePosition(ReaderChapterPosition(3, 0.4))
+        holder.syncSettings(ReaderSettings(viewMode = ReaderViewMode.VisualNovel, mergeImageOnlyChapters = true))
+        assertEquals(ReaderChapterPosition(3, 0.4), holder.readerPosition.loadPosition)
+        holder.markWebViewRestored()
+        holder.jumpToWithHistory(ReaderChapterPosition(4, 0.2))
+        holder.markWebViewRestored()
+        holder.applySyncedBookmark(ReaderChapterPosition(1, 0.5))
+        assertEquals(ReaderChapterPosition(1, 0.5), holder.readerPosition.loadPosition)
+        assertEquals(ReaderChapterPosition(3, 0.4), holder.backTargetPosition)
+    }
+    @Test
     fun syncedBookmarkRestoresSamePositionWithoutAddingJumpHistory() {
         val holder = stateHolder(initialIndex = 2)
         holder.jumpToWithHistory(ReaderChapterPosition(3, 0.1))
