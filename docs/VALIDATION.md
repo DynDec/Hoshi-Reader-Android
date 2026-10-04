@@ -508,6 +508,14 @@ Validate relevant bookshelf/import changes with:
   intact. Verify Show/Blur/Hide persist across restart in dark and E-ink themes;
   Hide must not reveal the real cover, Blur must visibly blur on Android 12+
   and safely show fallback artwork on Android 8-11.
+- Manage Shelves: “Books per row” defaults to 2 and persists. Its maximum equals
+  the collapsed preview capacity for the Library content width, even with empty
+  shelves or hidden thumbnails. Check local, Reading, Unshelved, and Google Drive
+  expanded grids at both endpoints, including dense-card title/progress/selection
+  layouts. Choose 6 on a wide window, narrow to a four-preview layout, then widen:
+  the grid and slider show 4 while narrow and restore 6 afterward. An explicit
+  lower selection replaces the saved value. Collapsed previews and shelf
+  expansion state must remain unchanged.
 - Manage Shelves: “Hide thumbnails when collapsed” defaults off and persists
   across restart. Enable it and confirm local, Reading, and Google Drive collapsed
   sections show only one title/count/arrow row, with no preview placeholder.

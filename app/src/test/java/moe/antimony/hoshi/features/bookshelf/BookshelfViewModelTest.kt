@@ -48,6 +48,7 @@ class BookshelfViewModelTest {
                 showReading = true,
                 coverMode = BookshelfCoverMode.Blur,
                 hideCollapsedShelfThumbnails = true,
+                bookColumns = 6,
             ),
         )
         val viewModel = BookshelfViewModel(repository, testScope())
@@ -62,9 +63,28 @@ class BookshelfViewModelTest {
         assertTrue(viewModel.uiState.value.hideCollapsedShelfThumbnails)
         assertTrue(viewModel.uiState.value.showReading)
         assertEquals(BookshelfCoverMode.Blur, viewModel.uiState.value.coverMode)
+        assertEquals(6, viewModel.uiState.value.bookColumns)
         assertTrue(viewModel.uiState.value.hasLoadedBooks)
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.errorMessage.testString())
+    }
+
+    @Test
+    fun changeBookColumnsPublishesStateWithoutReloadAndPersistsExplicitReduction() {
+        val repository = FakeBookshelfRepository()
+        val viewModel = BookshelfViewModel(repository, testScope())
+
+        viewModel.changeBookColumns(6)
+        assertEquals(6, viewModel.uiState.value.bookColumns)
+        assertEquals(6, repository.settings.bookColumns)
+        assertTrue(repository.loadRequests.isEmpty())
+        viewModel.reloadBookEntries()
+        assertEquals(6, viewModel.uiState.value.bookColumns)
+
+        viewModel.changeBookColumns(2)
+        viewModel.reloadBookEntries()
+        assertEquals(2, viewModel.uiState.value.bookColumns)
+        assertEquals(2, repository.settings.bookColumns)
     }
 
     @Test
@@ -1548,6 +1568,10 @@ class BookshelfViewModelTest {
         override suspend fun changeShowReading(showReading: Boolean) {
             settings = settings.copy(showReading = showReading)
             showReadingUpdates += showReading
+        }
+
+        override suspend fun changeBookColumns(bookColumns: Int) {
+            settings = settings.copy(bookColumns = bookColumns)
         }
 
         override suspend fun changeHideCollapsedShelfThumbnails(hide: Boolean) {

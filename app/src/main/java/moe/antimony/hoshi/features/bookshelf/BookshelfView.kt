@@ -90,6 +90,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -132,6 +133,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.content.ContentLanguageProfile
@@ -310,6 +312,28 @@ fun BookshelfView(
         coverMode = uiState.coverMode,
         hideBookshelfProgress = hideBookshelfProgress,
         hideCollapsedShelfThumbnails = uiState.hideCollapsedShelfThumbnails,
+        bookColumns = uiState.bookColumns,
+        shelfManagementContent = { contentWidthDp ->
+            if (showShelfManagement) {
+                ShelfManagementDialog(
+                    shelves = uiState.shelves,
+                    showReading = uiState.showReading,
+                    coverMode = uiState.coverMode,
+                    hideCollapsedShelfThumbnails = uiState.hideCollapsedShelfThumbnails,
+                    bookColumns = layoutSpec.bookGridColumns(contentWidthDp, uiState.bookColumns),
+                    maxBookColumns = layoutSpec.collapsedShelfPreviewColumns(contentWidthDp),
+                    onBookColumnsChange = booksViewModel::changeBookColumns,
+                    onShowReadingChange = booksViewModel::changeShowReading,
+                    onCoverModeChange = booksViewModel::changeCoverMode,
+                    onHideCollapsedShelfThumbnailsChange = booksViewModel::changeHideCollapsedShelfThumbnails,
+                    onCreateShelf = booksViewModel::createShelf,
+                    onDeleteShelf = booksViewModel::deleteShelf,
+                    onRenameShelf = booksViewModel::renameShelf,
+                    onMoveShelf = booksViewModel::moveShelf,
+                    onDismiss = { showShelfManagement = false },
+                )
+            }
+        },
         sortOption = uiState.sortOption,
         hasLoadedBooks = uiState.hasLoadedBooks,
         isLoading = uiState.isLoading,
@@ -558,23 +582,6 @@ fun BookshelfView(
         )
     }
 
-    if (showShelfManagement) {
-        ShelfManagementDialog(
-            shelves = uiState.shelves,
-            showReading = uiState.showReading,
-            coverMode = uiState.coverMode,
-            hideCollapsedShelfThumbnails = uiState.hideCollapsedShelfThumbnails,
-            onShowReadingChange = booksViewModel::changeShowReading,
-            onCoverModeChange = booksViewModel::changeCoverMode,
-            onHideCollapsedShelfThumbnailsChange = booksViewModel::changeHideCollapsedShelfThumbnails,
-            onCreateShelf = booksViewModel::createShelf,
-            onDeleteShelf = booksViewModel::deleteShelf,
-            onRenameShelf = booksViewModel::renameShelf,
-            onMoveShelf = booksViewModel::moveShelf,
-            onDismiss = { showShelfManagement = false },
-        )
-    }
-
     uiState.shelfCreationMoveDialog?.let { dialog ->
         NewShelfMoveDialog(
             shelves = uiState.shelves,
@@ -663,6 +670,7 @@ internal fun HoshiMainShell(
 
 internal const val CompactNavigationBarTag = "compact-navigation-bar"
 internal const val ShelfManagementShelfListTag = "shelf-management-shelf-list"
+internal const val ShelfManagementBookColumnsTag = "shelf-management-book-columns"
 
 @Composable
 private fun HoshiCompactBottomNavigation(
@@ -902,6 +910,8 @@ private fun BooksTab(
     coverMode: BookshelfCoverMode,
     hideBookshelfProgress: Boolean,
     hideCollapsedShelfThumbnails: Boolean,
+    bookColumns: Int,
+    shelfManagementContent: @Composable (Int) -> Unit,
     sortOption: BookSortOption,
     hasLoadedBooks: Boolean,
     isLoading: Boolean,
@@ -978,6 +988,7 @@ private fun BooksTab(
                 .padding(innerPadding),
         ) {
             val contentWidthDp = layoutSpec.constrainedContentWidthDp(maxWidth.value.toInt())
+            shelfManagementContent(contentWidthDp)
             val bookContentAlignment = if (layoutSpec.navigationLayout == MainShellNavigationLayout.NavigationRail) {
                 Alignment.TopStart
             } else {
@@ -1013,7 +1024,7 @@ private fun BooksTab(
                     )
                     Box(modifier = contentModifier.fillMaxHeight()) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(layoutSpec.bookGridColumns(contentWidthDp)),
+                        columns = GridCells.Fixed(layoutSpec.bookGridColumns(contentWidthDp, bookColumns)),
                         modifier = Modifier
                             .fillMaxSize()
                             .pullToRefresh(
@@ -1974,6 +1985,9 @@ internal fun ShelfManagementDialog(
     showReading: Boolean,
     coverMode: BookshelfCoverMode,
     hideCollapsedShelfThumbnails: Boolean,
+    bookColumns: Int,
+    maxBookColumns: Int,
+    onBookColumnsChange: (Int) -> Unit,
     onShowReadingChange: (Boolean) -> Unit,
     onCoverModeChange: (BookshelfCoverMode) -> Unit,
     onHideCollapsedShelfThumbnailsChange: (Boolean) -> Unit,
@@ -2002,6 +2016,40 @@ internal fun ShelfManagementDialog(
                     .testTag(ShelfManagementShelfListTag),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item(key = "book-columns") {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.bookshelf_books_per_row),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Surface(
+                                color = hoshiSurfaces.nested,
+                                shape = RoundedCornerShape(100),
+                            ) {
+                                Text(
+                                    text = bookColumns.toString(),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                        Slider(
+                            value = bookColumns.toFloat(),
+                            onValueChange = { value ->
+                                val columns = value.roundToInt().coerceIn(2, maxBookColumns)
+                                if (columns != bookColumns) onBookColumnsChange(columns)
+                            },
+                            valueRange = 2f..maxBookColumns.toFloat(),
+                            steps = maxBookColumns - 3,
+                            modifier = Modifier.fillMaxWidth().testTag(ShelfManagementBookColumnsTag),
+                        )
+                    }
+                }
                 item(key = "cover-mode") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),

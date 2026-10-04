@@ -84,6 +84,7 @@ internal interface BookshelfRepository {
     suspend fun setBookProfile(entry: BookEntry, profileId: String?)
     suspend fun changeSort(sortOption: BookSortOption)
     suspend fun changeShowReading(showReading: Boolean)
+    suspend fun changeBookColumns(bookColumns: Int)
     suspend fun changeHideCollapsedShelfThumbnails(hide: Boolean)
     suspend fun changeCoverMode(coverMode: BookshelfCoverMode)
     suspend fun rebuildLookupQuery()
@@ -326,6 +327,10 @@ internal class AndroidBookshelfRepository @Inject constructor(
 
     override suspend fun changeShowReading(showReading: Boolean) {
         settingsRepository.update { it.copy(showReading = showReading) }
+    }
+
+    override suspend fun changeBookColumns(bookColumns: Int) {
+        settingsRepository.update { it.copy(bookColumns = bookColumns) }
     }
 
     override suspend fun changeHideCollapsedShelfThumbnails(hide: Boolean) {

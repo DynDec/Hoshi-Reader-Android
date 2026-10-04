@@ -8,6 +8,11 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Add a Books per row slider at the top of Manage Shelves, defaulting to two
+  columns and ranging up to the current collapsed shelf preview capacity.
+  Smaller windows temporarily cap the displayed count without changing the
+  saved preference or collapsed previews.
+
 - Add a 10em blank buffer after text in Continuous reading and an optional
   profile setting to merge image-only files with adjacent chapters within the
   same table-of-contents section, retaining original reading positions and

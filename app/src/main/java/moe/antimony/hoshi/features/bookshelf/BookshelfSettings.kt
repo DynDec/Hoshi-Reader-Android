@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +19,7 @@ enum class BookshelfCoverMode {
 }
 
 data class BookshelfSettings(
+    val bookColumns: Int = 2,
     val sortOption: BookSortOption = BookSortOption.Recent,
     val showReading: Boolean = false,
     val hideCollapsedShelfThumbnails: Boolean = false,
@@ -30,6 +32,7 @@ class BookshelfSettingsRepository(
     val settings: Flow<BookshelfSettings> =
         dataStore.data.map { preferences ->
             BookshelfSettings(
+                bookColumns = (preferences[KEY_BOOK_COLUMNS] ?: 2).coerceAtLeast(2),
                 sortOption = bookSortOptionFromRawValue(preferences[KEY_SORT_OPTION]),
                 showReading = preferences[KEY_SHOW_READING] ?: false,
                 coverMode = bookshelfCoverModeFromRawValue(preferences[KEY_COVER_MODE]),
@@ -41,6 +44,7 @@ class BookshelfSettingsRepository(
         dataStore.edit { preferences ->
             val next = transform(
                 BookshelfSettings(
+                    bookColumns = (preferences[KEY_BOOK_COLUMNS] ?: 2).coerceAtLeast(2),
                     sortOption = bookSortOptionFromRawValue(preferences[KEY_SORT_OPTION]),
                     showReading = preferences[KEY_SHOW_READING] ?: false,
                     coverMode = bookshelfCoverModeFromRawValue(preferences[KEY_COVER_MODE]),
@@ -48,6 +52,7 @@ class BookshelfSettingsRepository(
                 ),
             )
             preferences[KEY_SORT_OPTION] = next.sortOption.name
+            preferences[KEY_BOOK_COLUMNS] = next.bookColumns.coerceAtLeast(2)
             preferences[KEY_SHOW_READING] = next.showReading
             preferences[KEY_HIDE_COLLAPSED_SHELF_THUMBNAILS] = next.hideCollapsedShelfThumbnails
             preferences[KEY_COVER_MODE] = next.coverMode.name
@@ -55,6 +60,7 @@ class BookshelfSettingsRepository(
     }
 
     private companion object {
+        val KEY_BOOK_COLUMNS = intPreferencesKey("bookshelfBookColumns")
         val KEY_SORT_OPTION = stringPreferencesKey("bookshelfSortOption")
         val KEY_SHOW_READING = booleanPreferencesKey("bookshelfShowReading")
         val KEY_HIDE_COLLAPSED_SHELF_THUMBNAILS = booleanPreferencesKey("bookshelfHideCollapsedShelfThumbnails")

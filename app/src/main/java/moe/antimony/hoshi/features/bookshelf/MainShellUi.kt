@@ -73,7 +73,10 @@ data class MainShellLayoutSpec(
     fun constrainedContentWidthDp(windowWidthDp: Int): Int =
         windowWidthDp.coerceAtMost(contentMaxWidthDp)
 
-    fun bookGridColumns(contentWidthDp: Int): Int {
+    fun bookGridColumns(contentWidthDp: Int, bookColumns: Int = 2): Int =
+        bookColumns.coerceIn(2, collapsedShelfPreviewColumns(contentWidthDp))
+
+    private fun adaptiveBookGridColumns(contentWidthDp: Int): Int {
         val available = (contentWidthDp - pageHorizontalPaddingDp * 2).coerceAtLeast(bookGridMinCellWidthDp)
         val columns = (available + bookGridSpacingDp) / (bookGridMinCellWidthDp + bookGridSpacingDp)
         return columns.coerceIn(1, bookGridMaxColumns)
@@ -84,7 +87,7 @@ data class MainShellLayoutSpec(
         val adaptiveColumns =
             ((available + CollapsedShelfCoverSpacingDp) / (CollapsedShelfCoverTargetWidthDp + CollapsedShelfCoverSpacingDp))
                 .coerceAtLeast(1)
-        val minimumPreviewColumns = (bookGridColumns(contentWidthDp) + 2).coerceAtLeast(4)
+        val minimumPreviewColumns = (adaptiveBookGridColumns(contentWidthDp) + 2).coerceAtLeast(4)
         return maxOf(adaptiveColumns, minimumPreviewColumns)
     }
 

@@ -582,6 +582,15 @@ internal class BookshelfViewModel : ViewModel {
         }
     }
 
+    fun changeBookColumns(bookColumns: Int) {
+        val columns = bookColumns.coerceAtLeast(2)
+        if (_uiState.value.bookColumns == columns) return
+        _uiState.update { it.copy(bookColumns = columns) }
+        workScope.launch {
+            repository.changeBookColumns(columns)
+        }
+    }
+
     fun changeHideCollapsedShelfThumbnails(hide: Boolean) {
         _uiState.update { it.copy(hideCollapsedShelfThumbnails = hide) }
         workScope.launch {
@@ -779,6 +788,7 @@ internal class BookshelfViewModel : ViewModel {
                 showReading = result.settings.showReading,
                 coverMode = result.settings.coverMode,
                 hideCollapsedShelfThumbnails = result.settings.hideCollapsedShelfThumbnails,
+                bookColumns = result.settings.bookColumns,
                 selectedBookIds = validSelectedIds,
                 hasLoadedBooks = true,
                 isLoading = false,

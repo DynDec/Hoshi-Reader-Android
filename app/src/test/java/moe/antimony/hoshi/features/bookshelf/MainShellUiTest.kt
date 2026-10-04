@@ -324,16 +324,45 @@ class MainShellUiTest {
 
         assertEquals(MainShellNavigationLayout.NavigationRail, spec.navigationLayout)
         assertEquals(640, spec.contentMaxWidthDp)
-        assertEquals(3, spec.bookGridColumns(contentWidthDp = 640))
+        assertEquals(2, spec.bookGridColumns(contentWidthDp = 640))
+        assertEquals(6, spec.collapsedShelfPreviewColumns(contentWidthDp = 640))
     }
 
     @Test
-    fun expandedWindowsUseNavigationRailAndCapBookGridColumns() {
+    fun expandedWindowsUseNavigationRailAndConstrainContent() {
         val spec = MainShellLayoutSpec.forWidthDp(1200)
 
         assertEquals(MainShellNavigationLayout.NavigationRail, spec.navigationLayout)
         assertEquals(1040, spec.contentMaxWidthDp)
-        assertEquals(5, spec.bookGridColumns(contentWidthDp = 1040))
+        assertEquals(2, spec.bookGridColumns(contentWidthDp = 1040))
+        assertEquals(10, spec.collapsedShelfPreviewColumns(contentWidthDp = 1040))
+    }
+
+    @Test
+    fun selectedColumnsAreLimitedByUnchangedPreviewCapacity() {
+        listOf(360 to 4, 640 to 6, 1040 to 10).forEach { (width, capacity) ->
+            val spec = MainShellLayoutSpec.forWidthDp(width)
+            assertEquals(capacity, spec.collapsedShelfPreviewColumns(width))
+            (2..capacity).forEach { columns ->
+                assertEquals(columns, spec.bookGridColumns(width, columns))
+                assertEquals(capacity, spec.collapsedShelfPreviewColumns(width))
+            }
+            assertEquals(capacity, spec.bookGridColumns(width, Int.MAX_VALUE))
+            assertEquals(2, spec.bookGridColumns(width, 0))
+        }
+    }
+
+    @Test
+    fun resizeTemporarilyCapsSavedColumnsAndRestoresThemWhenSpaceReturns() {
+        val savedColumns = 6
+        val wide = MainShellLayoutSpec.forWidthDp(800)
+        val narrow = MainShellLayoutSpec.forWidthDp(360)
+        val wideContent = wide.constrainedContentWidthDp(720)
+
+        assertEquals(6, wide.bookGridColumns(wideContent, savedColumns))
+        assertEquals(4, narrow.bookGridColumns(360, savedColumns))
+        assertEquals(6, wide.bookGridColumns(wideContent, savedColumns))
+        assertEquals(2, wide.bookGridColumns(wideContent, bookColumns = 2))
     }
 
     @Test

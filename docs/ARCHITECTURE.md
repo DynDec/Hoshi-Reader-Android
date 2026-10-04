@@ -101,6 +101,11 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   to false. When enabled, local, Reading, and Google Drive collapsed sections
   omit their preview rows entirely while retaining their title/count/toggle row;
   expanded cards continue to follow the cover mode.
+  A local DataStore-backed `bookColumns` preference defaults to two and controls
+  all expanded Library sections. Manage Shelves uses the Library's measured
+  content width for its slider maximum: the unchanged adaptive collapsed preview
+  capacity. Rendering clamps the saved count to that capacity without persisting
+  resize-driven reductions, so wider windows restore the selected count.
 - Book metadata, bookmarks, highlights, reading sessions, and Sasayaki data
   are persisted through iOS-compatible sidecar repositories and models.
   Highlights use timestamped UUID records with durable deletion markers;
