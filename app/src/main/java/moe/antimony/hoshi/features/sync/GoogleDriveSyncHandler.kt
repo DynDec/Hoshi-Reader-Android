@@ -114,6 +114,11 @@ class GoogleDriveSyncHandler @Inject constructor(private val client: GoogleDrive
         client.write(data, fileName, folder)
     }
 
+    suspend fun upload(file: File, fileName: String, folder: String) {
+        if (children(folder, fileName).isNotEmpty()) return
+        client.write(file, fileName, folder)
+    }
+
     suspend fun download(file: GoogleDriveFile, destination: File, onProgress: (Double) -> Unit) {
         val size = file.size!!.toLong()
         client.performDownload(driveUrl("files/${file.id.urlPathSegment()}", mapOf("alt" to "media")), destination) { received, _ ->

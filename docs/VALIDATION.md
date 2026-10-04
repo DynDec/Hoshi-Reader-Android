@@ -906,6 +906,12 @@ that explicit class only on an available device using data-preserving installs.
 
 Validate relevant sync/update/Sasayaki changes with:
 
+- Large Hoshi uploads: run `GoogleDriveStreamingUploadTest`, `GoogleDriveRetryTest`
+  and `GoogleDriveSyncManagerTest`. Verify bounded file writes, fixed-length HTTP
+  streaming, complete replay after authentication/rate-limit retries, and stream
+  cleanup on cancellation or failure. On a device, sync a library containing
+  multiple 100 MB EPUBs while reading; uploads must not allocate whole-file or
+  whole-multipart buffers or publish file state before successful completion.
 - Hoshi sync: verify GIS consent for the installed package/signing certificate and
   `drive.file` access to the same Hoshi Reader folder as iOS. Cancel the account
   picker and test a rejected authorization: both must show a localized error

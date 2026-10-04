@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
@@ -25,6 +24,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.JsonArray
@@ -90,26 +90,63 @@ class GoogleDriveClient internal constructor(
         parent: String,
         fileId: String? = null,
         contentType: String = "application/octet-stream",
+    ): GoogleDriveFile = writeMultipart(data.size.toLong(), name, parent, fileId, contentType) { it.write(data) }
+
+    suspend fun write(
+        file: File,
+        name: String,
+        parent: String,
+        fileId: String? = null,
+        contentType: String = "application/octet-stream",
+    ): GoogleDriveFile {
+        val length = withContext(ioDispatcher) { file.length() }
+        val context = currentCoroutineContext()
+        val connection = connectionId
+        return writeMultipart(length, name, parent, fileId, contentType) { output ->
+            // Reopen for each HTTP retry; never retain a whole EPUB or multipart body in memory.
+            file.inputStream().use { input ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    context.ensureActive()
+                    checkConnection(connection)
+                    val count = input.read(buffer)
+                    if (count == -1) break
+                    output.write(buffer, 0, count)
+                }
+            }
+        }
+    }
+
+    private suspend fun writeMultipart(
+        length: Long,
+        name: String,
+        parent: String,
+        fileId: String?,
+        contentType: String,
+        writer: (OutputStream) -> Unit,
     ): GoogleDriveFile {
         val metadata = buildJsonObject {
             put("name", name)
             if (fileId == null) put("parents", JsonArray(listOf(JsonPrimitive(parent))))
         }.toString()
         val boundary = UUID.randomUUID().toString()
-        val body = ByteArrayOutputStream().apply {
-            write("--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$metadata".toByteArray())
-            write("\r\n--$boundary\r\nContent-Type: $contentType\r\n\r\n".toByteArray())
-            write(data)
-            write("\r\n--$boundary--\r\n".toByteArray())
-        }.toByteArray()
-        return SyncFormat.json.decodeFromString(request(
-            path = fileId?.let { "files/${it.urlPathSegment()}" } ?: "files",
-            query = mapOf("uploadType" to "multipart", "fields" to "id,name,mimeType,md5Checksum,createdTime"),
+        val prefix = ("--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$metadata" +
+            "\r\n--$boundary\r\nContent-Type: $contentType\r\n\r\n").toByteArray()
+        val suffix = "\r\n--$boundary--\r\n".toByteArray()
+        val url = driveUrl(
+            fileId?.let { "files/${it.urlPathSegment()}" } ?: "files",
+            mapOf("uploadType" to "multipart", "fields" to "id,name,mimeType,md5Checksum,createdTime"),
+        ).replace("/drive/v3/", "/upload/drive/v3/")
+        return SyncFormat.json.decodeFromString(performStreamingUpload(
+            url = url,
             method = if (fileId == null) "POST" else "PATCH",
-            body = body,
             contentType = "multipart/related; boundary=$boundary",
-            upload = true,
-        ).decodeToString())
+            contentLength = prefix.size.toLong() + length + suffix.size,
+        ) { output ->
+            output.write(prefix)
+            writer(output)
+            output.write(suffix)
+        }.decodeToString())
     }
 
     suspend fun trashFile(fileId: String) {

@@ -34,6 +34,7 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   per-book errors.
   Books sync eight at a time using far fewer Google Drive requests, and
   rate-limited or failed requests are retried.
+  Large book uploads stream from disk without loading entire files into memory.
 
 ### Changed
 

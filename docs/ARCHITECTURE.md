@@ -515,7 +515,10 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   from ignored `secrets.properties` or build environment variables; no client secret
   is used. TTU retains its device-code authorization. Preferences remain DataStore-backed.
 - `GoogleDriveClient` shares cancellable HTTP transport, token refresh and network
-  preflight. Hoshi connections use 60-second connect/read timeouts; TTU uses
+  preflight. Hoshi file uploads stream multipart bodies from disk with bounded
+  buffers and fixed-length HTTP streaming; retries reopen the source file.
+  State uploads reuse the transport without copying the complete multipart body.
+  Hoshi connections use 60-second connect/read timeouts; TTU uses
   10 seconds. `GoogleDriveSyncHandler` owns the native Drive layout and changes
   feed, while `TtuDriveHandler` retains TTU folder/file discovery and cache behavior.
   TTU remote books remain `RemoteBookEntry` values; automatic TTU refresh suppresses
