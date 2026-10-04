@@ -27,6 +27,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   Connecting through the Google account picker resets pending sync operations so
   books deleted before sign-in do not delete existing cloud copies.
   Devices without Google Play Services can connect through their browser.
+  Hoshi and TTU retain their logins independently when connecting or switching
+  providers; signing out disconnects only the selected provider.
   Android-generated Sasayaki matches include the image-list field required by iOS.
   Debug builds sync edits after 2 seconds and poll for cloud changes every 5 seconds.
   Bookshelf and Statistics refreshes are batched during sync and skipped while reading.

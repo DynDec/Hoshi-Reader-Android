@@ -235,7 +235,6 @@ fun SyncSettingsView(
             }
             when (result) {
                 is DriveAuthorizationResult.Authorized -> {
-                    googleAuth.clearHoshiLogin()
                     hoshiSync.start()
                     isAuthorizing = false
                     devicePrompt = null

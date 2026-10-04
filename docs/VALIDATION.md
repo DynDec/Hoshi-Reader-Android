@@ -104,6 +104,14 @@ to verify form encoding, token responses, failures and rejected HTTP redirects.
 Also verify real Custom Tab sign-in, Back/close cancellation and return to Sync
 settings on a device without Play Services.
 
+Run `GoogleDriveAuthTest` with the explicit instrumentation runner and require
+`OK (5 tests)`. It uses in-memory credentials to check independent Hoshi/TTU
+logins, provider token routing, cancellation, and provider-scoped sign-out for
+both account-picker and browser connections without touching saved accounts.
+For real sign-in, connect TTU then Hoshi, and Hoshi then TTU; switch providers
+and confirm both retain their connection. Sign out of each provider and confirm
+the other remains connected. Cover both Play Services and browser authorization.
+
 ## Sasayaki Subtitle Export
 
 - From Resources, export the current match using both Subtitles and Transcription.

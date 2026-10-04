@@ -513,7 +513,10 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   under `noBackupFilesDir`, refresh independently of Play Services, and are cleared
   locally on sign-out. Debug/release browser client IDs and redirect schemes come
   from ignored `secrets.properties` or build environment variables; no client secret
-  is used. TTU retains its device-code authorization. Preferences remain DataStore-backed.
+  is used. TTU retains its device-code authorization. Each provider retains its
+  own login; connecting or selecting one does not clear the other's credentials.
+  Sign-out clears only the selected provider, and only the selected provider syncs.
+  Preferences remain DataStore-backed.
 - `GoogleDriveClient` shares cancellable HTTP transport, token refresh and network
   preflight. Hoshi file uploads stream multipart bodies from disk with bounded
   buffers and fixed-length HTTP streaming; retries reopen the source file.

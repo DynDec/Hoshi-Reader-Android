@@ -2,6 +2,8 @@ package moe.antimony.hoshi.features.sync
 
 import android.content.Context
 import android.content.Intent
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
@@ -22,19 +24,32 @@ import kotlinx.coroutines.tasks.await
 private val Context.hoshiDriveAuthDataStore by preferencesDataStore(name = "hoshi-drive-auth")
 
 @Singleton
-class GoogleDriveAuth @Inject constructor(
-    @param:ApplicationContext private val context: Context,
-    private val ttu: DeviceCodeDriveAuthorizer,
-    private val settings: Lazy<SyncSettingsRepository>,
+class GoogleDriveAuth internal constructor(
+    private val context: Context,
+    private val ttu: DriveAuthorizer,
+    private val currentProvider: suspend () -> SyncProvider,
     val browser: GoogleDriveBrowserAuth,
+    private val dataStore: DataStore<Preferences>,
+    private val browserAuthorizationRequired: () -> Boolean,
 ) : DriveAuthorizer {
+    @Inject constructor(
+        @ApplicationContext context: Context,
+        ttu: DeviceCodeDriveAuthorizer,
+        settings: Lazy<SyncSettingsRepository>,
+        browser: GoogleDriveBrowserAuth,
+    ) : this(
+        context, ttu, { settings.get().settings.first().provider }, browser,
+        context.hoshiDriveAuthDataStore,
+        { GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) != ConnectionResult.SUCCESS },
+    )
+
     private val client by lazy { Identity.getAuthorizationClient(context) }
     private val connectedKey = booleanPreferencesKey("connected")
 
-    suspend fun provider(): SyncProvider = settings.get().settings.first().provider
+    suspend fun provider(): SyncProvider = currentProvider()
 
     fun usesBrowserAuthorization(): Boolean =
-        GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) != ConnectionResult.SUCCESS
+        browserAuthorizationRequired()
 
     suspend fun authorize(selectAccount: Boolean = false): AuthorizationResult = client.authorize(
         AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(DriveFileScope)))
@@ -45,20 +60,18 @@ class GoogleDriveAuth @Inject constructor(
     fun authorizationResult(intent: Intent?): AuthorizationResult = client.getAuthorizationResultFromIntent(intent)
 
     suspend fun accept() {
-        ttu.revokeAccess()
         browser.revokeAccess()
-        context.hoshiDriveAuthDataStore.edit { it[connectedKey] = true }
+        dataStore.edit { it[connectedKey] = true }
     }
 
     suspend fun acceptBrowserAuthorization(intent: Intent?) {
         browser.accept(intent)
-        ttu.revokeAccess()
-        context.hoshiDriveAuthDataStore.edit { it[connectedKey] = false }
+        dataStore.edit { it[connectedKey] = false }
     }
 
     suspend fun clearHoshiLogin() {
         browser.revokeAccess()
-        context.hoshiDriveAuthDataStore.edit { it[connectedKey] = false }
+        dataStore.edit { it[connectedKey] = false }
     }
 
     override suspend fun status(): DriveAuthStatus = status(provider())
@@ -69,7 +82,7 @@ class GoogleDriveAuth @Inject constructor(
             val browserStatus = browser.status()
             when {
                 browserStatus == DriveAuthStatus.Connected || usesBrowserAuthorization() -> browserStatus
-                context.hoshiDriveAuthDataStore.data.first()[connectedKey] == true -> DriveAuthStatus.Connected
+                dataStore.data.first()[connectedKey] == true -> DriveAuthStatus.Connected
                 else -> DriveAuthStatus.NotConnected
             }
         }
