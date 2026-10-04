@@ -1054,13 +1054,14 @@ class ReaderWebViewStateHolderTest {
     fun contentsTabSelectionSurvivesSheetDismissalWithinReaderSession() {
         val holder = stateHolder()
 
-        assertEquals(ReaderGoToTab.Chapters, holder.selectedGoToTab)
+        assertEquals(ReaderGoToTab.Gallery, holder.selectedGoToTab)
         holder.openGoToFromMenu()
-        holder.selectGoToTab(ReaderGoToTab.Gallery)
+        assertEquals(ReaderGoToTab.Gallery, holder.selectedGoToTab)
+        holder.selectGoToTab(ReaderGoToTab.Chapters)
         holder.dismissGoTo()
         holder.openGoToFromMenu()
 
-        assertEquals(ReaderGoToTab.Gallery, holder.selectedGoToTab)
+        assertEquals(ReaderGoToTab.Chapters, holder.selectedGoToTab)
 
         holder.selectGoToTab(ReaderGoToTab.Search)
         holder.dismissGoTo()
@@ -1102,7 +1103,7 @@ class ReaderWebViewStateHolderTest {
 
         val newSession = stateHolder()
 
-        assertEquals(ReaderGoToTab.Chapters, newSession.selectedGoToTab)
+        assertEquals(ReaderGoToTab.Gallery, newSession.selectedGoToTab)
         newSession.openSasayakiFromMenu(SasayakiSheetTab.Resources)
         assertEquals(SasayakiSheetTab.Resources, newSession.selectedSasayakiTab)
     }

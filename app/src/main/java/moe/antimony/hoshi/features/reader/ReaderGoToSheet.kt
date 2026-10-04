@@ -87,7 +87,7 @@ internal enum class ReaderGoToTab {
 
 internal val ReaderGoToTabRole = Role.Tab
 
-internal fun readerGoToDefaultTab(): ReaderGoToTab = ReaderGoToTab.Chapters
+internal fun readerGoToDefaultTab(): ReaderGoToTab = ReaderGoToTab.Gallery
 
 @Composable
 internal fun ReaderGoToSheet(
