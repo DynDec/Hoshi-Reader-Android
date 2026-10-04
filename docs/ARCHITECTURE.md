@@ -329,7 +329,9 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   fields when their indexing semantics change. Contents rows, chapter progress,
   and chapter time remaining derive from one Kotlin-owned TOC range model;
   Gallery thumbnails and the fullscreen viewer reuse the existing safe EPUB
-  resource path.
+  resource path. Gallery list position and preview aspect ratios live in the
+  book-scoped `ReaderWebViewStateHolder` through `ReaderGalleryState`; they survive
+  Contents dismissal and tab changes but are discarded when the reader session ends.
 - Reader highlights keep plain text/raw offsets for positioning and optional
   iOS-compatible `textFurigana` for Contents display. The shared highlight asset
   owns exact-range identity and returns explicit create/recolor/remove results;

@@ -28,6 +28,8 @@ internal class ReaderWebViewStateHolder(
     var selectedGoToTab by mutableStateOf(readerGoToDefaultTab())
         private set
 
+    val galleryState = ReaderGalleryState()
+
     var showSasayaki by mutableStateOf(false)
         private set
 

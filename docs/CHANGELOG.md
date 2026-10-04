@@ -42,7 +42,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 ### Changed
 
 - Open Reader Contents on Gallery by default, retaining later tab selections
-  within the current reader session.
+  and Gallery scroll position within the current reader session. Browse with
+  compact Previous/Next image buttons above the list and previews about 30% shorter.
 - Edit individual reading sessions in Statistics. Session deletions persist across
   sync, and daily totals follow the selected reset time.
 

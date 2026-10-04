@@ -95,6 +95,7 @@ internal fun ReaderGoToSheet(
     currentPosition: ReaderChapterPosition,
     progressDisplay: ReaderProgressDisplay,
     highlights: List<ReaderHighlight>,
+    galleryState: ReaderGalleryState,
     selectedTab: ReaderGoToTab,
     onSelectedTabChange: (ReaderGoToTab) -> Unit,
     onChapterJump: (ReaderChapterPosition, String?) -> Unit,
@@ -150,7 +151,11 @@ internal fun ReaderGoToSheet(
         ReaderGoToTabs(
             selectedTab = selectedTab,
             onSelectedTabChange = onSelectedTabChange,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
+            modifier = Modifier.padding(
+                start = 20.dp,
+                end = 20.dp,
+                bottom = if (selectedTab == ReaderGoToTab.Gallery) 0.dp else 10.dp,
+            ),
         )
         when (selectedTab) {
             ReaderGoToTab.Chapters -> ReaderGoToChaptersTab(
@@ -176,6 +181,7 @@ internal fun ReaderGoToSheet(
             )
             ReaderGoToTab.Gallery -> ReaderGalleryTab(
                 book = book,
+                state = galleryState,
                 onImageSelected = onGalleryImageSelected,
                 modifier = Modifier.weight(1f),
             )

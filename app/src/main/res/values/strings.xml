@@ -332,6 +332,8 @@
     <string name="reader_chapters" comment="Reader chapter-list label; Sasayaki intentionally reuses the same visible label for audiobook chapters.">Chapters</string>
     <string name="reader_gallery">Gallery</string>
     <string name="reader_gallery_image">Gallery image</string>
+    <string name="reader_gallery_previous">Previous image</string>
+    <string name="reader_gallery_next">Next image</string>
     <string name="reader_no_images">No Images</string>
     <string name="reader_highlights">Highlights</string>
     <string name="reader_statistics" comment="Reader menu label, intentionally matching advanced statistics.">Statistics</string>

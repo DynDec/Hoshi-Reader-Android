@@ -161,6 +161,15 @@ build script. Do not regenerate the catalog for a CRLF-only difference.
 
 ## Reader And Lookup
 
+- Gallery: Previous/Next moves exactly one image without wrapping, including rapid
+  taps and after manual scrolling. Buttons stay above the image viewport; portrait
+  and wide previews retain their full proportions at 70% of the former size.
+  Contents dismissal, tab changes, and fullscreen viewing preserve Gallery's
+  image and pixel offset; leaving Reader and opening a new book session resets it.
+  `ReaderGalleryTest` uses generated in-memory images without opening user books
+  or modifying preferences. Build its APK separately and run the explicit class
+  with `adb install -r` and `am instrument`, preserving device data.
+
 - Dictionary tab history: search A, follow a definition link to B, swipe back to
   A, switch to Settings and return. A and its scroll/expanded definitions must
   remain visible; forward must still reach B and back must return to A. Also

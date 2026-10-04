@@ -2181,6 +2181,7 @@ fun ReaderWebView(
                 progressDisplay = progressDisplay,
                 highlights = highlights.orEmpty(),
                 selectedTab = stateHolder.selectedGoToTab,
+                galleryState = stateHolder.galleryState,
                 onSelectedTabChange = stateHolder::selectGoToTab,
                 onChapterJump = { target, fragment ->
                     closeLookupPopupsAndSelection()
