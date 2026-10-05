@@ -53,7 +53,10 @@ class AnkiRemoteAudioDeviceTest {
                 settings.value = transform(settings.value)
             }
         }
-        val repository = AnkiRepository(context, backend, settings, LocalAudioRepository(context.filesDir))
+        val repository = AnkiRepository(
+            context, backend, settings, LocalAudioRepository(context.filesDir),
+            AnkiBookCoverReuseStore(DeviceAnkiCoverPreferences()),
+        )
         val remote = RemoteWordAudioRepository(UrlConnectionAudioHttpClient(), Dispatchers.IO)
         try {
             for (source in BuiltInAudioSource.entries) {

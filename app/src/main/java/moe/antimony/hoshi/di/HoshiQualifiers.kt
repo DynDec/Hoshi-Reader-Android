@@ -8,6 +8,10 @@ annotation class ApplicationScope
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
+annotation class AnkiBookCoverReuseDataStore
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
 annotation class CacheDir
 
 @Qualifier

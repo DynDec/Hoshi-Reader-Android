@@ -313,6 +313,8 @@ data class AnkiMiningContext(
     val coverPath: String? = null,
     val sasayakiAudioPath: String? = null,
     val sentenceOffset: Int? = null,
+    val bookId: String? = null,
+    val reusedCoverReference: String? = null,
 )
 
 internal data class AnkiTermDictionary(
@@ -467,6 +469,7 @@ internal object AnkiHandlebarRenderer {
             "{phonetic-transcriptions}" -> payload.phoneticTranscriptions
             "{document-title}" -> context.documentTitle.orEmpty()
             "{book-cover}" -> context.coverPath.orEmpty()
+            "{book-cover-reuse}" -> context.reusedCoverReference.orEmpty()
             "{sasayaki-audio}" -> context.sasayakiAudioPath.orEmpty()
             else -> ""
         }

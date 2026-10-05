@@ -162,6 +162,7 @@ class AnkiRepositoryFetchTest {
             backend = backend,
             settingsRepository = settingsRepository,
             localAudioRepository = LocalAudioRepository(Files.createTempDirectory("hoshi-anki-test").toFile()),
+            coverReuseStore = AnkiBookCoverReuseStore(MemoryAnkiCoverPreferences()),
         )
 
     private class InMemoryAnkiSettingsRepository(

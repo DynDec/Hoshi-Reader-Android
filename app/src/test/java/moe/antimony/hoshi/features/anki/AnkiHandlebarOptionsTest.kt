@@ -6,6 +6,15 @@ import org.junit.Test
 
 class AnkiHandlebarOptionsTest {
     @Test
+    fun reusedBookCoverFollowsBookCoverInBothPickerModes() {
+        for (showAll in listOf(false, true)) {
+            val options = AnkiHandlebarOptions.forTermDictionaries(listOf("JMdict"), showAll)
+            assertEquals("{book-cover-reuse}", options[options.indexOf("{book-cover}") + 1])
+            assertEquals(1, options.count { it == "{book-cover-reuse}" })
+        }
+    }
+
+    @Test
     fun includesTermDictionarySpecificGlossaryHandlebarsAfterCoreOptions() {
         val options = AnkiHandlebarOptions.forTermDictionaries(
             listOf("JMdict", "明鏡国語辞典 第三版"),

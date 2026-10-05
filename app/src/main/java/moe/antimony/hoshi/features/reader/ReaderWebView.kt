@@ -625,6 +625,7 @@ fun ReaderWebView(
                 audioSettings = audioSettings,
                 documentTitle = book.title,
                 coverPath = sasayakiCoverFile?.absolutePath,
+                bookId = bookEntry?.metadata?.id ?: bookId,
                 contentLanguageProfile = popupContentLanguageProfile,
             ),
         )?.let { (popup, highlightCount) ->
@@ -653,6 +654,7 @@ fun ReaderWebView(
                 audioSettings = audioSettings,
                 documentTitle = book.title,
                 coverPath = sasayakiCoverFile?.absolutePath,
+                bookId = bookEntry?.metadata?.id ?: bookId,
                 contentLanguageProfile = popupContentLanguageProfile,
             ),
         )?.let { (popup, highlightCount) ->

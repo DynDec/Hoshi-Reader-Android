@@ -14,6 +14,7 @@ import moe.antimony.hoshi.features.audio.LocalAudioRepository
 import moe.antimony.hoshi.features.audio.LocalAudioResolver
 import moe.antimony.hoshi.ui.UiText
 import java.io.File
+import java.io.IOException
 import java.net.URL
 import java.security.MessageDigest
 import java.util.UUID
@@ -28,6 +29,7 @@ internal class AnkiRepository(
     private val backend: AnkiBackend,
     private val settingsRepository: AnkiSettingsRepository,
     private val localAudioRepository: LocalAudioRepository,
+    private val coverReuseStore: AnkiBookCoverReuseStore,
     private val ankiConnectBackendFactory: (String, String) -> AnkiBackend,
     private val loadDictionaryMedia: (DictionaryMedia) -> ByteArray?,
     private val loadTermDictionaries: () -> List<AnkiTermDictionary>,
@@ -39,11 +41,13 @@ internal class AnkiRepository(
         settingsRepository: AnkiSettingsRepository,
         localAudioRepository: LocalAudioRepository,
         dictionaryRepository: DictionaryRepository,
+        coverReuseStore: AnkiBookCoverReuseStore,
     ) : this(
         context = context,
         backend = backend,
         settingsRepository = settingsRepository,
         localAudioRepository = localAudioRepository,
+        coverReuseStore = coverReuseStore,
         ankiConnectBackendFactory = { endpoint: String, apiKey: String ->
             AnkiConnectBackend(endpoint, apiKey = apiKey)
         },
@@ -63,6 +67,7 @@ internal class AnkiRepository(
         backend: AnkiBackend,
         settingsRepository: AnkiSettingsRepository,
         localAudioRepository: LocalAudioRepository,
+        coverReuseStore: AnkiBookCoverReuseStore,
         ankiConnectBackendFactory: (String, String) -> AnkiBackend = { endpoint: String, apiKey: String ->
             AnkiConnectBackend(endpoint, apiKey = apiKey)
         },
@@ -72,6 +77,7 @@ internal class AnkiRepository(
         backend = backend,
         settingsRepository = settingsRepository,
         localAudioRepository = localAudioRepository,
+        coverReuseStore = coverReuseStore,
         ankiConnectBackendFactory = ankiConnectBackendFactory,
         loadDictionaryMedia = { null },
         loadTermDictionaries = loadTermDictionaries,
@@ -218,14 +224,32 @@ internal class AnkiRepository(
         val payload = runCatching { AnkiMiningPayload.fromJson(rawPayload) }.getOrNull()
             ?: return@withContext false
         val needsCover = fieldMappings.referencesAnkiHandlebar("{book-cover}")
+        val needsReusedCover = fieldMappings.referencesAnkiHandlebar("{book-cover-reuse}")
         val needsSasayakiAudio = fieldMappings.referencesAnkiHandlebar("{sasayaki-audio}")
         val needsAudio = fieldMappings.referencesAnkiHandlebar("{audio}")
+        val covers = try {
+            resolveAnkiBookCoverReferences(
+                needsCover = needsCover,
+                needsReusedCover = needsReusedCover,
+                bookId = context.bookId,
+                backendKind = settings.backendKind,
+                reuseStore = coverReuseStore,
+                upload = {
+                    context.coverPath?.let {
+                        addHashedMediaFile(it, "hoshi_cover", activeBackend, settings.backendKind)
+                    }
+                },
+            )
+        } catch (error: IOException) {
+            logAnkiFetchFailure("Failed to access reusable Anki book covers", error)
+            return@withContext false
+        }
         val mediaContext = AnkiMiningContext(
             sentence = context.sentence,
             documentTitle = context.documentTitle,
-            coverPath = context.coverPath?.takeIf { needsCover }?.let {
-                addHashedMediaFile(it, "hoshi_cover", activeBackend, settings.backendKind)
-            },
+            coverPath = covers.cover,
+            reusedCoverReference = covers.reusedCover,
+            bookId = context.bookId,
             sasayakiAudioPath = context.sasayakiAudioPath?.takeIf { needsSasayakiAudio }?.let {
                 addHashedMediaFile(it, "hoshi_sasayaki", activeBackend, settings.backendKind)
             },

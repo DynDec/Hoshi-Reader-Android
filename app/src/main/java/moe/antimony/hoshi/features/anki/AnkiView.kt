@@ -880,6 +880,7 @@ internal object AnkiHandlebarOptions {
         "{phonetic-transcriptions}",
         "{document-title}",
         "{book-cover}",
+        "{book-cover-reuse}",
         "{sasayaki-audio}",
     )
 

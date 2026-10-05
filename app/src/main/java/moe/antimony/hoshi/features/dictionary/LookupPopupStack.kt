@@ -28,6 +28,7 @@ internal data class LookupPopupOptions(
     val popupActionBar: Boolean = false,
     val documentTitle: String? = null,
     val coverPath: String? = null,
+    val bookId: String? = null,
     val contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
 )
 
@@ -106,6 +107,7 @@ internal fun createLookupPopupItem(
                 sentence = selection.sentence,
                 documentTitle = options.documentTitle,
                 coverPath = options.coverPath,
+                bookId = options.bookId,
                 sentenceOffset = selection.sentenceOffset,
             ),
         ),

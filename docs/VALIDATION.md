@@ -801,6 +801,33 @@ Validate relevant dictionary/audio changes with:
   a successful non-suffix glossary redirect followed by a failed source tap.
 - Android AnkiConnect and AnkiDroid flows when Anki behavior changes, including
   duplicate checks, media references, add-note, and sync behavior.
+- Anki `{book-cover-reuse}` appears immediately after `{book-cover}` in both
+  normal and Show All Handlebars lists. With AnkiDroid, mine two different words
+  from one book, then restart Hoshi and mine another: all exported image `src`
+  values must be identical, with only one new cover file. Repeat in a child
+  dictionary popup and another card format; a different book must get its own
+  reference. With both cover placeholders mapped, the first export shares one
+  upload; later `{book-cover}` exports new files while reuse retains the first
+  reference. With AnkiConnect, reuse behaves like normal cover export. Preserve
+  existing app and collection data; do not delete media or switch collections
+  to test invalidation, because this placeholder intentionally does not detect
+  cover changes or stale references. The saved references must be absent from
+  Hoshi backups and sync exports.
+  `AnkiBookCoverReuseDeviceTest` provides an opt-in live API check using generated
+  cover data, an isolated local DataStore, and in-memory Anki settings. Each
+  phase deletes only its own uniquely marked notes; one uploaded image can
+  remain unused in Anki media. Build both debug APKs and install with `adb
+  install -r` as above. Use the same fresh alphanumeric run ID for both phases:
+
+  ```bash
+  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiBookCoverReuseDeviceTest -e ankiCoverReuseSmoke true -e ankiCoverReuseRunId UNIQUE_RUN_ID -e ankiCoverReusePhase first moe.requited.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
+  adb shell am force-stop moe.requited.hoshi.debug
+  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiBookCoverReuseDeviceTest -e ankiCoverReuseSmoke true -e ankiCoverReuseRunId UNIQUE_RUN_ID -e ankiCoverReusePhase restart moe.requited.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
+  ```
+
+  Require `OK (1 test)` from each phase. The first phase verifies two saved notes
+  use the same image reference and only one upload; the restart phase verifies
+  the saved reference with no cover source and zero uploads.
 - Anki tag templates through both backends: mix literal tags with
   `{document-title}` and `{expression}`; substituted spaces, tabs, newlines,
   non-breaking spaces, and full-width spaces become underscores without

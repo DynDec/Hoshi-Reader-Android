@@ -507,6 +507,17 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   glossary-first and monolingual/bilingual definition handlebars resolve from
   the current profile's persisted term-dictionary order and categories without
   extending the popup mining payload.
+- Anki `{book-cover-reuse}` receives the canonical book ID through the reader's
+  root and child popup contexts. `AnkiBookCoverReuseStore` is a Hilt singleton
+  backed by a dedicated Preferences DataStore at
+  `noBackupFilesDir/anki_book_cover_reuse.preferences_pb`. It stores the final
+  AnkiDroid image reference per book, shared across profiles and formats, and
+  serializes lookup/upload/persistence with a coroutine mutex. A successful media
+  upload is cached before note creation; cache hits do not read the source cover.
+  This store is outside book metadata, profile settings, backups, and sync.
+  There are no cover-change or Anki media/collection validity checks.
+  AnkiConnect resolves this placeholder through normal cover export without
+  accessing the store; `{book-cover}` retains its original behavior.
 - Google Drive sync has Hoshi (`gdrive`) and TTU (`ttu`) providers. Hoshi is the
   default; existing TTU logins migrate to TTU. Hoshi uses Google Identity Services
   `AuthorizationClient` with `drive.file` and Android package/signing registration;

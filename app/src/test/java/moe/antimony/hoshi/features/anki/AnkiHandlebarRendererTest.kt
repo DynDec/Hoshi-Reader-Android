@@ -6,6 +6,30 @@ import org.junit.Test
 
 class AnkiHandlebarRendererTest {
     @Test
+    fun rendersIndependentCoverReferencesInsideCustomHtml() {
+        assertEquals(
+            """<div><img src="fresh.jpeg" /></div><figure><img src="saved.jpeg" /></figure>""",
+            AnkiHandlebarRenderer.render(
+                template = "<div>{book-cover}</div><figure>{book-cover-reuse}</figure>",
+                payload = AnkiMiningPayload(expression = "猫"),
+                context = AnkiMiningContext(
+                    sentence = "猫",
+                    coverPath = """<img src="fresh.jpeg" />""",
+                    reusedCoverReference = """<img src="saved.jpeg" />""",
+                ),
+            ),
+        )
+        assertEquals(
+            "<div></div>",
+            AnkiHandlebarRenderer.render(
+                template = "<div>{book-cover-reuse}</div>",
+                payload = AnkiMiningPayload(expression = "猫"),
+                context = AnkiMiningContext(sentence = "猫"),
+            ),
+        )
+    }
+
+    @Test
     fun glossarySelectionUsesPersistedDictionaryOrderCategoriesAndAllCategoryVariants() {
         val excluded =
             """<li data-dictionary="Excluded"><i>(Excluded)</i> <span>excluded</span></li>"""

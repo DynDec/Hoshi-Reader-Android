@@ -1,6 +1,9 @@
 package moe.antimony.hoshi.features.anki
 
 import android.content.ContextWrapper
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import java.io.IOException
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -13,6 +16,7 @@ import kotlinx.coroutines.test.setMain
 import java.nio.file.Files
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import moe.antimony.hoshi.dictionary.DictionaryCategory
 import moe.antimony.hoshi.ui.UiText
@@ -882,11 +886,149 @@ class AnkiRepositoryBackendSelectionTest {
         assertTrue(ankiConnect.lastFields.getValue("Media").contains(".opus"))
     }
 
+    @Test
+    fun reusedCoverRendersSavedReferenceWithoutReadingChangedOrMissingSource() = runBlocking {
+        val cover = Files.createTempFile("hoshi-reuse-cover", ".png").toFile()
+        try {
+            cover.writeBytes(byteArrayOf(1))
+            val store = AnkiBookCoverReuseStore(MemoryAnkiCoverPreferences())
+            val reference = """<img src="saved_random_suffix.jpeg" />"""
+            store.getOrUpload("book") { reference }
+            val backend = RecordingBackend()
+            val repository = repository(
+                backend = backend,
+                settingsRepository = reuseCoverSettings(),
+                coverReuseStore = store,
+            )
+            for (source in listOf("changed", "missing", "absent")) {
+                if (source == "changed") cover.writeBytes(byteArrayOf(2, 3))
+                if (source == "missing") assertTrue(cover.delete())
+                assertTrue(repository.mineEntry(
+                    rawPayload = """{"expression":"猫"}""",
+                    context = AnkiMiningContext(
+                        sentence = "猫",
+                        bookId = "book",
+                        coverPath = if (source == "absent") null else cover.absolutePath,
+                    ),
+                    decks = emptyList(),
+                    noteTypes = emptyList(),
+                ))
+                assertEquals("<div>$reference</div>", backend.lastFields["Front"])
+            }
+            assertEquals(0, backend.addMediaFromUriCalls)
+        } finally {
+            cover.delete()
+        }
+    }
+
+    @Test
+    fun failedNoteDoesNotDiscardUploadedCoverReference() = runBlocking {
+        val store = AnkiBookCoverReuseStore(MemoryAnkiCoverPreferences())
+        val reference = """<img src="uploaded.jpeg" />"""
+        store.getOrUpload("book") { reference }
+        val rejectingBackend = RecordingBackend(addNoteResult = false)
+        val settings = reuseCoverSettings()
+        assertFalse(repository(
+            backend = rejectingBackend,
+            settingsRepository = settings,
+            coverReuseStore = store,
+        ).mineEntry(
+            rawPayload = """{"expression":"猫"}""",
+            context = AnkiMiningContext(sentence = "猫", bookId = "book"),
+            decks = emptyList(),
+            noteTypes = emptyList(),
+        ))
+        val acceptingBackend = RecordingBackend()
+        assertTrue(repository(
+            backend = acceptingBackend,
+            settingsRepository = settings,
+            coverReuseStore = store,
+        ).mineEntry(
+            rawPayload = """{"expression":"犬"}""",
+            context = AnkiMiningContext(sentence = "犬", bookId = "book"),
+            decks = emptyList(),
+            noteTypes = emptyList(),
+        ))
+        assertEquals("<div>$reference</div>", acceptingBackend.lastFields["Front"])
+        assertEquals(0, acceptingBackend.addMediaFromUriCalls)
+    }
+
+    @Test
+    fun reuseCacheReadFailureStopsNoteCreationButInactiveMappingsSkipCache() = runBlocking {
+        val dataStore = object : DataStore<Preferences> by MemoryAnkiCoverPreferences() {
+            override val data = flow<Preferences> { throw IOException("Read failed") }
+        }
+        val backend = RecordingBackend()
+        val settings = reuseCoverSettings()
+        val repository = repository(
+            backend = backend,
+            settingsRepository = settings,
+            coverReuseStore = AnkiBookCoverReuseStore(dataStore),
+        )
+        assertFalse(repository.mineEntry(
+            rawPayload = """{"expression":"猫"}""",
+            context = AnkiMiningContext(sentence = "猫", bookId = "book"),
+            decks = emptyList(),
+            noteTypes = emptyList(),
+        ))
+        assertFalse(backend.addNoteCalled)
+        settings.update { it.copy(fieldMappings = mapOf("Front" to "{expression}", "Inactive" to "{book-cover-reuse}")) }
+        assertTrue(repository.mineEntry(
+            rawPayload = """{"expression":"猫"}""",
+            context = AnkiMiningContext(sentence = "猫", bookId = "book"),
+            decks = emptyList(),
+            noteTypes = emptyList(),
+        ))
+        assertEquals(mapOf("Front" to "猫"), backend.lastFields)
+    }
+
+    @Test
+    fun ankiConnectReuseUsesExistingMediaUploadAndNeverAccessesLocalCache() = runBlocking {
+        val dataStore = object : DataStore<Preferences> by MemoryAnkiCoverPreferences() {
+            override val data = flow<Preferences> { error("AnkiConnect must not read cache") }
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                error("AnkiConnect must not write cache")
+        }
+        val backend = RecordingBackend()
+        val settings = reuseCoverSettings()
+        settings.update { it.copy(backendKind = AnkiBackendKind.AnkiConnect, ankiConnectUrl = "https://anki.example.com") }
+        val cover = Files.createTempFile("hoshi-connect-reuse", ".png").toFile()
+        try {
+            cover.writeBytes(byteArrayOf(1, 2, 3))
+            val repository = repository(
+                settingsRepository = settings,
+                coverReuseStore = AnkiBookCoverReuseStore(dataStore),
+                ankiConnectBackendFactory = { _, _ -> backend },
+            )
+            repeat(2) {
+                assertTrue(repository.mineEntry(
+                    rawPayload = """{"expression":"猫"}""",
+                    context = AnkiMiningContext(sentence = "猫", bookId = "book", coverPath = cover.absolutePath),
+                    decks = emptyList(),
+                    noteTypes = emptyList(),
+                ))
+                assertEquals("""<div><img src="${backend.lastMediaName}"></div>""", backend.lastFields["Front"])
+            }
+            assertEquals(2, backend.addMediaFromBytesCalls)
+        } finally {
+            cover.delete()
+        }
+    }
+
+    private fun reuseCoverSettings() = InMemoryAnkiSettingsRepository(
+        AnkiSettings(
+            selectedDeckId = 1L,
+            selectedNoteTypeId = 2L,
+            fieldMappings = mapOf("Front" to "<div>{book-cover-reuse}</div>"),
+        ),
+    )
+
     private fun repository(
         backend: AnkiBackend = RecordingBackend(),
         settingsRepository: InMemoryAnkiSettingsRepository = InMemoryAnkiSettingsRepository(),
         ankiConnectBackendFactory: (String, String) -> AnkiBackend = { _, _ -> RecordingBackend() },
         loadTermDictionaries: () -> List<AnkiTermDictionary> = { emptyList() },
+        coverReuseStore: AnkiBookCoverReuseStore = AnkiBookCoverReuseStore(MemoryAnkiCoverPreferences()),
     ): AnkiRepository {
         val cacheDir = Files.createTempDirectory("hoshi-anki-cache").toFile()
         return AnkiRepository(
@@ -896,6 +1038,7 @@ class AnkiRepositoryBackendSelectionTest {
             backend = backend,
             settingsRepository = settingsRepository,
             localAudioRepository = LocalAudioRepository(Files.createTempDirectory("hoshi-anki-test").toFile()),
+            coverReuseStore = coverReuseStore,
             ankiConnectBackendFactory = ankiConnectBackendFactory,
             loadTermDictionaries = loadTermDictionaries,
         )
@@ -931,6 +1074,8 @@ class AnkiRepositoryBackendSelectionTest {
         var duplicateCalls = 0
             private set
         var addMediaFromBytesCalls = 0
+            private set
+        var addMediaFromUriCalls = 0
             private set
         var syncCalls = 0
             private set
@@ -986,7 +1131,10 @@ class AnkiRepositoryBackendSelectionTest {
             return addNoteResult
         }
 
-        override fun addMediaFromUri(uriString: String, preferredName: String, mimeType: String): String? = null
+        override fun addMediaFromUri(uriString: String, preferredName: String, mimeType: String): String? {
+            addMediaFromUriCalls += 1
+            return null
+        }
 
         override fun addMediaFromBytes(bytes: ByteArray, preferredName: String, mimeType: String): String? {
             addMediaFromBytesCalls += 1

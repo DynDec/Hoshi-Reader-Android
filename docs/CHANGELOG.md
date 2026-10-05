@@ -8,6 +8,10 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Add `{book-cover-reuse}` to Anki field placeholders to reuse one uploaded cover
+  per book in AnkiDroid across app restarts, reducing duplicate cover files.
+  References stay local to this installation; AnkiConnect uses normal cover export.
+
 - Add a Books per row slider at the top of Manage Shelves, defaulting to two
   columns and ranging up to the current collapsed shelf preview capacity.
   Smaller windows temporarily cap the displayed count without changing the

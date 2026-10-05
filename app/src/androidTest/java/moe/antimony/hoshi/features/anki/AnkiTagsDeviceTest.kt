@@ -52,6 +52,7 @@ class AnkiTagsDeviceTest {
             backend = backend,
             settingsRepository = settings,
             localAudioRepository = LocalAudioRepository(context.filesDir),
+            coverReuseStore = AnkiBookCoverReuseStore(DeviceAnkiCoverPreferences()),
         )
         try {
             assertTrue(repository.mineEntry(

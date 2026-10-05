@@ -42,6 +42,7 @@ class AnkiLocalAudioDeviceTest {
                 ),
             ),
             localAudioRepository = localAudioRepository,
+            coverReuseStore = AnkiBookCoverReuseStore(DeviceAnkiCoverPreferences()),
         )
         val audioUrl = LocalAudioResolver.audioUrl(localAudio!!.source, localAudio.file)
         val payload = """{"expression":"食べる","audio":"$audioUrl"}"""

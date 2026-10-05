@@ -555,6 +555,31 @@ class LookupPopupTest {
         assertEquals(ContentLanguageProfile.Default, defaultPopup?.first?.state?.contentLanguageProfile)
     }
 
+    @Test
+    fun readerRootAndChildPopupsCarryBookIdentityWhileStandalonePopupsHaveNone() {
+        val selection = ReaderSelectionData(
+            text = "猫",
+            sentence = "猫がいる。",
+            rect = ReaderSelectionRect(x = 0.0, y = 0.0, width = 1.0, height = 1.0),
+            normalizedOffset = null,
+        )
+        for (isVertical in listOf(true, false)) {
+            val popup = createLookupPopupItem(
+                selection = selection,
+                options = LookupPopupOptions(isVertical = isVertical, bookId = "canonical-book-id"),
+                lookup = { _, _, _ -> listOf(lookupResult("猫", "ねこ", "cat")) },
+            )
+            assertEquals("canonical-book-id", popup?.first?.state?.ankiContext?.bookId)
+        }
+        val standalone = createLookupPopupItem(
+            selection = selection,
+            options = LookupPopupOptions(isVertical = false),
+            lookup = { _, _, _ -> listOf(lookupResult("猫", "ねこ", "cat")) },
+        )
+        assertTrue(standalone != null)
+        assertEquals(null, standalone?.first?.state?.ankiContext?.bookId)
+    }
+
     private fun lookupResult(
         expression: String,
         reading: String,

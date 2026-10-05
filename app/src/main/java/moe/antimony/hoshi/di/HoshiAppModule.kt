@@ -3,6 +3,9 @@ package moe.antimony.hoshi.di
 import android.content.ContentResolver
 import android.content.Context
 import androidx.work.WorkManager
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -159,6 +162,18 @@ internal object HoshiAppModule {
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
     ): AnkiSettingsRepository =
         context.ankiSettingsRepository(profileRepository, ioDispatcher)
+
+    @Provides
+    @Singleton
+    @AnkiBookCoverReuseDataStore
+    fun provideAnkiBookCoverReuseDataStore(
+        @ApplicationContext context: Context,
+        @ApplicationScope scope: CoroutineScope,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ): DataStore<Preferences> = PreferenceDataStoreFactory.create(
+        scope = CoroutineScope(scope.coroutineContext + ioDispatcher),
+        produceFile = { File(context.noBackupFilesDir, "anki_book_cover_reuse.preferences_pb") },
+    )
 
     @Provides
     @Singleton
