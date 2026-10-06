@@ -44,7 +44,7 @@ class ContinuousReaderBrowserTest {
         val image = "data:image/svg+xml;base64," + Base64.getEncoder().encodeToString(
             "<svg xmlns='http://www.w3.org/2000/svg' width='1266' height='1800'><rect width='1266' height='1800' fill='green'/></svg>".toByteArray())
         val svg = "<div class='main'><svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='100%' height='100%' viewBox='0 0 1266 1800'><image width='1266' height='1800' xlink:href='$image'/></svg></div>"
-        val content = listOf("<p>" + "Alpha猫 ".repeat(100) + "</p>", svg, "<p>" + "Beta犬 ".repeat(100) + "</p>")
+        val content = listOf("<p>" + "Alpha猫 ".repeat(100) + "</p><img width='30' height='30' src='$image'/>", svg, "<p>" + "Beta犬 ".repeat(100) + "</p>")
         val css = ".vrtl{writing-mode:vertical-rl}.p-image{writing-mode:vertical-rl;font-size:2em}.main{display:block;width:auto;height:auto;margin:0;padding:0}"
         return EpubBook("Browser fixture", chapters = content.mapIndexed { index, body ->
             EpubChapter("c$index", "text/c$index.xhtml", "application/xhtml+xml",

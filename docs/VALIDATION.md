@@ -367,8 +367,11 @@ Manual reader validation should cover:
   previous/next beyond the entire group, and unchanged Paginated/VN behavior.
   Check one reader-font 10em buffer below horizontal or left of vertical text,
   including a text group ending in images; image-only displays have none. The
-  buffer must add scroll extent without adding characters or progress, and the
-  existing chapter-swipe threshold must trigger only at the far edge.
+  buffer must add scroll extent without adding characters or progress. Check
+  reader-font 1.0em before and after each merged image-only source in both writing
+  directions; ordinary images within text sources and unmerged chapters must
+  retain their original spacing. The existing chapter-swipe threshold must
+  trigger only at the far edge.
 - Renderer termination in paginated, continuous and VN modes: after moving
   beyond the saved bookmark (including a continuous scroll before its idle
   save), terminate the renderer and verify the loading frame restores the latest

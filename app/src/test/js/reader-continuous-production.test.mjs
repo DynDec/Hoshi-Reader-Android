@@ -32,10 +32,18 @@ test('Production navigation/setup keeps the buffer scrollable and SVG illustrati
         }));
         const svg=illustrations.map(s=>{const r=s.getBoundingClientRect(),source=s.closest('[data-hoshi-source-index]')||d.body,owner=source.getBoundingClientRect();return {width:r.width,height:r.height,visible:w.getComputedStyle(s).visibility,sourceWidth:owner.width,sourceHeight:owner.height,sourceBlockLength:fixture.vertical?owner.width:owner.height}});
         const sources=w.hoshiContinuousGroup&&w.hoshiContinuousGroup.sources;
+        const imageSpacing=(sources||[]).map(source=>{
+          const owner=source.element,body=owner.querySelector('[data-hoshi-source-body]');
+          if(!body)return {expected:0,before:0,after:0};
+          const outer=owner.getBoundingClientRect(),inner=body.getBoundingClientRect();
+          return {expected:sources.length>1&&!source.hasText?24:0,
+            before:fixture.vertical?outer.right-inner.right:inner.top-outer.top,
+            after:fixture.vertical?inner.left-outer.left:outer.bottom-inner.bottom};
+        });
         return {indices:fixture.indices,merge:fixture.merge,vertical:fixture.vertical,hasText:fixture.hasText,ready:!!w.fixtureReady,errors,
           expectedSvgImages:fixture.expectedSvgImages,svgImages:d.querySelectorAll('svg image').length,decoded,
           buffers:d.querySelectorAll('[data-hoshi-continuous-buffer]').length+(buffer?1:0),bufferLength:rect&&(fixture.vertical?rect.width:rect.height),
-          addedExtent:withBuffer-withoutBuffer,withoutBuffer,viewport:fixture.vertical?w.innerWidth:w.innerHeight,svg,sourceCount:sources&&sources.length};
+          addedExtent:withBuffer-withoutBuffer,withoutBuffer,viewport:fixture.vertical?w.innerWidth:w.innerHeight,svg,sourceCount:sources&&sources.length,imageSpacing};
       })).then(results=>document.getElementById('results').textContent=JSON.stringify(results))
         .catch(e=>document.getElementById('results').textContent=JSON.stringify({error:String(e),stack:e.stack}));
       <\/script></body></html>`;
@@ -73,6 +81,7 @@ test('Production navigation/setup keeps the buffer scrollable and SVG illustrati
             if(output.svgImages!==output.expectedSvgImages)failures.push({reason:'SVG image lost',...output});
             if(output.decoded.some(value=>!value))failures.push({reason:'SVG resource failed to decode',...output});
             if(output.sourceCount!==output.indices.split(',').length)failures.push({reason:'source mapping',...output});
+            if(output.imageSpacing.some(s=>Math.abs(s.before-s.expected)>.5||Math.abs(s.after-s.expected)>.5))failures.push({reason:'merged image 1em spacing',...output});
         }
         assert.deepEqual(failures,[]);
     } finally { await new Promise(resolve=>server.close(resolve)); }

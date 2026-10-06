@@ -320,6 +320,8 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   bridge, namespacing fragment IDs and source styles. The Continuous web asset
   scopes publisher selectors, font faces and animations before layout and adds
   one reader-font 10em buffer only when the displayed content contains text.
+  Only image-only source wrappers in composed groups receive reader-font 1.0em
+  block padding before and after their content, following the writing direction.
   Buffers contain no text and source character counts remain unchanged.
   `reader-continuous-group.js` maps scroll progress, selections, search, highlights
   and Sasayaki ranges to original source chapters, including zero-text files.

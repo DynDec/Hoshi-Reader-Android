@@ -96,6 +96,9 @@ internal data class ContinuousGroupDocument(val html: String?, val sources: List
                 }
                 val wrapper = document.body().appendElement("section").attr("id", scope)
                     .attr("data-hoshi-source-index", index.toString())
+                if (ReaderChapterContent.classify(html[at]).imageOnly) {
+                    wrapper.attr("data-hoshi-merged-image", "")
+                }
                 source.selectFirst("html")?.attributes()?.forEach { attribute ->
                     if (attribute.key in setOf("class", "lang", "xml:lang", "dir", "style")) {
                         wrapper.attr(attribute.key, if (attribute.key == "style") css(attribute.value) else attribute.value)
