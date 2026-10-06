@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-internal const val ReaderGalleryPreviewScale = 0.7f
+internal const val ReaderGalleryPreviewScale = 0.8f
 
 internal class ReaderGalleryState(
     val listState: LazyListState = LazyListState(),

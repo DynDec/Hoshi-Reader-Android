@@ -163,7 +163,7 @@ build script. Do not regenerate the catalog for a CRLF-only difference.
 
 - Gallery: Previous/Next moves exactly one image without wrapping, including rapid
   taps and after manual scrolling. Buttons stay above the image viewport; portrait
-  and wide previews retain their full proportions at 70% of the former size.
+  and wide previews retain their full proportions at 80% of the former size.
   Contents dismissal, tab changes, and fullscreen viewing preserve Gallery's
   image and pixel offset; leaving Reader and opening a new book session resets it.
   `ReaderGalleryTest` uses generated in-memory images without opening user books

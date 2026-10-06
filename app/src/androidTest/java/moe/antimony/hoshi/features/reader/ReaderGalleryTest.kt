@@ -105,8 +105,8 @@ class ReaderGalleryTest {
         }
     }
 
-    @Test fun portraitPreviewsAreThirtyPercentShorterAndBelowControls() = checkLayout(100, 200, "portrait")
-    @Test fun widePreviewsAreThirtyPercentShorterAndBelowControls() = checkLayout(400, 100, "wide")
+    @Test fun portraitPreviewsKeepProportionsAndStayBelowControls() = checkLayout(100, 200, "portrait")
+    @Test fun widePreviewsKeepProportionsAndStayBelowControls() = checkLayout(400, 100, "wide")
 
     @Test
     fun emptyGalleryShowsItsMessageWithoutNavigation() {
@@ -124,8 +124,8 @@ class ReaderGalleryTest {
         val bounds = composeRule.onAllNodesWithContentDescription(imageLabel)[0].getUnclippedBoundsInRoot()
         val galleryBounds = composeRule.onNodeWithTag("gallery").getUnclippedBoundsInRoot()
         val oldPreviewWidth = (galleryBounds.right - galleryBounds.left).value - 40f
-        assertEquals(oldPreviewWidth * 0.7f, (bounds.right - bounds.left).value, 1f)
-        assertEquals(oldPreviewWidth * height / width * 0.7f, (bounds.bottom - bounds.top).value, 1f)
+        assertEquals(oldPreviewWidth * 0.8f, (bounds.right - bounds.left).value, 1f)
+        assertEquals(oldPreviewWidth * height / width * 0.8f, (bounds.bottom - bounds.top).value, 1f)
         assertEquals(
             (galleryBounds.left.value + galleryBounds.right.value) / 2,
             (bounds.left.value + bounds.right.value) / 2, 1f,
