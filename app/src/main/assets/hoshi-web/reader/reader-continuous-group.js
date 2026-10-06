@@ -16,7 +16,7 @@
       if (this.sources.some(function(source) { return source.hasText; })) {
         var buffer = document.createElement('div');
         buffer.setAttribute('data-hoshi-continuous-buffer', '');
-        buffer.style.cssText = 'all:initial!important;display:block!important;writing-mode:inherit!important;block-size:10em!important;inline-size:1px!important;margin:0!important;padding:0!important;flex-shrink:0!important;break-inside:avoid!important;';
+        buffer.style.cssText = 'all:initial!important;display:block!important;writing-mode:inherit!important;block-size:15em!important;inline-size:1px!important;margin:0!important;padding:0!important;flex-shrink:0!important;break-inside:avoid!important;';
         buffer.style.setProperty('font-size', global.getComputedStyle(document.body).fontSize, 'important');
         document.body.appendChild(buffer);
       }
