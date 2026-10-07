@@ -10,6 +10,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 - Add `{book-cover-reuse}` to Anki field placeholders to reuse one uploaded cover
   per book in AnkiDroid across app restarts, reducing duplicate cover files.
+  Before uploading, it can discover an existing cover in recent notes of the
+  selected note type using the field mapped to `{document-title}`.
   References stay local to this installation; AnkiConnect uses normal cover export.
 
 - Add a Books per row slider at the top of Manage Shelves, defaulting to two

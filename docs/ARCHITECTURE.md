@@ -514,8 +514,15 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   backed by a dedicated Preferences DataStore at
   `noBackupFilesDir/anki_book_cover_reuse.preferences_pb`. It stores the final
   AnkiDroid image reference per book, shared across profiles and formats, and
-  serializes lookup/upload/persistence with a coroutine mutex. A successful media
-  upload is cached before note creation; cache hits do not read the source cover.
+  serializes lookup/discovery/upload/persistence with a coroutine mutex. On a
+  miss, discovery uses the selected format's active `{document-title}` and
+  `{book-cover-reuse}` field mappings, compares the rendered title field (including
+  surrounding HTML), and extracts the image tag from the cover field of the
+  newest matching note. `AndroidAnkiContentApi` makes one parameterized SQL
+  query bounded to the newest 100 notes of the selected note type, across decks.
+  It retrieves field strings only, with no image reads; unavailable discovery or
+  no match falls back to normal cover upload. Discovered references and successful
+  uploads are cached before note creation; cache hits skip discovery and source reads.
   This store is outside book metadata, profile settings, backups, and sync.
   There are no cover-change or Anki media/collection validity checks.
   AnkiConnect resolves this placeholder through normal cover export without

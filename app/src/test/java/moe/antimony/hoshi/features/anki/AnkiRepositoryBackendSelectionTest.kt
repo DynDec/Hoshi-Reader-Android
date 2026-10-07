@@ -1015,6 +1015,73 @@ class AnkiRepositoryBackendSelectionTest {
         }
     }
 
+    @Test
+    fun discoveryUsesSelectedFormatMappingsAndKeepsReferenceAfterRejectedNote() = runBlocking {
+        val noteType = AnkiNoteType(22L, "Custom", listOf("Front", "Book", "Artwork"))
+        val reference = "<img src='existing.png'>"
+        val backend = RecordingBackend(noteTypes = listOf(noteType), discoveredCover = reference, addNoteResult = false)
+        val settings = InMemoryAnkiSettingsRepository(AnkiSettings(
+            selectedDeckId = 1L,
+            selectedNoteTypeId = noteType.id,
+            fieldMappings = mapOf("Front" to "{expression}", "Book" to "<b>{document-title}</b>", "Artwork" to "<div>{book-cover-reuse}</div>"),
+        ))
+        val store = AnkiBookCoverReuseStore(MemoryAnkiCoverPreferences())
+        val repository = repository(backend = backend, settingsRepository = settings, coverReuseStore = store)
+        repeat(2) {
+            assertFalse(repository.mineEntry(
+                rawPayload = """{"expression":"猫"}""",
+                context = AnkiMiningContext(sentence = "", bookId = "book", documentTitle = "A book"),
+                decks = emptyList(), noteTypes = emptyList(),
+            ))
+            assertEquals("<div>$reference</div>", backend.lastFields["Artwork"])
+        }
+        assertEquals(1, backend.discoveryCalls)
+        assertEquals(AnkiBookCoverDiscoveryRequest(22L, 1, 2, "<b>A book</b>"), backend.lastDiscoveryRequest)
+        assertEquals(AnkiBookCoverDiscoveryLimit, backend.lastDiscoveryLimit)
+        assertEquals(0, backend.addMediaFromUriCalls)
+        assertEquals(reference, store.getOrUpload("book") { error("Rejected note must retain discovered reference") })
+    }
+
+    @Test
+    fun discoverySkipsAbsentTitleAndInactiveTitleMappings() = runBlocking {
+        val noteType = AnkiNoteType(2L, "Custom", listOf("Front", "Artwork"))
+        val backend = RecordingBackend(noteTypes = listOf(noteType), discoveredCover = "<img src='existing.png'>")
+        for ((mappings, title) in listOf(
+            mapOf("Front" to "{document-title}", "Artwork" to "{book-cover-reuse}") to null,
+            mapOf("Inactive" to "{document-title}", "Artwork" to "{book-cover-reuse}") to "Book",
+        )) {
+            val settings = InMemoryAnkiSettingsRepository(AnkiSettings(
+                selectedDeckId = 1L, selectedNoteTypeId = 2L, fieldMappings = mappings,
+            ))
+            assertTrue(repository(backend = backend, settingsRepository = settings).mineEntry(
+                """{"expression":"猫"}""", AnkiMiningContext(sentence = "", bookId = "book", documentTitle = title),
+                emptyList(), emptyList(),
+            ))
+        }
+        assertEquals(0, backend.discoveryCalls)
+    }
+
+    @Test
+    fun discoveredReferencePersistenceFailureStopsNoteCreation() = runBlocking {
+        val preferences = object : DataStore<Preferences> by MemoryAnkiCoverPreferences() {
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                throw IOException("Write failed")
+        }
+        val noteType = AnkiNoteType(2L, "Custom", listOf("Front", "Artwork"))
+        val backend = RecordingBackend(noteTypes = listOf(noteType), discoveredCover = "<img src='existing.png'>")
+        val settings = InMemoryAnkiSettingsRepository(AnkiSettings(
+            selectedDeckId = 1L, selectedNoteTypeId = 2L,
+            fieldMappings = mapOf("Front" to "{document-title}", "Artwork" to "{book-cover-reuse}"),
+        ))
+        assertFalse(repository(backend = backend, settingsRepository = settings,
+            coverReuseStore = AnkiBookCoverReuseStore(preferences),
+        ).mineEntry("""{"expression":"猫"}""",
+            AnkiMiningContext(sentence = "", bookId = "book", documentTitle = "Book"), emptyList(), emptyList(),
+        ))
+        assertEquals(1, backend.discoveryCalls)
+        assertFalse(backend.addNoteCalled)
+    }
+
     private fun reuseCoverSettings() = InMemoryAnkiSettingsRepository(
         AnkiSettings(
             selectedDeckId = 1L,
@@ -1066,6 +1133,7 @@ class AnkiRepositoryBackendSelectionTest {
         private val duplicateKeys: Set<String> = emptySet(),
         private val addNoteResult: Boolean = true,
         private val onFetchDecks: () -> Unit = {},
+        private val discoveredCover: String? = null,
     ) : AnkiBackend {
         var fetchDecksCalls = 0
             private set
@@ -1093,6 +1161,16 @@ class AnkiRepositoryBackendSelectionTest {
             private set
         var lastOpenNotesKey: String = ""
             private set
+        var discoveryCalls = 0
+        var lastDiscoveryRequest: AnkiBookCoverDiscoveryRequest? = null
+        var lastDiscoveryLimit = 0
+
+        override fun findBookCoverReference(request: AnkiBookCoverDiscoveryRequest, limit: Int): String? {
+            discoveryCalls++
+            lastDiscoveryRequest = request
+            lastDiscoveryLimit = limit
+            return discoveredCover
+        }
 
         override fun isAvailable(): Boolean = available
 

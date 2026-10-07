@@ -831,6 +831,33 @@ Validate relevant dictionary/audio changes with:
   Require `OK (1 test)` from each phase. The first phase verifies two saved notes
   use the same image reference and only one upload; the restart phase verifies
   the saved reference with no cover source and zero uploads.
+- Anki cover discovery: with an empty test-owned cover cache and a selected
+  format mapping a field to `{document-title}` (including a custom HTML wrapper),
+  export from a book already represented in the newest 100 notes of that note
+  type. Verify the existing image reference is copied, no cover is uploaded,
+  and subsequent exports skip discovery. Other note types, older notes, missing
+  title mappings, or an unavailable query fall back to normal cover upload.
+  Do not hardcode `MiscInfo`, limit discovery to a deck, inspect source-cover
+  bytes, or read image files. A rejected note must retain a discovered reference;
+  a cache persistence failure must prevent note creation.
+  `AnkiBookCoverDiscoveryDeviceTest` is an opt-in benchmark and live export check.
+  It creates 500 uniquely marked notes with generated 5 KB field content in an
+  existing note type and deck, uses isolated DataStore files and in-memory
+  settings, and deletes only its own 502 notes and fixture files in `finally`.
+  One small uploaded cover can remain unused in Anki media. Install both APKs
+  using `adb install -r`, then run:
+
+  ```bash
+  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiBookCoverDiscoveryDeviceTest -e ankiCoverDiscoveryBenchmark true moe.requited.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
+  ```
+
+  Require `OK (1 test)` and `cleaned_test_notes=502`. Record the `COVER_DISCOVERY`
+  median/p95/max outputs for N=25/50/100/200/500 misses and newest matches,
+  N=100 boundary matches, single-note provider access, cached reuse, and first
+  discovery plus persistence against a persistence-only baseline.
+  Discovery timings include query, field transfer, title comparison, and image
+  extraction; they exclude note creation and cover upload. Report initial
+  provider access separately from warm timings, and preserve existing user data.
 - Anki tag templates through both backends: mix literal tags with
   `{document-title}` and `{expression}`; substituted spaces, tabs, newlines,
   non-breaking spaces, and full-width spaces become underscores without

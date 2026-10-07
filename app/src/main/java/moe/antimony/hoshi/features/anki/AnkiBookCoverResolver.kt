@@ -12,6 +12,7 @@ internal suspend fun resolveAnkiBookCoverReferences(
     backendKind: AnkiBackendKind,
     reuseStore: AnkiBookCoverReuseStore,
     upload: () -> String?,
+    discover: () -> String? = { null },
 ): AnkiBookCoverReferences {
     var uploaded = false
     var freshReference: String? = null
@@ -26,7 +27,7 @@ internal suspend fun resolveAnkiBookCoverReferences(
     val reusedCover = if (!needsReusedCover) {
         null
     } else if (backendKind == AnkiBackendKind.AnkiDroid) {
-        reuseStore.getOrUpload(bookId, ::uploadOnce)
+        reuseStore.getOrUpload(bookId) { discover()?.takeIf { it.isNotBlank() } ?: uploadOnce() }
     } else {
         uploadOnce()
     }

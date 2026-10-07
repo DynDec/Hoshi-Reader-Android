@@ -239,6 +239,19 @@ internal class AnkiRepository(
                         addHashedMediaFile(it, "hoshi_cover", activeBackend, settings.backendKind)
                     }
                 },
+                discover = {
+                    if (context.documentTitle.isNullOrBlank()) null else {
+                        ankiBookCoverDiscoveryRequest(noteType, fieldMappings) { template ->
+                            normalizeAnkiDictionaryHtml(AnkiHandlebarRenderer.render(
+                                template = template,
+                                payload = payload,
+                                context = context,
+                                selectedGlossaryFallback = settings.selectedGlossaryFallback,
+                                termDictionaries = termDictionaries,
+                            ))
+                        }?.let { activeBackend.findBookCoverReference(it) }
+                    }
+                },
             )
         } catch (error: IOException) {
             logAnkiFetchFailure("Failed to access reusable Anki book covers", error)

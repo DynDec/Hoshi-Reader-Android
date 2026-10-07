@@ -15,6 +15,7 @@ import java.security.MessageDigest
 import java.text.Normalizer
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 
 class AndroidAnkiContentApi @Inject constructor(
     @ApplicationContext
@@ -82,6 +83,29 @@ class AndroidAnkiContentApi @Inject constructor(
         fields: Array<String>,
         tags: Set<String>,
     ): Long? = api.addNote(modelId, deckId, fields, tags)
+
+    override fun findBookCoverReference(request: AnkiBookCoverDiscoveryRequest, limit: Int): String? {
+        if (limit <= 0 || request.titleFieldValue.isBlank() || request.titleFieldIndex < 0 || request.coverFieldIndex < 0) return null
+        // Discovery is an optional optimization: an unavailable query falls back to uploading.
+        return try {
+            appContext.contentResolver.query(
+                FlashCardsContract.Note.CONTENT_URI_V2,
+                arrayOf(FlashCardsContract.Note.FLDS),
+                AnkiRecentBookCoverSelection,
+                arrayOf(request.modelId.toString(), limit.toString()),
+                "id DESC",
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    ankiBookCoverFromFields(cursor.getString(0).orEmpty(), request)?.let { return it }
+                }
+                null
+            }
+        } catch (error: RuntimeException) {
+            if (error is CancellationException) throw error
+            logAnkiApiFailure("Unable to discover an existing Anki book cover", error)
+            null
+        }
+    }
 
     override fun addMediaFromUri(uriString: String, preferredName: String, mimeType: String): String? =
         api.addMediaFromUri(

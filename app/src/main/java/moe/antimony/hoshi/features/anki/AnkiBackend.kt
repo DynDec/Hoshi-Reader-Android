@@ -26,6 +26,7 @@ interface AnkiBackend {
     ): Boolean
     fun addMediaFromUri(uriString: String, preferredName: String, mimeType: String): String?
     fun addMediaFromBytes(bytes: ByteArray, preferredName: String, mimeType: String): String? = null
+    fun findBookCoverReference(request: AnkiBookCoverDiscoveryRequest, limit: Int = AnkiBookCoverDiscoveryLimit): String? = null
     fun openNotes(
         deck: AnkiDeck,
         noteType: AnkiNoteType,
@@ -85,6 +86,7 @@ interface AnkiContentApi {
     ): Boolean
     fun addNote(modelId: Long, deckId: Long, fields: Array<String>, tags: Set<String>): Long?
     fun addMediaFromUri(uriString: String, preferredName: String, mimeType: String): String? = null
+    fun findBookCoverReference(request: AnkiBookCoverDiscoveryRequest, limit: Int = AnkiBookCoverDiscoveryLimit): String? = null
     fun openNotes(query: String): Boolean = false
     fun sync(): Boolean = false
     fun isAvailable(): Boolean = true
@@ -175,6 +177,9 @@ class AnkiDroidBackendAdapter @Inject constructor(
 
     override fun addMediaFromUri(uriString: String, preferredName: String, mimeType: String): String? =
         api.addMediaFromUri(uriString, preferredName, mimeType)
+
+    override fun findBookCoverReference(request: AnkiBookCoverDiscoveryRequest, limit: Int): String? =
+        api.findBookCoverReference(request, limit)
 
     override fun openNotes(
         deck: AnkiDeck,
