@@ -29,6 +29,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   the saved padding while using the fork's safe areas and hiding border shortcuts
   and bottom progress.
 - Start fullscreen Reader image controls hidden and toggle them with a content tap.
+  Opening an image also enables Reader focus mode, hiding the status bar and
+  keeping focus mode enabled after the image closes.
 
 - Add Hoshi Google Drive sync alongside TTU, sharing books, reading position,
   highlights, shelves, reading sessions and Sasayaki playback with iOS. Cloud

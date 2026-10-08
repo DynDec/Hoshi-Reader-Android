@@ -725,7 +725,10 @@ fun ReaderWebView(
             sourceUrl = sourceUrl,
             imageResourceForUrl = readerImageResourceBridge::imageResourceForUrl,
             closeLookupPopupsAndSelection = ::closeLookupPopupsAndSelection,
-            showFullscreenImage = { fullscreenImage = it },
+            showFullscreenImage = {
+                stateHolder.enterFocusModeForReaderInteraction()
+                fullscreenImage = it
+            },
         )
     }
     fun updateSasayakiSettings(settings: SasayakiSettings) {
