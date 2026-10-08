@@ -73,9 +73,9 @@ test('Production navigation/setup keeps the buffer scrollable and SVG illustrati
         for(const output of results){
             if(!output.ready||output.errors.length)failures.push({reason:'initialization',...output});
             if(output.buffers!==(output.hasText?1:0))failures.push({reason:'buffer count',...output});
-            if(output.hasText&&Math.abs(output.bufferLength-240)>.5)failures.push({reason:'10em size',...output});
+            if(output.hasText&&Math.abs(output.bufferLength-360)>.5)failures.push({reason:'15em size',...output});
             // A long text document must gain the full buffer length in the scrolling direction.
-            if(output.hasText&&output.withoutBuffer>output.viewport&&output.addedExtent<239)failures.push({reason:'buffer scroll extent',...output});
+            if(output.hasText&&output.withoutBuffer>output.viewport&&output.addedExtent<359)failures.push({reason:'buffer scroll extent',...output});
             if(output.svg.some(s=>s.width<1||s.height<1||s.visible!=='visible'))failures.push({reason:'SVG collapsed',...output});
             if(output.svg.some(s=>s.sourceBlockLength<1))failures.push({reason:'SVG source collapsed',...output});
             if(output.svgImages!==output.expectedSvgImages)failures.push({reason:'SVG image lost',...output});

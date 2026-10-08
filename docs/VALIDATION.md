@@ -345,15 +345,16 @@ and show the keyboard while preserving results and navigation history.
 Manual reader validation should cover:
 
 - Continuous chapter grouping: `ContinuousReadingGroupsTest` generates EPUBs and
-  covers text-image-text, consecutive/first/last images, one-sided/nested/fragment
-  TOC boundaries, duplicate labels, absent navigation, captions, SVGs and cached
-  chapter shells. Run the profile, state-holder and scroll scheduler tests for
+  covers text-image-text, consecutive/first/last images, front matter before the
+  first named TOC target, one-sided/nested/fragment TOC boundaries, duplicate
+  labels, absent navigation, captions, SVGs and cached chapter shells. Run the
+  profile, state-holder and scroll scheduler tests for
   profile persistence, source positions, mode changes and incoming sync updates.
   `reader-continuous-group.test.mjs` covers source-local offsets, cross-file
   highlight splitting, zero-text positions and source-scoped Sasayaki media stops.
   The optional `reader-continuous-browser.test.mjs` uses an isolated headless
   Chromium profile for real CSSOM/layout, publisher fonts/animations, cross-file
-  selections and a 10em buffer in both writing directions. Set
+  selections and a 15em buffer in both writing directions. Set
   `HOSHI_TEST_CHROMIUM` to a Chromium executable on hosts without the default
   Windows Chrome/Edge paths; missing Chromium is reported as a skipped test.
   `ContinuousReaderBrowserTest` runs the Kotlin-composed document, generated CSS
@@ -365,7 +366,10 @@ Manual reader validation should cover:
   visible only in Continuous, then enable it and check restart restoration,
   bookmarks/search/highlights/lookup/Sasayaki, incoming synced source positions,
   previous/next beyond the entire group, and unchanged Paginated/VN behavior.
-  Check one reader-font 10em buffer below horizontal or left of vertical text,
+  Include consecutive opening image files omitted from the TOC, followed by a
+  text contents page: they should merge as front matter, while the first named
+  chapter remains a separate group. Disabling merging must separate each file.
+  Check one reader-font 15em buffer below horizontal or left of vertical text,
   including a text group ending in images; image-only displays have none. The
   buffer must add scroll extent without adding characters or progress. Check
   reader-font 1.0em before and after each merged image-only source in both writing

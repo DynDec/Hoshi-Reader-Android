@@ -314,8 +314,9 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
 - Continuous display groups retain ordered spine indices and original chapter
   counts. `ContinuousReadingGroups` resolves the metadata-selected EPUB3 nav or
   EPUB2 NCX document and treats every named nested/fragment target as a section
-  boundary. Only adjacent supported image-only files and text in the same
-  unambiguous section join; missing navigation and spanning files stay separate.
+  boundary. Files before the first named target form an initial section. Only
+  adjacent supported image-only files and text in the same unambiguous section
+  join; missing navigation and spanning files stay separate.
   `ContinuousGroupDocument` composes group content on the existing HTTPS resource
   bridge, namespacing fragment IDs and source styles. The Continuous web asset
   scopes publisher selectors, font faces and animations before layout and adds

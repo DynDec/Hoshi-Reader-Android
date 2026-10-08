@@ -88,7 +88,7 @@ test('Continuous renders one buffer in both axes and preserves source CSS, cross
     for (const output of results) {
         assert.equal(output.buffers, output.imageOnly ? 0 : 1);
         if (output.imageOnly) continue;
-        assert.ok(Math.abs(output.bufferLength - 240) < 0.5, JSON.stringify(output));
+        assert.ok(Math.abs(output.bufferLength - 360) < 0.5, JSON.stringify(output));
         if (output.singleton) continue;
         assert.deepEqual(output.colors, ['rgb(255, 0, 0)', 'rgb(0, 0, 255)']);
         assert.notEqual(output.fonts[0], output.fonts[1]);

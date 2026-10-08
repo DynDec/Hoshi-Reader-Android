@@ -41,6 +41,27 @@ class ContinuousReadingGroupsTest {
         assertEquals(listOf(listOf(0), listOf(1), listOf(2)), groups(book(content, listOf("missing.xhtml"))))
     }
 
+    @Test fun frontMatterMergesBeforeTheFirstNamedSectionWithoutCrossingItsBoundary() {
+        val content = List(5) { image } + listOf("Contents", "Alpha", image, "Beta")
+        val fixture = book(content, listOf("6.xhtml", "8.xhtml"))
+        val merged = ContinuousReadingGroups.build(fixture, true)
+        assertEquals(listOf((0..5).toList(), listOf(6, 7), listOf(8)), merged.map { it.indices })
+        assertNull(merged.first().previousPosition())
+        assertEquals(ReaderChapterPosition(6), merged.first().nextPosition(8))
+        assertEquals(ReaderChapterPosition(5, 1.0), merged[1].previousPosition())
+        assertEquals(fixture.chapters.indices.map { listOf(it) }, ContinuousReadingGroups.build(fixture, false).map { it.indices })
+        for (targets in listOf(null, emptyList(), listOf("missing.xhtml"))) {
+            assertEquals(fixture.chapters.indices.map { listOf(it) }, groups(book(content, targets)))
+        }
+    }
+
+    @Test fun frontMatterRetainsTextEmptySourceAndFragmentBoundaries() {
+        assertEquals(listOf(listOf(0), listOf(1, 2), listOf(3), listOf(4), listOf(5)),
+            groups(book(listOf("Introduction", "Credits", image, "", image, "Alpha"), listOf("5.xhtml"))))
+        assertEquals(listOf(listOf(0, 1), listOf(2), listOf(3, 4)),
+            groups(book(listOf(image, image, "<p>Preface</p><h1 id='chapter'>Alpha</h1>", image, "Beta"), listOf("2.xhtml#chapter"))))
+    }
+
     @Test fun fragmentSectionsAndNestedTargetsConservativelyKeepSpanningFilesSeparate() {
         val content = listOf("<h1 id='first'>Alpha</h1><p id='second'>Beta</p>", image, "Gamma")
         assertEquals(listOf(listOf(0), listOf(1, 2)), groups(book(content, listOf("0.xhtml#first", "0.xhtml#second"))))
@@ -58,7 +79,7 @@ class ContinuousReadingGroupsTest {
         val ncxBook = fixture.copy(navigationDocumentHref = "OPS/toc.ncx", resources = mapOf("OPS/toc.ncx" to EpubResource("application/x-dtbncx+xml", ncx.toByteArray())))
         assertEquals(listOf(listOf(0, 1), listOf(2)), groups(ncxBook))
         val unnamedParent = ncx.replace("<navLabel><text>Parent</text></navLabel>", "")
-        assertEquals(listOf(listOf(0), listOf(1), listOf(2)), groups(ncxBook.copy(resources = mapOf("OPS/toc.ncx" to EpubResource("application/x-dtbncx+xml", unnamedParent.toByteArray())))))
+        assertEquals(listOf(listOf(0, 1), listOf(2)), groups(ncxBook.copy(resources = mapOf("OPS/toc.ncx" to EpubResource("application/x-dtbncx+xml", unnamedParent.toByteArray())))))
         assertEquals(listOf(listOf(0), listOf(1), listOf(2)), groups(fixture.copy(resources = emptyMap())))
         assertEquals(listOf(listOf(0), listOf(1, 2)), groups(book(listOf("", image, "Alpha"))))
         assertFalse(ReaderChapterContent.classify("<img src=''/>").imageOnly)
@@ -148,22 +169,29 @@ class ContinuousReadingGroupsTest {
     }
 
     @Test fun generatedPackedEpubUsesManifestNavigationAndWorksWithCachedChapterShells() {
+        val content = listOf(image, image, "Contents", "Alpha", image, "Beta")
         val archive = temporary.newFile("fixture.epub")
         ZipOutputStream(archive.outputStream()).use { zip ->
             fun put(name: String, text: String) { zip.putNextEntry(ZipEntry(name)); zip.write(text.toByteArray()); zip.closeEntry() }
             put("mimetype", "application/epub+zip")
             put("META-INF/container.xml", "<container xmlns='urn:oasis:names:tc:opendocument:xmlns:container'><rootfiles><rootfile full-path='OPS/package.opf' media-type='application/oebps-package+xml'/></rootfiles></container>")
-            put("OPS/package.opf", "<package xmlns='http://www.idpf.org/2007/opf' version='3.0' unique-identifier='id'><metadata xmlns:dc='http://purl.org/dc/elements/1.1/'><dc:title>Fixture</dc:title><dc:identifier id='id'>fixture</dc:identifier><dc:language>en</dc:language></metadata><manifest><item id='nav' href='nav/tree.xhtml' properties='nav' media-type='application/xhtml+xml'/>" + (0..2).joinToString("") { "<item id='c$it' href='text/$it.xhtml' media-type='application/xhtml+xml'/>" } + "</manifest><spine>" + (0..2).joinToString("") { "<itemref idref='c$it'/>" } + "</spine></package>")
-            put("OPS/nav/tree.xhtml", "<html xmlns='http://www.w3.org/1999/xhtml' xmlns:epub='http://www.idpf.org/2007/ops'><body><nav epub:type='toc'><ol><li><a href='../text/0.xhtml'>Section</a></li></ol></nav></body></html>")
-            listOf("Alpha", image, "Beta").forEachIndexed { index, body -> put("OPS/text/$index.xhtml", "<html xmlns='http://www.w3.org/1999/xhtml'><body>$body</body></html>") }
+            put("OPS/package.opf", "<package xmlns='http://www.idpf.org/2007/opf' version='3.0' unique-identifier='id'><metadata xmlns:dc='http://purl.org/dc/elements/1.1/'><dc:title>Fixture</dc:title><dc:identifier id='id'>fixture</dc:identifier><dc:language>en</dc:language></metadata><manifest><item id='nav' href='nav/tree.xhtml' properties='nav' media-type='application/xhtml+xml'/>" + content.indices.joinToString("") { "<item id='c$it' href='text/$it.xhtml' media-type='application/xhtml+xml'/>" } + "</manifest><spine>" + content.indices.joinToString("") { "<itemref idref='c$it'/>" } + "</spine></package>")
+            put("OPS/nav/tree.xhtml", "<html xmlns='http://www.w3.org/1999/xhtml' xmlns:epub='http://www.idpf.org/2007/ops'><body><nav epub:type='toc'><ol><li><a href='../text/3.xhtml'>Section</a></li></ol></nav></body></html>")
+            content.forEachIndexed { index, body -> put("OPS/text/$index.xhtml", "<html xmlns='http://www.w3.org/1999/xhtml'><body>$body</body></html>") }
         }
         val parser = EpubBookParser(temporary.newFolder("parser"))
         val first = parser.parse(archive)
         val cached = parser.parse(archive, cachedBookInfo = first.bookInfo)
         assertEquals("OPS/nav/tree.xhtml", cached.navigationDocumentHref)
         assertTrue(cached.chapters.all { it.html.isEmpty() })
-        assertEquals(listOf(listOf(0, 1, 2)), groups(cached))
+        assertEquals(listOf(listOf(0, 1, 2), listOf(3, 4, 5)), groups(first))
+        assertEquals(groups(first), groups(cached))
         assertEquals(first.bookInfo, cached.bookInfo)
-        assertTrue(ContinuousGroupDocument.compose(cached, ContinuousReadingGroups.build(cached, true).single()).html!!.contains("Alpha"))
+        val merged = ContinuousReadingGroups.build(cached, true)
+        val frontMatter = ContinuousGroupDocument.compose(cached, merged.first())
+        assertEquals(listOf(0, 1, 2), frontMatter.sources.map { it.index })
+        assertEquals(listOf(false, false, true), frontMatter.sources.map { it.hasText })
+        assertTrue(frontMatter.html!!.contains("Contents"))
+        assertTrue(ContinuousGroupDocument.compose(cached, merged.last()).html!!.contains("Alpha"))
     }
 }

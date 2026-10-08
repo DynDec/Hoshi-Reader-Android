@@ -41,12 +41,12 @@ function fixture({ vertical = false, texts = ['Alpha', '', 'Beta'], extra = {} }
 }
 
 for (const vertical of [false, true]) {
-    test(`Continuous adds one reader-font 10em buffer to mixed groups (${vertical ? 'vertical' : 'horizontal'})`, () => {
+    test(`Continuous adds one reader-font 15em buffer to mixed groups (${vertical ? 'vertical' : 'horizontal'})`, () => {
         const mixed = fixture({ vertical, texts: ['Alpha', '', ''] });
         assert.equal(mixed.children.length, 1);
         const buffer = mixed.children[0];
         assert.equal(buffer.attributes['data-hoshi-continuous-buffer'], '');
-        assert.match(buffer.style.cssText, /block-size:10em!important/);
+        assert.match(buffer.style.cssText, /block-size:15em!important/);
         assert.match(buffer.style.cssText, /writing-mode:inherit!important/);
         assert.deepEqual(buffer.style['font-size'], { value: '24px', priority: 'important' });
         mixed.group.offsets();

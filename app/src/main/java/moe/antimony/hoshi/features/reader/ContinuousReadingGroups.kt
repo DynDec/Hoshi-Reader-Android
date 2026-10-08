@@ -65,9 +65,10 @@ internal object ContinuousReadingGroups {
             val boundaries = navigationBoundaries(book)
             if (boundaries != null) {
                 val content = book.chapters.map { ReaderChapterContent.classify(book.chapterHtml(it)) }
-                val sections = Array<Int?>(book.chapters.size) { null }
+                val sections = IntArray(book.chapters.size)
                 val ambiguous = mutableSetOf<Int>()
-                var section: Int? = null
+                // Valid navigation bounds the front matter before its first named target.
+                var section = -1
                 book.chapters.indices.forEach { index ->
                     val targets = boundaries[index].orEmpty()
                     if (targets.isNotEmpty()) {
@@ -81,7 +82,7 @@ internal object ContinuousReadingGroups {
                 }
                 joins.indices.forEach { index ->
                     joins[index] = index !in ambiguous && index + 1 !in ambiguous &&
-                        sections[index] != null && sections[index] == sections[index + 1] &&
+                        sections[index] == sections[index + 1] &&
                         (content[index].imageOnly || content[index].hasText) &&
                         (content[index + 1].imageOnly || content[index + 1].hasText) &&
                         (content[index].imageOnly || content[index + 1].imageOnly)
