@@ -49,6 +49,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -258,11 +259,16 @@ fun ReaderWebView(
     val effectiveSettings = stateHolder.effectiveSettings
     val readerPosition = stateHolder.readerPosition
     val mergeImages = effectiveSettings.viewMode == ReaderViewMode.Continuous && effectiveSettings.mergeImageOnlyChapters
+    // Merged grouping parses every source file, so keep it while this book stays open.
+    val mergedReadingGroupsCache = remember(book) { AtomicReference<List<ContinuousReadingGroup>?>(null) }
     var readingGroups by remember(book, mergeImages) {
-        mutableStateOf(if (mergeImages) null else ContinuousReadingGroups.build(book, false))
+        mutableStateOf(if (mergeImages) mergedReadingGroupsCache.get() else ContinuousReadingGroups.build(book, false))
     }
     LaunchedEffect(book, mergeImages) {
-        if (mergeImages) readingGroups = withContext(Dispatchers.IO) { ContinuousReadingGroups.build(book, true) }
+        if (mergeImages && readingGroups == null) {
+            readingGroups = withContext(Dispatchers.IO) { ContinuousReadingGroups.build(book, true) }
+                .also(mergedReadingGroupsCache::set)
+        }
     }
     fun currentReadingGroup(): ContinuousReadingGroup? = if (effectiveSettings.viewMode == ReaderViewMode.Continuous) {
         readingGroups?.firstOrNull { stateHolder.readerPosition.loadPosition.index in it.indices }

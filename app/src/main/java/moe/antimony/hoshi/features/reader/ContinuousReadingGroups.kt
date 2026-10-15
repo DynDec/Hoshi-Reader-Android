@@ -4,28 +4,58 @@ import java.net.URI
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubChapter
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.nodes.TextNode
 
 internal data class ReaderChapterContent(val imageOnly: Boolean, val hasText: Boolean) {
     companion object {
-        fun classify(html: String): ReaderChapterContent {
-            val body = Jsoup.parse(html).body()
-            body.select("script,style,head,metadata,title,desc,rt,rp,template").remove()
-            val hasText = body.wholeText().any { !it.isWhitespace() && it != '\u00a0' }
-            val images = body.select("img,svg image,svg path,svg rect,svg circle,svg polygon,svg ellipse,svg use").filter {
-                when (it.normalName()) {
-                    "img" -> it.attr("src").isNotBlank() || it.attr("srcset").isNotBlank()
-                    "image", "use" -> it.attr("href").isNotBlank() || it.attr("xlink:href").isNotBlank()
-                    else -> true
+        fun classify(html: String): ReaderChapterContent = classify(Jsoup.parse(html))
+
+        /** Reads [document] without modifying it, so callers can reuse one parse. */
+        fun classify(document: Document): ReaderChapterContent {
+            var hasText = false
+            var hasImage = false
+            fun visit(element: Element, inSvg: Boolean) {
+                for (node in element.childNodes()) {
+                    if (hasText) return
+                    when (node) {
+                        is TextNode -> if (node.wholeText.any { !it.isWhitespace() && it != '\u00a0' }) hasText = true
+                        is Element -> {
+                            val name = node.normalName()
+                            if (name in ReaderChapterIgnoredElements) continue
+                            if (!hasImage && node.isReaderImage(name, inSvg)) hasImage = true
+                            visit(node, inSvg || name == "svg")
+                        }
+                    }
                 }
             }
-            return ReaderChapterContent(!hasText && images.isNotEmpty(), hasText)
+            visit(document.body(), inSvg = false)
+            return ReaderChapterContent(!hasText && hasImage, hasText)
+        }
+
+        private fun Element.isReaderImage(name: String, inSvg: Boolean): Boolean = when {
+            name == "img" -> attr("src").isNotBlank() || attr("srcset").isNotBlank()
+            !inSvg -> false
+            name == "image" || name == "use" -> attr("href").isNotBlank() || attr("xlink:href").isNotBlank()
+            else -> name in ReaderSvgShapeElements
         }
     }
 }
 
+private val ReaderChapterIgnoredElements = setOf("script", "style", "head", "metadata", "title", "desc", "rt", "rp", "template")
+private val ReaderSvgShapeElements = setOf("path", "rect", "circle", "polygon", "ellipse")
+private val FragmentPrefixSkippedElements = setOf("script", "style", "metadata", "title", "desc", "rt", "rp", "template")
+private val FragmentPrefixMediaElements = setOf("img", "svg")
+private val WhitespacePattern = Regex("\\s+")
+
 /** Source indices and source character counts never change with the display preference. */
-internal data class ContinuousReadingGroup(val indices: List<Int>, val counts: List<Int>) {
+internal data class ContinuousReadingGroup(
+    val indices: List<Int>,
+    val counts: List<Int>,
+    /** Classification captured while grouping; null when grouping did not need to parse sources. */
+    val contents: List<ReaderChapterContent>? = null,
+) {
     val firstIndex get() = indices.first()
     val lastIndex get() = indices.last()
     private val weights get() = counts.map { it.coerceAtLeast(1) }
@@ -61,44 +91,59 @@ internal data class ContinuousReadingGroup(val indices: List<Int>, val counts: L
 internal object ContinuousReadingGroups {
     fun build(book: EpubBook, merge: Boolean): List<ContinuousReadingGroup> {
         val joins = BooleanArray((book.chapters.size - 1).coerceAtLeast(0))
-        if (merge) {
-            val boundaries = navigationBoundaries(book)
-            if (boundaries != null) {
-                val content = book.chapters.map { ReaderChapterContent.classify(book.chapterHtml(it)) }
-                val sections = IntArray(book.chapters.size)
-                val ambiguous = mutableSetOf<Int>()
-                // Valid navigation bounds the front matter before its first named target.
-                var section = -1
-                book.chapters.indices.forEach { index ->
-                    val targets = boundaries[index].orEmpty()
-                    if (targets.isNotEmpty()) {
-                        section = index
-                        if (targets.size != 1 || targets.single().isNotEmpty() &&
-                            !fragmentStartsContent(book.chapterHtml(book.chapters[index]), targets.single())) {
-                            ambiguous += index
-                        }
-                    }
-                    sections[index] = section
-                }
-                joins.indices.forEach { index ->
-                    joins[index] = index !in ambiguous && index + 1 !in ambiguous &&
-                        sections[index] == sections[index + 1] &&
-                        (content[index].imageOnly || content[index].hasText) &&
-                        (content[index + 1].imageOnly || content[index + 1].hasText) &&
-                        (content[index].imageOnly || content[index + 1].imageOnly)
-                }
-            }
-        }
+        val contents = if (merge) navigationBoundaries(book)?.let { joinSections(book, it, joins) } else null
         val result = mutableListOf<ContinuousReadingGroup>()
         var start = 0
         book.chapters.indices.forEach { end ->
             if (end == book.chapters.lastIndex || !joins[end]) {
                 val indices = (start..end).toList()
-                result += ContinuousReadingGroup(indices, indices.map { book.bookInfo.chapterInfo[book.chapters[it].href]?.chapterCount ?: 0 })
+                result += ContinuousReadingGroup(
+                    indices,
+                    indices.map { book.bookInfo.chapterInfo[book.chapters[it].href]?.chapterCount ?: 0 },
+                    contents?.subList(start, end + 1)?.toList(),
+                )
                 start = end + 1
             }
         }
         return result
+    }
+
+    /**
+     * Parses each source file once and fills [joins]. Returns the per-chapter content, or null
+     * without joining anything when a navigation fragment does not exist in its target file.
+     */
+    private fun joinSections(
+        book: EpubBook,
+        boundaries: Map<Int, List<String>>,
+        joins: BooleanArray,
+    ): List<ReaderChapterContent>? {
+        val content = ArrayList<ReaderChapterContent>(book.chapters.size)
+        val sections = IntArray(book.chapters.size)
+        val ambiguous = BooleanArray(book.chapters.size)
+        // Valid navigation bounds the front matter before its first named target.
+        var section = -1
+        book.chapters.forEachIndexed { index, chapter ->
+            val document = Jsoup.parse(book.chapterHtml(chapter))
+            val targets = boundaries[index].orEmpty()
+            if (targets.any { it.isNotEmpty() && document.getElementById(it) == null }) return null
+            if (targets.isNotEmpty()) {
+                section = index
+                if (targets.size != 1 || targets.single().isNotEmpty() &&
+                    !fragmentStartsContent(document, targets.single())) {
+                    ambiguous[index] = true
+                }
+            }
+            sections[index] = section
+            content += ReaderChapterContent.classify(document)
+        }
+        joins.indices.forEach { index ->
+            joins[index] = !ambiguous[index] && !ambiguous[index + 1] &&
+                sections[index] == sections[index + 1] &&
+                (content[index].imageOnly || content[index].hasText) &&
+                (content[index + 1].imageOnly || content[index + 1].hasText) &&
+                (content[index].imageOnly || content[index + 1].imageOnly)
+        }
+        return content
     }
 
     private fun navigationBoundaries(book: EpubBook): Map<Int, List<String>>? {
@@ -112,25 +157,23 @@ internal object ContinuousReadingGroups {
                 point.children().firstOrNull { it.normalName() == "content" }?.attr("src")?.let { label to it }
             }
         } else {
-            val nav = document.select("nav").filter { it.attr("epub:type").split(Regex("\\s+")).contains("toc") || it.attr("role") == "doc-toc" }.singleOrNull()
+            val nav = document.select("nav").filter { it.attr("epub:type").split(WhitespacePattern).contains("toc") || it.attr("role") == "doc-toc" }.singleOrNull()
                 ?: return null
             nav.select("a[href]").map { it.text().ifBlank { it.attr("title") } to it.attr("href") }
         }
+        val chapterIndices = book.chapters.withIndex().reversed().associate { (index, chapter) -> chapter.href to index }
         val targets = anchors.filter { it.first.isNotBlank() }.map { (_, target) ->
             val resolved = runCatching { URI("https", "appassets.androidplatform.net", "/epub/$href", null).resolve(target) }.getOrNull() ?: return null
             if (resolved.host != "appassets.androidplatform.net" || resolved.scheme != "https") return null
-            val chapter = book.chapters.indexOfFirst { it.href == resolved.path.removePrefix("/epub/") }
-            if (chapter < 0) return null
-            val fragment = resolved.fragment.orEmpty()
-            if (fragment.isNotEmpty() && Jsoup.parse(book.chapterHtml(book.chapters[chapter])).getElementById(fragment) == null) return null
-            chapter to fragment
+            val chapter = chapterIndices[resolved.path.removePrefix("/epub/")] ?: return null
+            // Fragment existence is checked by joinSections while each file is parsed once.
+            chapter to resolved.fragment.orEmpty()
         }
         if (targets.isEmpty() || targets.zipWithNext().any { (a, b) -> a.first > b.first }) return null
         return targets.groupBy({ it.first }, { it.second })
     }
 
-    private fun fragmentStartsContent(html: String, fragment: String): Boolean {
-        val document = Jsoup.parse(html)
+    private fun fragmentStartsContent(document: Document, fragment: String): Boolean {
         if (document.selectFirst("html")?.id() == fragment) return true
         val body = document.body()
         val target = body.getElementById(fragment) ?: return false
@@ -144,8 +187,8 @@ internal object ContinuousReadingGroups {
                 if (reached) break
                 if (node is Element) {
                     if (node === target) { reached = true; break }
-                    if (node.normalName() in setOf("script", "style", "metadata", "title", "desc", "rt", "rp", "template")) continue
-                    if (node.normalName() in setOf("img", "svg")) prefix.append("<img src='boundary'/>")
+                    if (node.normalName() in FragmentPrefixSkippedElements) continue
+                    if (node.normalName() in FragmentPrefixMediaElements) prefix.append("<img src='boundary'/>")
                     visit(node)
                 } else prefix.append(node.outerHtml())
             }

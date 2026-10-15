@@ -194,4 +194,17 @@ class ContinuousReadingGroupsTest {
         assertTrue(frontMatter.html!!.contains("Contents"))
         assertTrue(ContinuousGroupDocument.compose(cached, merged.last()).html!!.contains("Alpha"))
     }
+
+    @Test fun groupingClassificationProducesTheSameComposedDocument() {
+        val fixture = book(listOf("<script>code</script>Alpha", image, "<svg><path d='M0 0'/></svg>", "Beta", image), listOf("0.xhtml", "3.xhtml"))
+        val merged = ContinuousReadingGroups.build(fixture, true)
+        assertEquals(listOf(listOf(0, 1, 2), listOf(3, 4)), merged.map { it.indices })
+        assertEquals(fixture.chapters.map { ReaderChapterContent.classify(it.html) }, merged.flatMap { it.contents.orEmpty() })
+        for (group in merged + ContinuousReadingGroups.build(fixture, false)) {
+            assertEquals(
+                ContinuousGroupDocument.compose(fixture, group.copy(contents = null)),
+                ContinuousGroupDocument.compose(fixture, group),
+            )
+        }
+    }
 }

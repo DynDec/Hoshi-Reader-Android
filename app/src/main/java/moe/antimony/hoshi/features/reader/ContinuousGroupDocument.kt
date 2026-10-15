@@ -8,6 +8,16 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.DataNode
 import org.jsoup.nodes.Element
 
+private val CssImportPattern = Regex(
+    """@import\s+(?:url\(\s*(?:"([^"]+)"|'([^']+)'|([^\s)]+))\s*\)|"([^"]+)"|'([^']+)')\s*([^;]*);""",
+    RegexOption.IGNORE_CASE,
+)
+private val CssUrlPattern = Regex("""url\(\s*(["']?)(.*?)\1\s*\)""", RegexOption.IGNORE_CASE)
+private val ScopedIdAttributes = listOf("id", "name")
+private val ResourceUrlAttributes = listOf("src", "href", "xlink:href", "poster", "data")
+private val CssUrlAttributes = listOf("fill", "stroke", "filter", "clip-path", "mask", "marker-start", "marker-mid", "marker-end")
+private val CopiedRootAttributes = setOf("class", "lang", "xml:lang", "dir", "style")
+
 @Serializable
 internal data class ContinuousSource(val index: Int, val count: Int, val hasText: Boolean)
 
@@ -17,16 +27,20 @@ internal data class ContinuousGroupDocument(val html: String?, val sources: List
         fun compose(book: EpubBook, group: ContinuousReadingGroup): ContinuousGroupDocument {
             val chapters = group.indices.map { book.chapters[it] }
             val html = chapters.map { book.chapterHtml(it) }
-            val sources = html.mapIndexed { at, content ->
-                ContinuousSource(group.indices[at], group.counts[at], ReaderChapterContent.classify(content).hasText)
+            if (chapters.size == 1) {
+                val content = group.contents?.single() ?: ReaderChapterContent.classify(html.single())
+                return ContinuousGroupDocument(null, listOf(ContinuousSource(group.firstIndex, group.counts.single(), content.hasText)))
             }
-            if (chapters.size == 1) return ContinuousGroupDocument(null, sources)
+            val sources = mutableListOf<ContinuousSource>()
             val document = Jsoup.parse("<html><head></head><body></body></html>")
             document.outputSettings().prettyPrint(false)
             chapters.forEachIndexed { at, chapter ->
                 val index = group.indices[at]
                 val source = Jsoup.parse(html[at])
                 source.outputSettings().prettyPrint(false)
+                // Classify before the source is rewritten below.
+                val content = group.contents?.get(at) ?: ReaderChapterContent.classify(source)
+                sources += ContinuousSource(index, group.counts[at], content.hasText)
                 val scope = "hoshi-source-$index"
                 val base = URI("https", "appassets.androidplatform.net", "/epub/${chapter.href}", null).toASCIIString()
                 fun url(raw: String, relativeTo: String = base): String {
@@ -39,8 +53,7 @@ internal data class ContinuousGroupDocument(val html: String?, val sources: List
                     return runCatching { book.readResource(uri.path.removePrefix("/epub/")) }.getOrNull()
                 }
                 fun css(raw: String, relativeTo: String = base, visited: Set<String> = emptySet()): String {
-                    val imported = Regex("""@import\s+(?:url\(\s*(?:"([^"]+)"|'([^']+)'|([^\s)]+))\s*\)|"([^"]+)"|'([^']+)')\s*([^;]*);""", RegexOption.IGNORE_CASE)
-                        .replace(raw) { match ->
+                    val imported = CssImportPattern.replace(raw) { match ->
                             val resolved = url(match.groupValues.slice(1..5).first { it.isNotEmpty() }, relativeTo)
                             if (resolved in visited) "" else {
                                 val bytes = localResource(resolved)
@@ -48,7 +61,7 @@ internal data class ContinuousGroupDocument(val html: String?, val sources: List
                                 match.groupValues[6].trim().takeIf { it.isNotEmpty() }?.let { "@media $it {$nested}" } ?: nested
                             }
                         }
-                    return Regex("""url\(\s*(["']?)(.*?)\1\s*\)""", RegexOption.IGNORE_CASE).replace(imported) {
+                    return CssUrlPattern.replace(imported) {
                         "url(\"${url(it.groupValues[2], relativeTo).replace("\"", "%22")}\")"
                     }
                 }
@@ -82,25 +95,25 @@ internal data class ContinuousGroupDocument(val html: String?, val sources: List
                 }
                 source.select("script,head,metadata").remove()
                 source.body().getAllElements().forEach { element ->
-                    for (attribute in listOf("id", "name")) {
+                    for (attribute in ScopedIdAttributes) {
                         if (element.hasAttr(attribute)) element.attr(attribute, "$scope-${element.attr(attribute)}")
                     }
-                    for (attribute in listOf("src", "href", "xlink:href", "poster", "data")) {
+                    for (attribute in ResourceUrlAttributes) {
                         if (element.hasAttr(attribute)) element.attr(attribute, url(element.attr(attribute)))
                     }
                     if (element.hasAttr("style")) element.attr("style", css(element.attr("style")))
-                    for (attribute in listOf("fill", "stroke", "filter", "clip-path", "mask", "marker-start", "marker-mid", "marker-end")) {
+                    for (attribute in CssUrlAttributes) {
                         if (element.hasAttr(attribute)) element.attr(attribute, css(element.attr(attribute)))
                     }
                     if (element.hasAttr("srcset")) element.attr("srcset", srcset(element.attr("srcset")))
                 }
                 val wrapper = document.body().appendElement("section").attr("id", scope)
                     .attr("data-hoshi-source-index", index.toString())
-                if (ReaderChapterContent.classify(html[at]).imageOnly) {
+                if (content.imageOnly) {
                     wrapper.attr("data-hoshi-merged-image", "")
                 }
                 source.selectFirst("html")?.attributes()?.forEach { attribute ->
-                    if (attribute.key in setOf("class", "lang", "xml:lang", "dir", "style")) {
+                    if (attribute.key in CopiedRootAttributes) {
                         wrapper.attr(attribute.key, if (attribute.key == "style") css(attribute.value) else attribute.value)
                     }
                     if (attribute.key == "id") {
