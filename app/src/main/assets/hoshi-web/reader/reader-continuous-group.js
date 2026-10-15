@@ -11,6 +11,12 @@
           element: document.querySelector('[data-hoshi-source-index="' + source.index + '"]') || document.body
         });
       });
+      // Progress weights match ContinuousReadingGroup in Kotlin: empty sources still occupy one unit.
+      this.totalWeight = this.sources.reduce(function(start, source) {
+        source.weight = Math.max(1, source.count);
+        source.weightStart = start;
+        return start + source.weight;
+      }, 0);
       if (!this.sources.length) return;
       this.offsetsReady = false;
       if (this.offsetsObserver) this.offsetsObserver.disconnect();
@@ -184,29 +190,19 @@
       return { index: source.index, progress: Math.max(0, Math.min(1, progress)) };
     },
     renderedProgress: function(position) {
-      var total = this.sources.reduce(function(sum, source) { return sum + Math.max(1, source.count); }, 0), before = 0;
-      for (var source of this.sources) {
-        var weight = Math.max(1, source.count);
-        if (source.index === position.index) return (before + weight * position.progress) / total;
-        before += weight;
-      }
-      return 0;
+      var source = this.source(position.index);
+      return source ? (source.weightStart + source.weight * position.progress) / this.totalWeight : 0;
     },
     restoreSource: function(progress) {
-      var total = this.sources.reduce(function(sum, source) { return sum + Math.max(1, source.count); }, 0);
-      var remaining = Math.max(0, Math.min(1, progress)) * total;
-      var before = 0;
-      for (var initial of this.sources) {
-        var initialWeight = Math.max(1, initial.count);
-        if (initial.index === global.__hoshiContinuousInitialSourceIndex && remaining >= before - 1e-9 && remaining <= before + initialWeight + 1e-9) {
-          return { source: initial, progress: Math.max(0, Math.min(1, (remaining - before) / initialWeight)) };
-        }
-        before += initialWeight;
+      var remaining = Math.max(0, Math.min(1, progress)) * this.totalWeight;
+      function at(source) {
+        return { source: source, progress: Math.max(0, Math.min(1, (remaining - source.weightStart) / source.weight)) };
       }
+      var initial = this.source(global.__hoshiContinuousInitialSourceIndex);
+      if (initial && remaining >= initial.weightStart - 1e-9 && remaining <= initial.weightStart + initial.weight + 1e-9) return at(initial);
+      var last = this.sources[this.sources.length - 1];
       for (var source of this.sources) {
-        var weight = Math.max(1, source.count);
-        if (remaining < weight || source === this.sources[this.sources.length - 1]) return { source: source, progress: Math.max(0, Math.min(1, remaining / weight)) };
-        remaining -= weight;
+        if (remaining < source.weightStart + source.weight || source === last) return at(source);
       }
       return null;
     },
