@@ -73,19 +73,28 @@
         }
         collect(template.sheet && template.sheet.cssRules);
       });
-      function replaceNames(value, mapping) {
-        mapping.forEach(function(replacement, original) {
-            var escaped = original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            value = value.replace(new RegExp('(^|[\\s,\'"])' + escaped + '(?=$|[\\s,\'"])', 'g'), '$1' + replacement);
+      // Compile each scope's rename patterns once instead of once per declaration.
+      function patterns(mapping) {
+        return Array.from(mapping, function(entry) {
+          var escaped = entry[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return [new RegExp('(^|[\\s,\'"])' + escaped + '(?=$|[\\s,\'"])', 'g'), '$1' + entry[1]];
         });
+      }
+      names.forEach(function(scoped) {
+        scoped.fontPatterns = patterns(scoped.fonts);
+        scoped.animationPatterns = patterns(scoped.animations);
+      });
+      function replaceNames(value, compiled) {
+        compiled.forEach(function(pattern) { value = value.replace(pattern[0], pattern[1]); });
         return value;
       }
       function declarations(style, scoped) {
+        if (!scoped.fontPatterns.length && !scoped.animationPatterns.length) return style ? style.cssText : '';
         Array.from(style || []).forEach(function(property) {
-            var value = style.getPropertyValue(property);
-            if (property === 'font-family' || property === 'font') value = replaceNames(value, scoped.fonts);
-            if (/^(?:-webkit-)?animation(?:-name)?$/.test(property)) value = replaceNames(value, scoped.animations);
-            style.setProperty(property, value, style.getPropertyPriority(property));
+            var original = style.getPropertyValue(property), value = original;
+            if (property === 'font-family' || property === 'font') value = replaceNames(value, scoped.fontPatterns);
+            if (/^(?:-webkit-)?animation(?:-name)?$/.test(property)) value = replaceNames(value, scoped.animationPatterns);
+            if (value !== original) style.setProperty(property, value, style.getPropertyPriority(property));
         });
         return style.cssText;
       }
@@ -124,7 +133,7 @@
       });
       names.forEach(function(scoped, scope) {
         var root = document.getElementById(scope);
-        if (!root) return;
+        if (!root || (!scoped.fontPatterns.length && !scoped.animationPatterns.length)) return;
         [root].concat(Array.from(root.querySelectorAll('[style]'))).forEach(function(element) {
           declarations(element.style, scoped);
         });
