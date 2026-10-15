@@ -22,7 +22,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Add a 15em blank buffer after text in Continuous reading and an optional
   profile setting to merge image-only files with adjacent chapters within the
   same table-of-contents section, including front matter before the first TOC
-  entry, retaining original reading positions and keeping SVG illustrations
+  entry and books whose table of contents links to missing anchors, retaining
+  original reading positions and keeping SVG illustrations
   visible when switching or opening chapters. Merged image-only files have a
   1.0em buffer before and after their images; ordinary images and unmerged
   chapters retain their original spacing.

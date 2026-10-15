@@ -119,15 +119,12 @@ internal object ContinuousReadingGroups {
         return result
     }
 
-    /**
-     * Parses each source file once and fills [joins]. Returns the per-chapter content, or null
-     * without joining anything when a navigation fragment does not exist in its target file.
-     */
+    /** Parses each source file once, fills [joins] and returns the per-chapter content. */
     private fun joinSections(
         book: EpubBook,
         boundaries: Map<Int, List<String>>,
         joins: BooleanArray,
-    ): List<ReaderChapterContent>? {
+    ): List<ReaderChapterContent> {
         val content = ArrayList<ReaderChapterContent>(book.chapters.size)
         val sections = IntArray(book.chapters.size)
         val ambiguous = BooleanArray(book.chapters.size)
@@ -135,8 +132,10 @@ internal object ContinuousReadingGroups {
         var section = -1
         book.chapters.forEachIndexed { index, chapter ->
             val document = Jsoup.parse(book.chapterHtml(chapter))
-            val targets = boundaries[index].orEmpty()
-            if (targets.any { it.isNotEmpty() && document.getElementById(it) == null }) return null
+            // A link to a missing fragment opens its file at the top, so it marks the file start.
+            val targets = boundaries[index].orEmpty().map { fragment ->
+                if (fragment.isNotEmpty() && document.getElementById(fragment) == null) "" else fragment
+            }
             if (targets.isNotEmpty()) {
                 section = index
                 if (targets.size != 1 || targets.single().isNotEmpty() &&
@@ -177,7 +176,7 @@ internal object ContinuousReadingGroups {
             val resolved = runCatching { URI("https", "appassets.androidplatform.net", "/epub/$href", null).resolve(target) }.getOrNull() ?: return null
             if (resolved.host != "appassets.androidplatform.net" || resolved.scheme != "https") return null
             val chapter = chapterIndices[resolved.path.removePrefix("/epub/")] ?: return null
-            // Fragment existence is checked by joinSections while each file is parsed once.
+            // joinSections resolves missing fragments to the file start while parsing each file once.
             chapter to resolved.fragment.orEmpty()
         }
         if (targets.isEmpty() || targets.zipWithNext().any { (a, b) -> a.first > b.first }) return null

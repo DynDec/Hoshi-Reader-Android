@@ -215,4 +215,18 @@ class ContinuousReadingGroupsTest {
         (0 until 5).forEach { index -> assertSame(groups.first { index in it.indices }, lookup[index]) }
         assertTrue(ContinuousReadingGroups.byChapter(emptyList()).isEmpty())
     }
+
+    @Test fun missingNavigationFragmentsMarkTheirFileStartInsteadOfDisablingMerging() {
+        // Converted books can link the TOC to anchors that no longer exist in the file.
+        val content = listOf(image, image, "Notice", "Contents", image, "<p id='real'>Alpha</p>", image, "Beta")
+        assertEquals(
+            listOf(listOf(0, 1, 2), listOf(3, 4), listOf(5, 6), listOf(7)),
+            groups(book(content, listOf("3.xhtml#gone", "5.xhtml#real", "7.xhtml#gone-too"))),
+        )
+        // Two targets in one file remain ambiguous even when one fragment is missing.
+        assertEquals(
+            listOf(listOf(0, 1), listOf(2), listOf(3, 4)),
+            groups(book(listOf(image, "Alpha", "<h1 id='real'>Beta</h1>", image, "Gamma"), listOf("0.xhtml", "2.xhtml#gone", "2.xhtml#real"))),
+        )
+    }
 }
