@@ -12,6 +12,12 @@
         });
       });
       if (!this.sources.length) return;
+      this.offsetsReady = false;
+      if (this.offsetsObserver) this.offsetsObserver.disconnect();
+      this.offsetsObserver = typeof global.MutationObserver === 'function'
+        ? new global.MutationObserver(function() { self.offsetsReady = false; })
+        : null;
+      if (this.offsetsObserver) this.offsetsObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
       this.scopeStyles();
       if (this.sources.some(function(source) { return source.hasText; })) {
         var buffer = document.createElement('div');
@@ -126,6 +132,11 @@
     },
     source: function(index) { return this.sources.find(function(source) { return source.index === index; }); },
     offsets: function() {
+      // Text node structure only changes through childList/characterData mutations;
+      // takeRecords() also catches mutations made earlier in the current task.
+      var observer = this.offsetsObserver;
+      if (this.offsetsReady && observer && observer.takeRecords().length === 0) return;
+      this.offsetsReady = false;
       var reader = this.reader, raw = 0, normalized = 0;
       this.sources.forEach(function(source) {
         source.rawStart = raw; source.normalizedStart = normalized;
@@ -135,6 +146,7 @@
         }
         source.rawEnd = raw; source.normalizedEnd = normalized;
       });
+      this.offsetsReady = true;
     },
     sourceForOffset: function(offset, raw) {
       this.offsets();

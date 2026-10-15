@@ -129,3 +129,32 @@ test('Continuous chapter-end Sasayaki image stops stay within the visible origin
     scoped.install(scopedReader, group.sources.map(({ index, count, hasText }) => ({ index, count, hasText })));
     assert.deepEqual(plain(scopedReader.sasayakiMediaStopsToChapterEnd()), [{ scroll: 10 }, { scroll: 20 }]);
 });
+
+test('Continuous reuses source offsets until the text structure changes', () => {
+    let pending = [];
+    let notify = null;
+    class RecordingObserver {
+        constructor(callback) { notify = callback; }
+        observe() {}
+        disconnect() {}
+        takeRecords() { const records = pending; pending = []; return records; }
+    }
+    const { group, reader, elements } = fixture({ extra: { MutationObserver: RecordingObserver } });
+    let walks = 0;
+    const walker = reader.createWalker;
+    reader.createWalker = element => { walks++; return walker(element); };
+    group.offsets();
+    group.offsets();
+    group.renderedCue({ sourceIndex: 2, start: 1 });
+    assert.equal(walks, 3);
+    elements[2].nodes.push({ textContent: 'Gamma' });
+    pending = [{ type: 'childList' }];
+    assert.equal(group.renderedCue({ sourceIndex: 2, start: 1 }).start, 6);
+    assert.equal(group.sources[2].normalizedEnd, 14);
+    assert.equal(walks, 6);
+    elements[0].nodes[0].textContent = 'Al';
+    notify([]);
+    group.offsets();
+    assert.equal(group.sources[2].normalizedStart, 2);
+    assert.equal(walks, 9);
+});
