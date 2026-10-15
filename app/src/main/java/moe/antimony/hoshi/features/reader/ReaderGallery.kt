@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,16 +36,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import java.io.File
 import java.net.URI
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.R
@@ -146,18 +148,25 @@ private fun ReaderGalleryImage(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var image by remember(book, path) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(book, path) {
-        image = withContext(Dispatchers.IO) {
-            book.readResource(path)?.decodeReaderGalleryBitmap()?.asImageBitmap()
-        }
-        image?.let { state.recordAspectRatio(path, it.width, it.height) }
+    var preview by remember(book, path) { mutableStateOf(state.cachedPreview(path)) }
+    var widthPx by remember { mutableIntStateOf(0) }
+    LaunchedEffect(book, path, widthPx) {
+        if (widthPx <= 0) return@LaunchedEffect
+        // Decode for the laid-out preview width, never beyond the previous size cap.
+        val targetWidthPx = widthPx.coerceAtMost(ReaderGalleryMaxPixelSize)
+        if (preview?.targetWidthPx == targetWidthPx) return@LaunchedEffect
+        val image = withContext(Dispatchers.IO) {
+            book.readResource(path)?.decodeReaderGalleryBitmap(targetWidthPx)?.asImageBitmap()
+        } ?: return@LaunchedEffect
+        preview = ReaderGalleryPreview(image, targetWidthPx).also { state.cachePreview(path, it) }
     }
+    val image = preview?.image
     val shape = RoundedCornerShape(4.dp)
     Box(
         modifier = modifier
             .fillMaxWidth(ReaderGalleryPreviewScale)
             .aspectRatio(state.aspectRatio(path))
+            .onSizeChanged { widthPx = it.width }
             .clip(shape)
             .clickable(onClick = onClick)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
@@ -165,7 +174,7 @@ private fun ReaderGalleryImage(
     ) {
         if (image != null) {
             Image(
-                bitmap = requireNotNull(image),
+                bitmap = image,
                 contentDescription = stringResource(R.string.reader_gallery_image),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.matchParentSize(),
@@ -174,12 +183,20 @@ private fun ReaderGalleryImage(
     }
 }
 
-private fun ByteArray.decodeReaderGalleryBitmap(): Bitmap? {
+private fun ByteArray.decodeReaderGalleryBitmap(targetWidthPx: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(this, 0, size, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    val scale = minOf(
+        1f,
+        targetWidthPx.toFloat() / bounds.outWidth,
+        ReaderGalleryMaxPixelSize.toFloat() / maxOf(bounds.outWidth, bounds.outHeight),
+    )
+    val targetWidth = (bounds.outWidth * scale).roundToInt().coerceAtLeast(1)
+    val targetHeight = (bounds.outHeight * scale).roundToInt().coerceAtLeast(1)
+    // Subsample as far as possible while staying at or above the target size.
     var sampleSize = 1
-    while (maxOf(bounds.outWidth, bounds.outHeight) / sampleSize > ReaderGalleryMaxPixelSize * 2) {
+    while (bounds.outWidth / (sampleSize * 2) >= targetWidth && bounds.outHeight / (sampleSize * 2) >= targetHeight) {
         sampleSize *= 2
     }
     val decoded = BitmapFactory.decodeByteArray(
@@ -188,15 +205,8 @@ private fun ByteArray.decodeReaderGalleryBitmap(): Bitmap? {
         size,
         BitmapFactory.Options().apply { inSampleSize = sampleSize },
     ) ?: return null
-    val longestEdge = maxOf(decoded.width, decoded.height)
-    if (longestEdge <= ReaderGalleryMaxPixelSize) return decoded
-    val scale = ReaderGalleryMaxPixelSize.toFloat() / longestEdge.toFloat()
-    val scaled = Bitmap.createScaledBitmap(
-        decoded,
-        (decoded.width * scale).toInt().coerceAtLeast(1),
-        (decoded.height * scale).toInt().coerceAtLeast(1),
-        true,
-    )
+    if (decoded.width <= targetWidth && decoded.height <= targetHeight) return decoded
+    val scaled = Bitmap.createScaledBitmap(decoded, targetWidth, targetHeight, true)
     if (scaled !== decoded) decoded.recycle()
     return scaled
 }

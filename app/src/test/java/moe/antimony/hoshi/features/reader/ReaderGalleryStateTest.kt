@@ -1,8 +1,13 @@
 package moe.antimony.hoshi.features.reader
 
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageBitmapConfig
+import androidx.compose.ui.graphics.colorspace.ColorSpace
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
 
@@ -76,6 +81,31 @@ class ReaderGalleryStateTest {
         assertSame(list, state.listState)
         assertEquals(8, state.currentImageIndex(15))
         assertEquals(91, state.listState.firstVisibleItemScrollOffset)
+    }
+
+    @Test
+    fun cachedPreviewsSurviveScrollingAndEvictLeastRecentlyUsedByPixelBytes() {
+        // Room for two 10x10 ARGB previews.
+        val state = ReaderGalleryState(previewCacheBytes = 800)
+        val first = ReaderGalleryPreview(FakeImageBitmap(10, 10), targetWidthPx = 10)
+        state.cachePreview("first.png", first)
+        state.cachePreview("second.png", ReaderGalleryPreview(FakeImageBitmap(10, 10), targetWidthPx = 10))
+        assertSame(first, state.cachedPreview("first.png"))
+        state.cachePreview("third.png", ReaderGalleryPreview(FakeImageBitmap(20, 5), targetWidthPx = 20))
+
+        assertSame(first, state.cachedPreview("first.png"))
+        assertNull(state.cachedPreview("second.png"))
+        assertEquals(4f, state.aspectRatio("third.png"), 0f)
+        // The aspect ratio outlives the evicted bitmap so the placeholder keeps its size.
+        assertEquals(1f, state.aspectRatio("second.png"), 0f)
+    }
+
+    private class FakeImageBitmap(override val width: Int, override val height: Int) : ImageBitmap {
+        override val colorSpace: ColorSpace = ColorSpaces.Srgb
+        override val hasAlpha = true
+        override val config = ImageBitmapConfig.Argb8888
+        override fun prepareToDraw() = Unit
+        override fun readPixels(buffer: IntArray, startX: Int, startY: Int, width: Int, height: Int, bufferOffset: Int, stride: Int) = Unit
     }
 
     private fun holder() = ReaderWebViewStateHolder(ReaderSettings(), ReaderChapterPosition(0, 0.0))
