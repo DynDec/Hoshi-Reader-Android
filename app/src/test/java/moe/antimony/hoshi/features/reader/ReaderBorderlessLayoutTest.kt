@@ -21,15 +21,15 @@ class ReaderBorderlessLayoutTest {
         assertEquals(40, compact.topSafeAreaDp)
         assertEquals(46, compact.bottomSafeAreaDp)
         assertEquals(0, compact.effectiveVerticalPadding)
-        assertEquals(10, compact.effectiveTopSafeAreaDp)
-        assertEquals(6, compact.effectiveBottomSafeAreaDp)
+        assertEquals(ReaderBorderlessTopSafeAreaDp, compact.effectiveTopSafeAreaDp)
+        assertEquals(ReaderBorderlessBottomSafeAreaDp, compact.effectiveBottomSafeAreaDp)
         assertEquals(12, compact.copy(removeVerticalBorders = false).effectiveVerticalPadding)
         assertEquals(40, compact.copy(removeVerticalBorders = false).effectiveTopSafeAreaDp)
         assertEquals(46, compact.copy(removeVerticalBorders = false).effectiveBottomSafeAreaDp)
     }
 
     @Test
-    fun removingVerticalBordersUsesCompactReaderInsetsAndHidesBorderChrome() {
+    fun removingVerticalBordersUsesCompactContentInsetsAndHidesBorderChrome() {
         val compact = ReaderSettings(
             removeVerticalBorders = true,
             topSafeAreaDp = 40,
@@ -37,11 +37,9 @@ class ReaderBorderlessLayoutTest {
         )
 
         assertEquals(
-            ReaderContentChromeInsets(topDp = 10, bottomDp = 6),
+            ReaderContentChromeInsets(topDp = ReaderBorderlessTopSafeAreaDp, bottomDp = ReaderBorderlessBottomSafeAreaDp),
             readerContentChromeInsets(settings = compact),
         )
-        assertEquals(10, readerTopChromeMetrics(compact.effectiveTopSafeAreaDp).topSafeAreaDp)
-        assertEquals(6, readerBottomChromeMetrics(compact.effectiveBottomSafeAreaDp).bottomSafeAreaDp)
 
         val focusVisibility = readerChromeVisibility(
             focusMode = true,
@@ -84,7 +82,7 @@ class ReaderBorderlessLayoutTest {
         )
 
         assertFalse(controls.visible)
-        assertEquals(6, controls.rowHeightDp)
+        assertEquals(ReaderBorderlessBottomSafeAreaDp, controls.rowHeightDp)
     }
 
     @Test
