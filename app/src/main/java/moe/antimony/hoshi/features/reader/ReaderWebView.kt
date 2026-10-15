@@ -270,8 +270,9 @@ fun ReaderWebView(
                 .also(mergedReadingGroupsCache::set)
         }
     }
+    val readingGroupByChapter = remember(readingGroups) { readingGroups?.let(ContinuousReadingGroups::byChapter) }
     fun currentReadingGroup(): ContinuousReadingGroup? = if (effectiveSettings.viewMode == ReaderViewMode.Continuous) {
-        readingGroups?.firstOrNull { stateHolder.readerPosition.loadPosition.index in it.indices }
+        readingGroupByChapter?.getOrNull(stateHolder.readerPosition.loadPosition.index)
     } else null
     fun sourcePosition(progress: Double): ReaderChapterPosition =
         currentReadingGroup()?.sourcePosition(progress, stateHolder.readerPosition.displayedPosition.index)

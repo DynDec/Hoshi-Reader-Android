@@ -58,20 +58,22 @@ internal data class ContinuousReadingGroup(
 ) {
     val firstIndex get() = indices.first()
     val lastIndex get() = indices.last()
-    private val weights get() = counts.map { it.coerceAtLeast(1) }
+    private val weights = counts.map { it.coerceAtLeast(1) }
+    private val weightsBefore = weights.runningFold(0) { sum, weight -> sum + weight }
+    private val totalWeight = weightsBefore.last()
     fun nextPosition(lastSpineIndex: Int): ReaderChapterPosition? =
         (lastIndex + 1).takeIf { it <= lastSpineIndex }?.let { ReaderChapterPosition(it) }
     fun previousPosition(): ReaderChapterPosition? =
         (firstIndex - 1).takeIf { it >= 0 }?.let { ReaderChapterPosition(it, 1.0) }
     fun renderedProgress(position: ReaderChapterPosition): Double {
         val at = indices.indexOf(position.index).coerceAtLeast(0)
-        return (weights.take(at).sum() + weights[at] * position.progress.coerceIn(0.0, 1.0)) / weights.sum().toDouble()
+        return (weightsBefore[at] + weights[at] * position.progress.coerceIn(0.0, 1.0)) / totalWeight.toDouble()
     }
     fun sourcePosition(progress: Double, preferredIndex: Int? = null): ReaderChapterPosition {
-        var remaining = progress.coerceIn(0.0, 1.0) * weights.sum()
+        var remaining = progress.coerceIn(0.0, 1.0) * totalWeight
         val preferred = indices.indexOf(preferredIndex)
         if (preferred >= 0) {
-            val before = weights.take(preferred).sum()
+            val before = weightsBefore[preferred]
             if (remaining >= before - 1e-9 && remaining <= before + weights[preferred] + 1e-9) {
                 return ReaderChapterPosition(indices[preferred], ((remaining - before) / weights[preferred]).coerceIn(0.0, 1.0))
             }
@@ -89,6 +91,15 @@ internal data class ContinuousReadingGroup(
 }
 
 internal object ContinuousReadingGroups {
+    /** Indexes groups by source chapter so per-scroll lookups do not scan every group. */
+    fun byChapter(groups: List<ContinuousReadingGroup>): List<ContinuousReadingGroup?> {
+        val size = groups.maxOfOrNull { it.lastIndex + 1 } ?: 0
+        val lookup = arrayOfNulls<ContinuousReadingGroup>(size)
+        // Keep the first containing group, matching a linear firstOrNull scan.
+        groups.asReversed().forEach { group -> group.indices.forEach { lookup[it] = group } }
+        return lookup.asList()
+    }
+
     fun build(book: EpubBook, merge: Boolean): List<ContinuousReadingGroup> {
         val joins = BooleanArray((book.chapters.size - 1).coerceAtLeast(0))
         val contents = if (merge) navigationBoundaries(book)?.let { joinSections(book, it, joins) } else null

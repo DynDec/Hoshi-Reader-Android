@@ -207,4 +207,12 @@ class ContinuousReadingGroupsTest {
             )
         }
     }
+
+    @Test fun chapterLookupFindsEachSourceGroup() {
+        val groups = ContinuousReadingGroups.build(book(listOf("Alpha", image, "Beta", "Gamma", image)), true)
+        val lookup = ContinuousReadingGroups.byChapter(groups)
+        assertEquals(5, lookup.size)
+        (0 until 5).forEach { index -> assertSame(groups.first { index in it.indices }, lookup[index]) }
+        assertTrue(ContinuousReadingGroups.byChapter(emptyList()).isEmpty())
+    }
 }
