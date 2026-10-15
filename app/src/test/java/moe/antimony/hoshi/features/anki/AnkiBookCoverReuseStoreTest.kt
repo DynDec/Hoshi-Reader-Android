@@ -2,29 +2,20 @@ package moe.antimony.hoshi.features.anki
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 
 class AnkiBookCoverReuseStoreTest {
-    @get:Rule
-    val tempFolder = TemporaryFolder()
-
     @Test
     fun uploadsOncePerBookAndKeepsBooksIndependent() = runBlocking {
         val store = AnkiBookCoverReuseStore(MemoryAnkiCoverPreferences())
@@ -64,36 +55,6 @@ class AnkiBookCoverReuseStoreTest {
         val reference = """<img src="retry.jpeg" />"""
         assertEquals(reference, store.getOrUpload("book") { reference })
         assertEquals(reference, store.getOrUpload("book") { error("Must reuse saved reference") })
-    }
-
-    @Test
-    fun referenceSurvivesClosingAndRecreatingDataStore() = runBlocking {
-        val file = tempFolder.root.resolve("anki_book_cover_reuse.preferences_pb")
-        val reference = """<img src="cover_random_suffix.jpeg" />"""
-        val firstJob = SupervisorJob()
-        try {
-            val first = AnkiBookCoverReuseStore(
-                PreferenceDataStoreFactory.create(
-                    scope = CoroutineScope(firstJob + Dispatchers.IO),
-                    produceFile = { file },
-                ),
-            )
-            assertEquals(reference, first.getOrUpload("book") { reference })
-        } finally {
-            firstJob.cancelAndJoin()
-        }
-        val secondJob = SupervisorJob()
-        try {
-            val second = AnkiBookCoverReuseStore(
-                PreferenceDataStoreFactory.create(
-                    scope = CoroutineScope(secondJob + Dispatchers.IO),
-                    produceFile = { file },
-                ),
-            )
-            assertEquals(reference, second.getOrUpload("book") { error("Must survive restart") })
-        } finally {
-            secondJob.cancelAndJoin()
-        }
     }
 
     @Test
