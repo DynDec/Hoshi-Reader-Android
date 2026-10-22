@@ -46,6 +46,7 @@ import moe.antimony.hoshi.BuildConfig
 import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.ReadingStatistics
+import moe.antimony.hoshi.epub.SasayakiPlaybackData
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -462,6 +463,48 @@ class GoogleDriveSyncManagerTest {
         assertNull(f.manager.state.value.errorMessage)
         assertTrue(f.manager.state.value.queue.isEmpty())
         assertEquals(8, f.store.state.books.values.count { !it.pending && it.files[SyncFileType.epub]?.value != null })
+    }
+
+    @Test fun aSingleDevicesOwnPlaybackUploadsNeverRequestASeekOnReadback() = runTest {
+        val f = fixture()
+        val root = f.books.createBookDirectory("book-a")
+        val book = BookMetadata("ID", "Local", folder = "book-a", lastAccess = 0.0)
+        f.books.saveMetadata(root, book)
+        f.store.handleBookImport(book, root)
+        val playback = SasayakiPlaybackData(2.0, delay = 0.25, rate = 1.2f)
+        f.books.saveSasayakiPlayback(root, playback)
+        var livePosition = 2.7
+        val seekRequests = mutableListOf<Double>()
+        var appliedSnapshots = 0
+        f.store.applyReaderState = { _, state, _, audiobookChanged, _ ->
+            appliedSnapshots++
+            if (audiobookChanged) {
+                livePosition = state.audiobook!!.value.lastPosition
+                seekRequests += livePosition
+            }
+        }
+        // The only writer is this device. Playback advances during its first upload,
+        // then each following pass reads/merges state written by this same manager.
+        f.remote.beforeWrite = {
+            f.books.saveSasayakiPlayback(root, playback.copy(lastPosition = 3.5))
+            livePosition = 4.2
+        }
+        f.manager.sync()
+        f.manager.sync()
+        for (position in listOf(4.5, 6.5, 8.5)) {
+            f.books.saveSasayakiPlayback(root, playback.copy(lastPosition = position))
+            livePosition = position + 0.7
+            f.manager.sync()
+        }
+        f.manager.sync()
+
+        assertNull(f.manager.state.value.errorMessage)
+        assertTrue(appliedSnapshots >= 5)
+        assertTrue(seekRequests.isEmpty())
+        assertEquals(9.2, livePosition, 0.000001)
+        assertEquals(8.5, f.books.loadSasayakiPlayback(root)!!.lastPosition, 0.0)
+        val uploaded = f.remote.entries.values.single { it.file.name == "book-a.json" }
+        assertEquals(8.5, SyncFormat.decode<SyncBook>(uploaded.data).audiobook!!.value.lastPosition, 0.0)
     }
 
     @Test fun publishesFilesOnlyAfterUploadAndDownloadsEpubOnlyOnDemand() = runTest {

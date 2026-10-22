@@ -38,7 +38,7 @@ class SyncStorage @Inject constructor(
     val booksChanged = revision.asStateFlow()
     var onChange: (() -> Unit)? = null
     var syncEnabled: (suspend () -> Boolean)? = null
-    var applyReaderState: (suspend (key: String, book: SyncBook, bookmarkChanged: Boolean, audiobookChanged: Boolean) -> Unit)? = null
+    var applyReaderState: (suspend (key: String, book: SyncBook, bookmarkChanged: Boolean, audiobookChanged: Boolean, highlightsChanged: Boolean) -> Unit)? = null
 
     init {
         statistics.onSave = { folder, sessions -> handleSessionsChange(folder.syncKey(), sessions) }
@@ -253,7 +253,9 @@ class SyncStorage @Inject constructor(
                 }
                 if (bookmarkChanged || modified != change.modified) sidecars.saveBookmark(root, bookmark!!.copy(lastModified = change.modified.appleDateSeconds()))
             }
-            if (books.loadHighlightRecords(root).mapValues { (_, change) -> change.replacing(change.value?.let(::SyncHighlight)) } != book.highlights) {
+            val storedHighlights = books.loadHighlightRecords(root).mapValues { (_, change) -> change.replacing(change.value?.let(::SyncHighlight)) }
+            val highlightsChanged = (storedHighlights.keys + book.highlights.keys).any { storedHighlights[it]?.value != book.highlights[it]?.value }
+            if (storedHighlights != book.highlights) {
                 sidecars.saveHighlightRecords(root, book.highlights.mapValues { (id, change) -> change.replacing(change.value?.highlight(id)) })
             }
             var audiobookChanged = false
@@ -267,7 +269,7 @@ class SyncStorage @Inject constructor(
                     sidecars.saveSasayakiPlayback(root, playback.copy(lastPosition = value.lastPosition, delay = value.delay, rate = value.rate.toFloat(), modified = change.modified))
                 }
             }
-            applyReaderState?.invoke(key, book, bookmarkChanged, audiobookChanged)
+            applyReaderState?.invoke(key, book, bookmarkChanged, audiobookChanged, highlightsChanged)
         } else {
             record = record.copy(sources = record.sources - SyncFileType.epub - SyncFileType.sasayaki)
             if (oldRecord?.deleted != true || oldRecord.generation != book.generation) {

@@ -1656,7 +1656,7 @@ fun ReaderWebView(
             onClose()
         }
     }
-    val currentSyncApply = rememberUpdatedState<suspend (String, SyncBook, Boolean, Boolean) -> Unit> { key, syncedBook, bookmarkChanged, audiobookChanged ->
+    val currentSyncApply = rememberUpdatedState<suspend (String, SyncBook, Boolean, Boolean, Boolean) -> Unit> { key, syncedBook, bookmarkChanged, audiobookChanged, highlightsChanged ->
         if (bookRoot?.name?.syncKey() == key && !bookDeleted) withContext(Dispatchers.Main.immediate) {
             if (bookmarkChanged) {
                 book.bookInfo.resolveTtuCharacterPosition(syncedBook.bookmark!!.value.characterCount)?.let { position ->
@@ -1665,7 +1665,7 @@ fun ReaderWebView(
                     resetStatisticsBaseline()
                 }
             }
-            highlights = bookRepository.loadHighlights(bookRoot)
+            if (highlightsChanged) highlights = bookRepository.loadHighlights(bookRoot)
             if (audiobookChanged) {
                 bookRepository.loadSasayakiPlayback(bookRoot)?.let { sasayakiPlayer?.applySyncedPlayback(it) }
             }
@@ -1684,8 +1684,8 @@ fun ReaderWebView(
         val sync = appContainer.googleDriveSyncManager
         sync.flushReader = { currentSyncFlush.value(it) }
         sync.stopReader = { currentSyncStop.value(it) }
-        sync.store.applyReaderState = { key, book, bookmarkChanged, audiobookChanged ->
-            currentSyncApply.value(key, book, bookmarkChanged, audiobookChanged)
+        sync.store.applyReaderState = { key, book, bookmarkChanged, audiobookChanged, highlightsChanged ->
+            currentSyncApply.value(key, book, bookmarkChanged, audiobookChanged, highlightsChanged)
         }
         sync.reloadSyncedMatch = { currentSyncMatch.value(it) }
         onDispose {

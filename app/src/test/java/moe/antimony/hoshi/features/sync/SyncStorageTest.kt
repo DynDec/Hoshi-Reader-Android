@@ -16,6 +16,8 @@ import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.BookShelf
 import moe.antimony.hoshi.epub.ReadingSession
+import moe.antimony.hoshi.epub.ReaderHighlight
+import moe.antimony.hoshi.epub.HighlightColor
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
 import org.junit.Assert.*
 import org.junit.Rule
@@ -40,6 +42,62 @@ class SyncStorageTest {
         bookmark = Timestamped(100, SyncBookmark(70)),
         shelves = mapOf("Shelf" to Timestamped(100, true)),
     ).let { if (deleted) it.delete() else it }
+
+    @Test fun readingBackOurOwnSnapshotDoesNotEraseAPendingHighlightBeforeTheNextEdit() = runBlocking {
+        val root = local()
+        val a = ReaderHighlight("A", 10, 0, "one", HighlightColor.Yellow, 0.0)
+        val b = ReaderHighlight("B", 20, 0, "two", HighlightColor.Yellow, 0.0)
+        repository.saveHighlights(root, listOf(a))
+        storage.prepareLibrary()
+        val ownSnapshot = storage.loadBook("book-a")!!
+        var displayed = listOf(a)
+        storage.applyReaderState = { _, _, _, _, changed -> if (changed) displayed = repository.loadHighlights(root) }
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val sync = async(Dispatchers.Default) {
+            storage.transaction {
+                entered.complete(Unit)
+                release.await()
+                storage.applyBook("book-a", ownSnapshot)
+            }
+        }
+        entered.await()
+        displayed = displayed + b
+        val pending = async(start = CoroutineStart.UNDISPATCHED) { repository.saveHighlights(root, displayed) }
+        assertFalse(pending.isCompleted)
+        release.complete(Unit)
+        sync.await()
+        pending.await()
+        val recolored = a.copy(color = HighlightColor.Green)
+        displayed = displayed.map { if (it.id == "A") recolored else it }
+        repository.saveHighlights(root, displayed)
+
+        assertEquals(listOf(recolored, b), repository.loadHighlights(root))
+    }
+
+    @Test fun readerHighlightsRefreshOnlyForChangedVisibleRecords() = runBlocking {
+        val root = local()
+        val a = ReaderHighlight("A", 10, 0, "one", HighlightColor.Yellow, 0.0)
+        val b = ReaderHighlight("B", 20, 0, "two", HighlightColor.Blue, 0.0)
+        repository.saveHighlights(root, listOf(a))
+        storage.prepareLibrary()
+        val snapshot = storage.loadBook("book-a")!!
+        var displayed = listOf(a)
+        val changes = mutableListOf<Boolean>()
+        storage.applyReaderState = { _, _, _, _, changed ->
+            changes += changed
+            if (changed) displayed = repository.loadHighlights(root)
+        }
+        val retimestamped = snapshot.copy(highlights = snapshot.highlights.mapValues { (_, value) -> value.copy(modified = value.modified + 1) })
+        storage.applyBook("book-a", retimestamped)
+        val added = retimestamped.copy(highlights = retimestamped.highlights + ("B" to Timestamped(200, SyncHighlight(b))))
+        storage.applyBook("book-a", added)
+        assertEquals(listOf(a, b), displayed)
+        storage.applyBook("book-a", added.copy(highlights = added.highlights + ("A" to Timestamped(300, null))))
+
+        assertEquals(listOf(false, true, true), changes)
+        assertEquals(listOf(b), displayed)
+    }
 
     @Test fun preparesAndReloadsExactBookkeeping() = runBlocking {
         local()
@@ -198,7 +256,7 @@ class SyncStorageTest {
         storage.prepareLibrary()
         val snapshot = storage.loadBook("book-a")!!
         val playbackChanges = mutableListOf<Boolean>()
-        storage.applyReaderState = { _, _, _, changed -> playbackChanges += changed }
+        storage.applyReaderState = { _, _, _, changed, _ -> playbackChanges += changed }
 
         // Playback may already have advanced by the time this saved local snapshot is merged.
         storage.applyBook("book-a", snapshot)
@@ -215,7 +273,7 @@ class SyncStorageTest {
         storage.prepareLibrary()
         val snapshot = storage.loadBook("book-a")!!
         val playbackChanges = mutableListOf<Boolean>()
-        storage.applyReaderState = { _, _, _, changed -> playbackChanges += changed }
+        storage.applyReaderState = { _, _, _, changed, _ -> playbackChanges += changed }
 
         storage.applyBook("book-a", snapshot.copy(audiobook = Timestamped(200, SyncPlayback(12.4, 0.0, 1.2))))
 
@@ -229,7 +287,7 @@ class SyncStorageTest {
         storage.prepareLibrary()
         val snapshot = storage.loadBook("book-a")!!
         val playbackChanges = mutableListOf<Boolean>()
-        storage.applyReaderState = { _, _, _, changed -> playbackChanges += changed }
+        storage.applyReaderState = { _, _, _, changed, _ -> playbackChanges += changed }
 
         for (value in listOf(SyncPlayback(5.0, 0.0, 1.0), SyncPlayback(5.0, 2.0, 1.0), SyncPlayback(5.0, 2.0, 1.5))) {
             storage.applyBook("book-a", snapshot.copy(audiobook = Timestamped(200, value)))

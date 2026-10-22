@@ -66,7 +66,7 @@ class SasayakiSyncPlaybackDeviceTest {
                 withTimeout(5_000) {
                     while (!withContext(Dispatchers.Main) { player!!.currentPosition > savedPosition + 1_200 }) delay(25)
                 }
-                store.applyReaderState = { _, _, _, audiobookChanged ->
+                store.applyReaderState = { _, _, _, audiobookChanged, _ ->
                     if (audiobookChanged) withContext(Dispatchers.Main.immediate) {
                         playback.applySyncedPlayback(books.loadSasayakiPlayback(bookRoot)!!)
                     }
