@@ -178,8 +178,8 @@
         const previousHadHistory =
             historyCount(previous, 'backCount') > 0 ||
             historyCount(previous, 'forwardCount') > 0;
-        const hasNextInitialEntry = (next.initialEntryJson || null) !== null;
-        if (!hasNextInitialEntry) return false;
+        const hasNextContent = (next.initialEntryJson || null) !== null || next.sourceText != null;
+        if (!hasNextContent) return false;
         if (previousHadHistory) return true;
         const previousContentKey = previous.contentKey || null;
         const nextContentKey = next.contentKey || null;

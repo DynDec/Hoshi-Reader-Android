@@ -54,7 +54,8 @@ class DictionarySearchReaderResetTest {
     fun clearingInactiveSearchRemovesItsPageAndSurvivesBookProfileChanges() {
         val repository = MemorySearchRepository()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        val viewModel = DictionarySearchViewModel(repository, scope, Dispatchers.Unconfined)
+        val history = DictionaryLookupHistoryRepository(DictionaryHistoryDeviceStore(), scope, Dispatchers.Unconfined)
+        val viewModel = DictionarySearchViewModel(repository, history, scope, Dispatchers.Unconfined)
         viewModel.applyExternalLookup("猫")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val assets = LookupPopupAssets.load(context)

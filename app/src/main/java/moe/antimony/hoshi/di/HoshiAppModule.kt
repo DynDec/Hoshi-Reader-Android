@@ -55,6 +55,8 @@ import moe.antimony.hoshi.features.wallpaper.BookCoverWallpaperSettingsRepositor
 import moe.antimony.hoshi.features.wallpaper.DefaultBookCoverPublisher
 import moe.antimony.hoshi.features.wallpaper.IReaderBookCoverCapabilityProvider
 import moe.antimony.hoshi.features.wallpaper.bookCoverWallpaperSettingsRepository
+import moe.antimony.hoshi.features.dictionary.DictionaryLookupHistory
+import moe.antimony.hoshi.features.dictionary.dictionaryLookupHistoryRepository
 import moe.antimony.hoshi.profiles.ProfileRepository
 
 @Module
@@ -122,6 +124,14 @@ internal object HoshiAppModule {
             displaySettings = appDisplaySettingsRepository.settings,
             ioDispatcher = ioDispatcher,
         )
+
+    @Provides
+    @Singleton
+    fun provideDictionaryLookupHistory(
+        @ApplicationContext context: Context,
+        @ApplicationScope applicationScope: CoroutineScope,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ): DictionaryLookupHistory = context.dictionaryLookupHistoryRepository(applicationScope, ioDispatcher)
 
     @Provides
     @Singleton

@@ -62,6 +62,7 @@ class TtsPlaybackController internal constructor(
     private var stopAfterSentence = false
     var imageHoldMillis: Long = 1_000
     var presentSentence: (suspend (TtsSentence, Boolean) -> Unit)? = null
+    private var presentationJob: Job? = null
     private var heldImageIndex: Int? = null
     private var naturalAdvance = false
     private var sentenceFinished = false
@@ -250,10 +251,7 @@ class TtsPlaybackController internal constructor(
                         preparedIndex = current.index
                     }
                     val holdImages = naturalAdvance && heldImageIndex != current.index
-                    presentSentence?.invoke(sentence, holdImages)
-                    if (sentence.imageBefore && holdImages && presentSentence == null) {
-                        delay(imageHoldMillis)
-                    }
+                    presentForPlayback(sentence, holdImages)
                     if (generation != token || associated) return@launch
                     heldImageIndex = current.index
                     if (files?.isEmpty() == true) {
@@ -286,6 +284,22 @@ class TtsPlaybackController internal constructor(
             catch (error: Exception) { if (generation == token) fail(error.toTtsError(TtsFailure.Synthesis)) }
         }
     }
+    private suspend fun presentForPlayback(sentence: TtsSentence, holdImages: Boolean) = coroutineScope {
+        // Reader navigation can abandon an image/restore without cancelling speech.
+        // Pausing playback still cancels this child through its parent.
+        val presentation = launch(start = CoroutineStart.LAZY) {
+            val presenter = presentSentence
+            if (presenter != null) presenter(sentence, holdImages)
+            else if (sentence.imageBefore && holdImages) delay(imageHoldMillis)
+        }
+        presentationJob = presentation
+        try {
+            presentation.join()
+        } finally {
+            if (presentationJob === presentation) presentationJob = null
+        }
+    }
+    fun cancelReaderPresentation() { presentationJob?.cancel() }
     private fun prefetchAhead() {
         if (prefetch?.isActive == true) return
         prefetch = scope.launch(Dispatchers.Main.immediate) {

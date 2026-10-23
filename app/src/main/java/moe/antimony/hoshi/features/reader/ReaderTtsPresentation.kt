@@ -4,6 +4,7 @@ import moe.antimony.hoshi.features.tts.TtsPlaybackState
 import moe.antimony.hoshi.features.tts.TtsSentence
 
 internal enum class ReaderTtsPresentation { None, Highlight, Follow }
+internal enum class ReaderTtsPresentationSource { Playback, DocumentRestore, Foreground }
 
 internal fun readerTtsPresentation(
     playback: TtsPlaybackState,
@@ -12,11 +13,12 @@ internal fun readerTtsPresentation(
     autoScroll: Boolean,
     restoring: Boolean = true,
     directJump: Boolean = false,
+    passiveRestore: Boolean = false,
 ): ReaderTtsPresentation = when {
     !playback.started || playback.sentence != sentence -> ReaderTtsPresentation.None
     restoring && playback.playing && playback.preparing -> ReaderTtsPresentation.None
     directJump -> ReaderTtsPresentation.Follow
-    playback.playing && autoScroll -> ReaderTtsPresentation.Follow
+    playback.playing && autoScroll && !passiveRestore -> ReaderTtsPresentation.Follow
     currentChapter == sentence.chapter -> ReaderTtsPresentation.Highlight
     else -> ReaderTtsPresentation.None
 }

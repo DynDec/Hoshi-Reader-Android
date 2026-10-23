@@ -247,6 +247,7 @@ class DictionarySearchViewModelTest {
         val repository = FakeDictionarySearchRepository(lookupResults = listOf(lookupResult("猫")))
         val viewModel = DictionarySearchViewModel(
             repository = repository,
+            history = history(),
             coroutineScope = backgroundScope,
             ioDispatcher = StandardTestDispatcher(testScheduler),
         )
@@ -275,6 +276,7 @@ class DictionarySearchViewModelTest {
         val repository = FakeDictionarySearchRepository()
         val viewModel = DictionarySearchViewModel(
             repository = repository,
+            history = history(),
             coroutineScope = backgroundScope,
             ioDispatcher = StandardTestDispatcher(testScheduler),
         )
@@ -296,7 +298,7 @@ class DictionarySearchViewModelTest {
     @Test
     fun resetBeforeLookupStartsDoesNotRestoreSearchingState() = runTest {
         val repository = FakeDictionarySearchRepository(lookupResults = listOf(lookupResult("猫")))
-        val viewModel = DictionarySearchViewModel(repository, backgroundScope, StandardTestDispatcher(testScheduler))
+        val viewModel = DictionarySearchViewModel(repository, history(backgroundScope), backgroundScope, StandardTestDispatcher(testScheduler))
         runCurrent()
 
         viewModel.applyExternalLookup("猫")
@@ -504,9 +506,118 @@ class DictionarySearchViewModelTest {
         assertEquals(emptyList<LookupPopupItem>(), viewModel.uiState.value.popups)
     }
 
+    @Test
+    fun historyRecordsOnlyOriginalSubmissionsIncludingFailures() = runTest {
+        val history = history(backgroundScope)
+        val repository = FakeDictionarySearchRepository(lookupResults = listOf(lookupResult("猫")))
+        val viewModel = DictionarySearchViewModel(repository, history, backgroundScope, StandardTestDispatcher(testScheduler))
+        viewModel.updateQuery(" 前猫、 後。\n次行 ")
+        runCurrent()
+        assertTrue(history.state.value.entries.isEmpty())
+        viewModel.runLookup()
+        runCurrent()
+        viewModel.lookupRootRedirect("後。\n次行")
+        viewModel.lookupRedirect("猫")
+        viewModel.openRootPopup(selection("猫"), LookupPopupOptions(isVertical = false))
+        viewModel.navigateBack()
+        viewModel.navigateForward()
+        viewModel.restoreRootSourceHistory(1)
+        viewModel.onEffectiveProfileChanged("first")
+        viewModel.onEffectiveProfileChanged("second")
+        viewModel.resetSearch()
+        runCurrent()
+        assertEquals(listOf("前猫、 後。\n次行"), history.state.value.entries)
+        repository.lookupResults = emptyList()
+        viewModel.applyExternalLookup("missing")
+        runCurrent()
+        repository.error = IllegalStateException("failed query")
+        viewModel.applyExternalLookup("failed")
+        runCurrent()
+        viewModel.applyExternalLookup(" ")
+        runCurrent()
+        assertEquals(listOf("failed", "missing", "前猫、 後。\n次行"), history.state.value.entries)
+    }
+
+    @Test
+    fun clearingOnlyInputKeepsResultsNavigationAndHistoryHidden() {
+        val repository = FakeDictionarySearchRepository(lookupResults = listOf(lookupResult("猫")))
+        val viewModel = viewModel(repository)
+        viewModel.applyExternalLookup("猫のいる文章。")
+        viewModel.setPopups(listOf(popup("child")))
+        viewModel.recordLookupRedirected(1)
+        val before = viewModel.uiState.value
+        viewModel.updateQuery("")
+        assertEquals(before.copy(query = ""), viewModel.uiState.value)
+        assertFalse(viewModel.uiState.value.showLookupHistory)
+        assertEquals(listOf("猫のいる文章。"), viewModel.historyState.value.entries)
+    }
+
+    @Test
+    fun historyReplayQueriesFullTextAndResetKeepsPersistentHistory() = runTest {
+        val history = history(backgroundScope)
+        val repository = FakeDictionarySearchRepository()
+        val viewModel = DictionarySearchViewModel(repository, history, backgroundScope, StandardTestDispatcher(testScheduler))
+        history.record("full sentence。\nnext line")
+        history.record("later")
+        runCurrent()
+        viewModel.applyExternalLookup("full sentence。\nnext line")
+        runCurrent()
+        assertEquals("full sentence。\nnext line", viewModel.uiState.value.query)
+        assertEquals(listOf("full sentence。\nnext line:16:16"), repository.lookupCalls)
+        assertEquals(listOf("full sentence。\nnext line", "later"), history.state.value.entries)
+        viewModel.resetSearch()
+        assertTrue(viewModel.uiState.value.showLookupHistory)
+        assertEquals(2, history.state.value.entries.size)
+    }
+
+    @Test
+    fun historyIsVisibleOnlyWithoutInputOrLookupContent() {
+        val empty = DictionarySearchUiState()
+        assertTrue(empty.showLookupHistory)
+        assertTrue(empty.copy(query = " ").showLookupHistory)
+        listOf(
+            empty.copy(query = "typing"),
+            empty.copy(lastQuery = "no match", hasSearched = true),
+            empty.copy(isSearching = true),
+            empty.copy(errorMessage = UiText.Literal("error")),
+            empty.copy(results = listOf(lookupResult("猫"))),
+            empty.copy(popups = listOf(popup("child"))),
+        ).forEach { assertFalse(it.showLookupHistory) }
+    }
+
+    @Test
+    fun unmatchedSubmissionKeepsClickableSourceAndStylesThenLooksUpLaterWord() {
+        val styles = mapOf("JMdict" to ".entry { color: red; }")
+        val repository = FakeDictionarySearchRepository(dictionaryStyles = styles)
+        val viewModel = viewModel(repository)
+        viewModel.applyExternalLookup("──今、猫がいる。")
+        assertFalse(viewModel.uiState.value.hasResults)
+        assertTrue(viewModel.uiState.value.hasLookupContent)
+        assertEquals(styles, viewModel.uiState.value.dictionaryStyles)
+        viewModel.updateQuery("")
+        assertTrue(viewModel.uiState.value.hasLookupContent)
+        assertFalse(viewModel.uiState.value.showLookupHistory)
+        repository.lookupResults = listOf(lookupResult("猫"))
+        viewModel.lookupRootRedirect("猫がいる。")
+        assertEquals("猫", viewModel.uiState.value.results.single().matched)
+        assertEquals("──今、猫がいる。", viewModel.uiState.value.lastQuery)
+        assertEquals(4, viewModel.rootMiningContext().sentenceOffset)
+        assertEquals(styles, viewModel.uiState.value.dictionaryStyles)
+        assertEquals(listOf("──今、猫がいる。"), viewModel.historyState.value.entries)
+        viewModel.resetSearch()
+        assertFalse(viewModel.uiState.value.hasLookupContent)
+        repository.error = IllegalStateException("query failed")
+        viewModel.applyExternalLookup("failed")
+        assertFalse(viewModel.uiState.value.hasLookupContent)
+    }
+
+    private fun history(scope: CoroutineScope = CoroutineScope(Dispatchers.Unconfined)) =
+        DictionaryLookupHistoryRepository(HistoryMemoryStore(), scope, Dispatchers.Unconfined)
+
     private fun viewModel(repository: FakeDictionarySearchRepository): DictionarySearchViewModel =
         DictionarySearchViewModel(
             repository = repository,
+            history = history(),
             coroutineScope = CoroutineScope(Dispatchers.Unconfined),
             ioDispatcher = Dispatchers.Unconfined,
         )

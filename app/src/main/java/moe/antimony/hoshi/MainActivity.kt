@@ -50,7 +50,14 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         pendingImportUri = intent.importUri()
         pendingSasayakiReaderBookId = intent.sasayakiReaderBookIdOrActivePlayback()
-        pendingDictionaryLookupRequest = intent.pendingDictionaryLookupRequest()
+        if (savedInstanceState == null) {
+            pendingDictionaryLookupRequest = intent.pendingDictionaryLookupRequest()
+        } else {
+            dictionaryLookupRequestId = savedInstanceState.getLong("dictionaryLookupRequestId")
+            pendingDictionaryLookupRequest = savedInstanceState.getString("pendingDictionaryLookupQuery")?.let {
+                PendingDictionaryLookupRequest(query = it, requestId = dictionaryLookupRequestId)
+            }
+        }
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
@@ -99,6 +106,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putLong("dictionaryLookupRequestId", dictionaryLookupRequestId)
+        outState.putString("pendingDictionaryLookupQuery", pendingDictionaryLookupRequest?.query)
     }
 
     @SuppressLint("RestrictedApi")

@@ -1243,4 +1243,11 @@
     <string name="sync_transfer_stage" comment="Drive file transfer queue">%1$s · %2$s</string>
     <string name="sync_transfer_amount" comment="Drive file transfer queue">%1$s / %2$s</string>
     <string name="sync_transfer_percent" comment="Drive file transfer queue">%1$d%% · %2$s</string>
+    <string name="dictionary_history_title">Lookup history</string>
+    <string name="dictionary_history_clear_confirm">Clear all lookup history?</string>
+    <string name="dictionary_history_load_failed">Failed to load lookup history</string>
+    <string name="dictionary_history_save_failed">Failed to save lookup history</string>
+    <string name="dictionary_history_delete_failed">Failed to delete lookup history entry</string>
+    <string name="dictionary_history_clear_failed">Failed to clear lookup history</string>
+    <string name="dictionary_history_retry" comment="Retry loading lookup history.">Retry</string>
 </resources>

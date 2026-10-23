@@ -377,6 +377,23 @@ test('iframe render messages forward only non-null source text', () => {
     }
 });
 
+test('unmatched source submissions replace old entries and subsequent source-only content', () => {
+    const scene = popupHost();
+    const original = { ...rootPopupPayload(), entriesCount: 1, initialEntryJson: '{"expression":"猫"}', contentKey: 'original' };
+    scene.host.renderStack({ popups: [original] });
+    const iframe = scene.document.getElementById('hoshi-reader-popup-layer').children[0].querySelector('.hoshi-reader-popup-iframe');
+    const messages = [];
+    iframe.contentWindow.postMessage = message => messages.push(message);
+    iframe.dispatchEvent('load');
+    for (const sourceText of ['──猫がいる。', '──別の文章。']) {
+        scene.host.renderStack({ popups: [{ ...original, entriesCount: 0, initialEntryJson: null, sourceText, contentKey: sourceText }] });
+    }
+    const renders = messages.filter(message => message.type === 'renderPopup');
+    assert.equal(renders.length, 3);
+    assert.deepEqual(renders.slice(1).map(message => message.sourceText), ['──猫がいる。', '──別の文章。']);
+    assert.equal(renders[2].entriesCount, 0);
+});
+
 test('active iframe rerenders when same popup id receives new entry payload', () => {
     const scene = popupHost();
     scene.host.renderStack({

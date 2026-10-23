@@ -32,7 +32,7 @@ class ReaderTtsHighlightWebViewTest {
     @get:Rule val composeRule = createComposeRule()
 
     @Test
-    fun imageRemainsVisibleDuringPreparationAndSentenceFollowsAfterHold() = runBlocking {
+    fun imageHoldAndPassiveRestorePreserveTheChosenPage() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val assets = ReaderWebAssets.load(instrumentation.targetContext)
         lateinit var webView: WebView
@@ -72,6 +72,7 @@ class ReaderTtsHighlightWebViewTest {
                 val preparing = TtsPlaybackState(sentences = listOf(sentence), started = true, playing = true, preparing = true)
                 val cue = SasayakiCueRange("tts-image-next", 900, 3)
                 var shown = 0
+                var firstStop: ReaderSasayakiMediaStop? = null
                 val actions = object : ReaderPlaybackPresentationActions {
                     override suspend fun stopsBeforeCue() = json.decodeFromString(
                         ListSerializer(ReaderSasayakiMediaStop.serializer()),
@@ -80,6 +81,7 @@ class ReaderTtsHighlightWebViewTest {
                         assertTrue("$description image stop discovered: " + evaluate(webView,
                             "JSON.stringify({image:document.querySelector('img').getBoundingClientRect(), current:window.hoshiReader.calculateProgress(), target:window.hoshiReader.sasayakiCueTargetScroll?.({id:'tts-image-next',start:900,length:3}), width:innerWidth,height:innerHeight})"), stops.isNotEmpty())
                         for (stop in stops) {
+                            if (firstStop == null) firstStop = stop
                             evaluate(webView, ReaderPaginationScripts.showSasayakiMediaStopInvocation(
                                 json.encodeToString(ReaderSasayakiMediaStop.serializer(), stop)))
                             // A restore/foreground callback during the hold must not reveal the next sentence.
@@ -105,8 +107,25 @@ class ReaderTtsHighlightWebViewTest {
                 assertTrue(description, shown > 0)
                 assertEquals("\"tts-image-next\"", evaluate(webView, "window.hoshiReader.activeCueId"))
                 composeRule.waitUntil("$description sentence after image", 5_000) { bluePixelCount() > 100 }
+
+                // The user browses back to the illustration while this sentence is playing.
+                evaluate(webView, ReaderPaginationScripts.showSasayakiMediaStopInvocation(
+                    json.encodeToString(ReaderSasayakiMediaStop.serializer(), requireNotNull(firstStop))))
+                composeRule.waitUntil("$description manually chosen image", 5_000) { redPixelCount() > 1000 }
+                val chosenProgress = ReaderPaginationScripts.doubleResult(evaluate(webView, ReaderPaginationScripts.progressInvocation()))
+                val restored = readerTtsPresentation(preparing.copy(preparing = false), sentence, 0,
+                    autoScroll = true, passiveRestore = true)
+                assertEquals(ReaderTtsPresentation.Highlight, restored)
+                evaluate(webView, ReaderPaginationScripts.highlightSasayakiCueInvocation(cue,
+                    reveal = restored == ReaderTtsPresentation.Follow, preserveReveal = true))
+                assertEquals("$description restore preserves the chosen page", chosenProgress,
+                    ReaderPaginationScripts.doubleResult(evaluate(webView, ReaderPaginationScripts.progressInvocation())))
+                assertTrue("$description restore does not reveal the narration", redPixelCount() > 1000)
             }
-        } finally { instrumentation.runOnMainSync { webView.destroy() } }
+        } finally { instrumentation.runOnMainSync {
+            (webView.parent as? android.view.ViewGroup)?.removeView(webView)
+            webView.destroy()
+        } }
     }
 
     @Test

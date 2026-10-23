@@ -704,6 +704,96 @@ class TtsPlaybackControllerTest {
             assertEquals(listOf(false, true, false, false), holds)
         }
     }
+    @Test fun cancelledReaderRestoreCannotLeaveSpeechPreparingForever() = runTest {
+        fixture { controller, output, _, _ ->
+            val restore = CompletableDeferred<Unit>()
+            controller.presentSentence = { _, hold -> if (hold) restore.await() }
+            controller.play(); runCurrent()
+            output.onEnded(); runCurrent()
+            assertTrue(controller.state.value.preparing)
+
+            restore.cancel()
+            runCurrent()
+
+            assertEquals(1, controller.state.value.index)
+            assertEquals(2, output.playCount)
+            assertTrue(controller.state.value.playing)
+            assertFalse(controller.state.value.preparing)
+            assertNull(controller.state.value.error)
+        }
+    }
+    @Test fun manualPageTurnCancelsImagePresentationAndPlaysTheWaitingSentenceOnce() = runTest {
+        fixture { controller, output, _, _ ->
+            val revealed = mutableListOf<String>()
+            var presentationContext: kotlin.coroutines.CoroutineContext? = null
+            controller.presentSentence = { sentence, hold ->
+                if (hold) {
+                    presentationContext = currentCoroutineContext()
+                    delay(1000)
+                }
+                revealed += sentence.text
+            }
+            controller.play(); runCurrent()
+            output.onEnded(); runCurrent()
+            assertEquals(1, output.playCount)
+            assertTrue(controller.state.value.preparing)
+
+            controller.cancelReaderPresentation()
+            runCurrent()
+
+            assertEquals(1, controller.state.value.index)
+            assertEquals(2, output.playCount)
+            assertTrue(controller.state.value.playing)
+            assertFalse(controller.state.value.preparing)
+            assertFalse(requireNotNull(presentationContext).isActive)
+            advanceTimeBy(2000); runCurrent()
+            assertEquals(listOf("東京です。"), revealed)
+            assertEquals(2, output.playCount)
+
+            output.onEnded(); runCurrent()
+            advanceTimeBy(1000); runCurrent()
+            assertEquals(2, controller.state.value.index)
+            assertEquals(3, output.playCount)
+            assertEquals(listOf("東京です。", "三つです。"), revealed)
+        }
+    }
+    @Test fun lookupImmediatelyAfterSkippingImageHoldStillControlsResume() = runTest {
+        fixture { controller, output, _, _ ->
+            controller.presentSentence = { _, hold -> if (hold) delay(1000) }
+            controller.play(); runCurrent()
+            output.onEnded(); runCurrent()
+
+            controller.cancelReaderPresentation()
+            val resume = controller.pauseForLookup()
+            runCurrent()
+            val playCountAtLookup = output.playCount
+            advanceTimeBy(2000); runCurrent()
+            assertEquals(playCountAtLookup, output.playCount)
+            assertFalse(controller.state.value.playing)
+
+            resume(); runCurrent()
+            assertEquals(1, controller.state.value.index)
+            assertEquals(playCountAtLookup + 1, output.playCount)
+            assertFalse(controller.state.value.preparing)
+        }
+    }
+    @Test fun skippingSilentSentenceImageHoldContinuesToTheNextAudibleSentence() = runTest {
+        fixture { controller, output, audio, _ ->
+            audio.silent = { it == controller.state.value.sentences[1] }
+            controller.presentSentence = { sentence, hold ->
+                if (hold && sentence == controller.state.value.sentences[1]) delay(1000)
+            }
+            controller.play(); runCurrent()
+            output.onEnded(); runCurrent()
+            controller.cancelReaderPresentation()
+            runCurrent()
+
+            assertEquals(2, controller.state.value.index)
+            assertEquals(2, output.playCount)
+            assertTrue(controller.state.value.playing)
+            assertFalse(controller.state.value.preparing)
+        }
+    }
     @Test fun pausingDuringImagePresentationCancelsAudioUntilTheHoldIsResumed() = runTest {
         fixture { controller, output, _, _ ->
             controller.presentSentence = { _, hold -> if (hold) delay(1000) }

@@ -46,4 +46,16 @@ class ReaderTtsPresentationTest {
         assertEquals(ReaderTtsPresentation.Follow,
             readerTtsPresentation(preparing, sentence, 1, autoScroll = true, restoring = false))
     }
+
+    @Test fun documentRestoreAfterManualChapterTurnDoesNotFollowThePlayingSentence() {
+        assertEquals(ReaderTtsPresentation.None, readerTtsPresentation(
+            paused.copy(playing = true), sentence, 2, autoScroll = true, passiveRestore = true,
+        ))
+    }
+
+    @Test fun documentRestoreAfterSkippingAnImageOnlyHighlightsWithoutRevealing() {
+        assertEquals(ReaderTtsPresentation.Highlight, readerTtsPresentation(
+            paused.copy(playing = true), sentence, 1, autoScroll = true, passiveRestore = true,
+        ))
+    }
 }

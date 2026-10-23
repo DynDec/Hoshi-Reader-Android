@@ -31,6 +31,7 @@ Names without an extension are searchable types, not necessarily filenames.
 | Popup stack, history, geometry | `features/reader/ReaderLookupPopupBridge.kt`, Web `popup/reader-popup-host.js`, `popup/popup.js` | Shared iframe lookup host and native service bridge |
 | Dictionary import/query | `dictionary/DictionaryRepository.kt`, `dictionary/DictionaryNativeBridge.kt`, `dictionary/DictionaryLookupQueryService.kt` | Native session and repository boundary; algorithms live in the bridge submodule |
 | Dictionary UI, updates | `features/dictionary/`, `DictionaryMutationCoordinator` | Retained search session, profile configuration and serialized mutations |
+| Lookup submission history | `features/dictionary/DictionaryLookupHistoryRepository.kt` | Global persistent original submissions from Dictionary and external lookup entry points |
 | Word audio | `features/audio/LocalAudioRepository.kt`, `features/audio/RemoteWordAudioRepository.kt`, `AudioRequestHandler` | Ordered audio candidates shared by popup playback and Anki |
 | Anki cards and media | `features/anki/AnkiRepository.kt`, `features/anki/AnkiBackend.kt` | Backend selection, formats, duplicate checks and export |
 | Hoshi/TTU Drive sync | `features/sync/GoogleDriveSyncManager.kt`, `features/sync/GoogleDriveSyncHandler.kt`, `features/sync/GoogleDriveFileTransfer.kt`, `features/sync/TtuSyncManager.kt`, `SyncStorage` | Provider protocols, state merge and background synchronization |
@@ -232,8 +233,19 @@ dynamic configuration and bridge calls.
   service bridge. `popup.js`'s `hoshiPopupGeometry` owns CSS-zoom coordinates.
   It converts between unscaled layout coordinates and visual scroll/viewport
   coordinates. Theme-only changes preserve popup DOM/history.
-- `DictionarySearchSession` retains search/history across tabs. Successful book
-  opening resets it before book-profile activation; failed opening leaves it.
+- `DictionarySearchSession` retains search/popup navigation history across tabs.
+  Successful book opening resets it before book-profile activation; failed opening
+  leaves it. Clearing the Dictionary input preserves displayed lookup content and
+  popup navigation; it does not reset the search session. Dictionary and external
+  lookup retain tappable source text even when a successful query has no matches.
+- `DictionaryLookupHistoryRepository` separately owns global original-submission
+  history in `dictionary-lookup-history` DataStore. Only explicit Dictionary
+  submissions and fresh external lookup requests write it; Reader lookup, popup
+  selection/redirects and recreation/profile refreshes do not. Application-scoped
+  serialized operations retain the latest 100 exact, trimmed texts and publish
+  only persisted changes. Resetting a search or opening a book preserves this
+  history; only the empty Dictionary page displays it. Storage failures retain
+  confirmed entries and report original diagnostics without blocking lookup.
 
 ## Integration boundaries
 
@@ -249,7 +261,7 @@ dynamic configuration and bridge calls.
 | Reader sync | Flush pending local saves before reconciliation; suppress write-back during remote restore. `SyncStorage` reports audiobook changes against the persisted position/delay/rate under the storage lock; local snapshot echoes and timestamp-only updates must not seek live playback. Reader highlights refresh only when visible records change; reading back local snapshots or timestamps must not overwrite pending highlight edits in the UI. Remote deletion/replacement closes the reader after statistics/audio cleanup. |
 | Backup restore | `BackupSettingsView` coordinates `HoshiBackupRepository` with sync: stop sync before Books replacement, reset bookkeeping on success, disable sync on failure before restarting the manager. |
 | Playback | Sasayaki and TTS services own their Media3 player/session. Media3 manages foreground-service and notification lifecycle; controls use that session. Reader supplies presentation callbacks and explicit exit/stop. Playback and its notification start on explicit audio interaction. The Sasayaki process-local connection remains a documented refactor target. |
-| Reader presentation | `ReaderPlaybackPresentation` owns chapter/media traversal shared by Sasayaki/TTS. `ReaderLookupPauseState` owns lookup interruption/resume across popup replacement. Paused TTS restoration must not navigate or finish reveal. |
+| Reader presentation | `ReaderPlaybackPresentation` owns chapter/media traversal shared by Sasayaki/TTS. Reader interaction cancels pending presentation for both; TTS presentation is a child of playback, so abandoning an image/restore resumes speech while pausing playback cancels both. Late Reader callbacks require the presentation to remain active. TTS document restoration only highlights without navigating or revealing; playback and foreground resume may follow the sentence. Image holds require auto-scroll, including TTS background fallback. `ReaderLookupPauseState` owns lookup interruption/resume across popup replacement. |
 | Transcription | `SasayakiTranscriptionCoordinator` serializes recognition, checkpoints and matching. Its work is process-bound; the reader-route VM pauses/saves on disposal. Process death ends the task; checkpoints support resumption. |
 | TTS text | `TtsBookRepository` extracts full chapter source. `TtsText`/dialogue/replacement transforms preserve source offsets and original Anki text; synthesis/cache is owned by `TtsAudioRepository`. |
 | TTS providers | `TtsEngineRouter` dispatches installed, online and custom engines. Voice discovery is separate from synthesis; playback speed/prefetch/delay are separate from synthesis identity. Disabling TTS cancels work without deleting configuration. |

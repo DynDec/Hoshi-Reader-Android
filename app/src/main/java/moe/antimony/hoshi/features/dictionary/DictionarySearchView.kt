@@ -174,6 +174,8 @@ internal fun DictionarySearchView(
     val searchViewModel: DictionarySearchViewModel = hiltViewModel()
     val ankiViewModel: AnkiViewModel = hiltViewModel()
     val uiState by rememberDictionarySearchState(session, searchViewModel)
+    val historyState by searchViewModel.historyState.collectAsStateWithLifecycle()
+    if (isActive) DictionaryLookupHistoryError(historyState.operationError, searchViewModel::dismissHistoryError)
     val ankiUiState by ankiViewModel.uiState.collectAsStateWithLifecycle()
     var ankiOperationError by remember { mutableStateOf<Throwable?>(null) }
     var ankiSynchronizationWarning by remember { mutableStateOf<Throwable?>(null) }
@@ -281,6 +283,7 @@ internal fun DictionarySearchView(
     val iframePayloads = remember(
         uiState.results,
         uiState.lastQuery,
+        uiState.hasLookupContent,
         uiState.sentenceOffset,
         themedPopups,
         childHistories,
@@ -295,7 +298,7 @@ internal fun DictionarySearchView(
     ) {
         dictionarySearchIframePayloads(
             rootResults = uiState.results,
-            sourceText = uiState.lastQuery,
+            sourceText = uiState.lastQuery.takeIf { uiState.hasLookupContent },
             sourceSentenceOffset = uiState.sentenceOffset,
             childPopups = themedPopups,
             childHistories = childHistories,
@@ -620,8 +623,25 @@ internal fun DictionarySearchView(
             .background(hoshiSurfaces.page)
             .onSizeChanged { viewportSize = it },
     ) {
+        DictionaryLookupHistoryContent(
+            searchState = uiState,
+            historyState = historyState,
+            onSelect = { text ->
+                childHistories = emptyMap()
+                rootIframeAtTop = true
+                pullDistancePx = 0f
+                suppressAutomaticFocus = true
+                focusManager.clearFocus(force = true)
+                keyboardController?.hide()
+                searchViewModel.applyExternalLookup(text)
+            },
+            onDelete = searchViewModel::deleteHistory,
+            onClear = searchViewModel::clearHistory,
+            onRetry = searchViewModel::retryHistoryLoad,
+            modifier = Modifier.fillMaxSize().padding(top = searchBarBottomDp.dp),
+        )
         when {
-            uiState.hasResults -> {
+            uiState.hasLookupContent -> {
                 DictionarySearchIframeHost(
                     session = session,
                     callbackHolder = readerPopupBridgeHolder,
@@ -669,7 +689,7 @@ internal fun DictionarySearchView(
                 text = requireNotNull(uiState.errorMessage).asString(),
                 modifier = Modifier.fillMaxSize(),
             )
-            uiState.hasSearched && !uiState.isSearching -> DictionarySearchMessage(
+            uiState.hasSearched && !uiState.isSearching && !uiState.showLookupHistory -> DictionarySearchMessage(
                 text = "",
                 modifier = Modifier.fillMaxSize(),
             )
@@ -683,7 +703,7 @@ internal fun DictionarySearchView(
                 rootHighlight = null,
             )
         }
-        if (uiState.hasResults && pullDistancePx > 1f) {
+        if (uiState.hasLookupContent && pullDistancePx > 1f) {
             DictionaryPullResetIndicator(
                 distancePx = pullDistancePx,
                 thresholdPx = with(density) { DictionaryPullResetThreshold.toPx() },

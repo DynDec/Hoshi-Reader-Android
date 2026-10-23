@@ -87,6 +87,7 @@ internal class ProcessTextLookupDependencies @Inject constructor(
     val audioSettingsRepository: AudioSettingsRepository,
     val readerFontManager: ReaderFontManager,
     val profileRepository: ProfileRepository,
+    val lookupHistory: DictionaryLookupHistory,
 )
 
 @AndroidEntryPoint
@@ -120,11 +121,16 @@ class ProcessTextLookupActivity : AppCompatActivity() {
             return
         }
 
+        // Recreating this overlay re-renders the same request; only a fresh request
+        // enters persistent history, never its subsequent word/character redirects.
+        if (savedInstanceState == null) dependencies.lookupHistory.record(request.query)
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         setFinishOnTouchOutside(true)
 
         setContent {
+            val historyState by dependencies.lookupHistory.state.collectAsStateWithLifecycle()
             val settingsViewModel: ReaderSettingsHostViewModel = hiltViewModel()
             val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
             val loadedReaderSettings = settingsState.settings
@@ -138,6 +144,7 @@ class ProcessTextLookupActivity : AppCompatActivity() {
                 useDarkSystemBarIcons = loadedReaderSettings?.usesDarkSystemBarIcons(systemDark) ?: !systemDark,
                 accentSeed = loadedReaderSettings?.displaySettings?.takeIf { it.accentSource == DisplayAccentSource.Custom }?.accentSeed,
             ) {
+                DictionaryLookupHistoryError(historyState.operationError, dependencies.lookupHistory::dismissOperationError)
                 ReaderSettingsHostError(settingsState, settingsViewModel)
                 if (loadedReaderSettings == null || !nativeReady) return@HoshiReaderTheme
                 ProcessTextLookupOverlay(
