@@ -205,6 +205,60 @@ function scanTextFromOffset(text, offset, configureOptions = {}) {
     return selection.selectText(1, 1, 80);
 }
 
+function loadGlossaryList() {
+    const fixture = loadSelection('逢瀬');
+    const { document, selection, textNode, window } = fixture;
+    function element(selector, parentElement) {
+        return {
+            nodeType: 1,
+            parentElement,
+            closest(selectors) {
+                return selectors.split(',').map((s) => s.trim()).includes(selector)
+                    ? this : parentElement?.closest(selectors) ?? null;
+            },
+        };
+    }
+    const glossary = element('.glossary-content');
+    const firstItem = element('li', glossary);
+    const secondItem = element('li', glossary);
+    // Inline markup within a list item must remain one lookup context.
+    textNode.textContent = '逢';
+    textNode.parentElement = element('span', firstItem);
+    const suffix = { nodeType: 3, textContent: '瀬', parentElement: element('ruby', firstItem) };
+    const nextTerm = { nodeType: 3, textContent: '瀬戸際', parentElement: secondItem };
+    document.createTreeWalker = (root) => treeWalker(root === firstItem
+        ? [textNode, suffix] : root === secondItem ? [nextTerm] : [textNode, suffix, nextTerm]);
+    document.pointElement = hitElement([]);
+    selection.clearSelection = () => {};
+    selection.getSelectionRect = () => ({ x: 0, y: 0, width: 1, height: 1 });
+    selection.postTextSelected = (value) => { fixture.posted = value; };
+    window.scanNonJapaneseText = false;
+    fixture.scan = (node) => {
+        selection.selection = null;
+        selection.getCharacterAtPoint = () => ({ node, offset: 0 });
+        return selection.selectText(1, 1, 80);
+    };
+    return { fixture, textNode, suffix, nextTerm };
+}
+
+test('glossary lookup stops at the current list item instead of joining the next term', () => {
+    const { fixture, suffix } = loadGlossaryList();
+    assert.equal(fixture.scan(suffix), '瀬');
+    assert.equal(fixture.posted.sentence, '逢瀬');
+    assert.equal(fixture.posted.sentenceOffset, 1);
+    assert.equal(fixture.selection.selection.ranges.length, 1);
+});
+
+test('glossary list lookup keeps inline text together and excludes preceding items from context', () => {
+    const { fixture, textNode, nextTerm } = loadGlossaryList();
+    assert.equal(fixture.scan(textNode), '逢瀬');
+    assert.equal(fixture.posted.sentence, '逢瀬');
+    assert.equal(fixture.posted.sentenceOffset, 0);
+    assert.equal(fixture.scan(nextTerm), '瀬戸際');
+    assert.equal(fixture.posted.sentence, '瀬戸際');
+    assert.equal(fixture.posted.sentenceOffset, 0);
+});
+
 function hitElement(matches) {
     return {
         closest(selector) {
