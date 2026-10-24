@@ -168,15 +168,24 @@ class ReaderTtsHighlightWebViewTest {
                 // Wait for production restore (including the VN clone and font layout).
                 evaluate(webView, "window.hoshiReader.buildNodeOffsets(); true")
                 val baseline = bluePixelCount()
-                val sentence = moe.antimony.hoshi.features.tts.TtsText.chapter(0,
-                    "<p>前「𠮟 、<ruby>猫<rt>ねこ</rt></ruby>。」後</p>").first()
-                assertEquals("前「𠮟 、ねこ。」", moe.antimony.hoshi.features.tts.TtsText.spoken(sentence, null, emptyList()))
-                val cue = moe.antimony.hoshi.features.sasayaki.SasayakiCueRange("tts-fixture", sentence.start, sentence.length)
-                evaluate(webView, ReaderPaginationScripts.highlightSasayakiCueInvocation(cue, true))
-                composeRule.waitUntil("$description sentence paint", 10_000) { bluePixelCount() > baseline + 100 }
-                assertEquals(description, "\"tts-fixture\"", evaluate(webView, "window.hoshiReader.activeCueId"))
-                evaluate(webView, ReaderPaginationScripts.clearSasayakiCueInvocation())
-                composeRule.waitUntil("$description clear paint", 10_000) { bluePixelCount() <= baseline + 20 }
+                val sentences = moe.antimony.hoshi.features.tts.TtsText.chapter(0,
+                    "<p>前「𠮟 、<ruby>猫<rt>ねこ</rt></ruby>。」後</p>")
+                assertEquals(listOf("前", "「𠮟 、猫。」", "後"), sentences.map { it.text })
+                assertEquals("「𠮟 、ねこ。」", moe.antimony.hoshi.features.tts.TtsText.spoken(sentences[1], null, emptyList()))
+                // Revisit the dialogue after the following narration, just as the previous/repeat controls do.
+                for (index in listOf(0, 1, 2, 1)) {
+                    val sentence = sentences[index]
+                    val cue = SasayakiCueRange("tts-fixture-$index", sentence.start, sentence.length)
+                    val sourceText = evaluate(webView, "window.hoshiReader.collectSasayakiCueRanges([{id:'probe',start:${sentence.start},length:${sentence.length}}])[0].ranges.map(s=>s.node.textContent.slice(s.start,s.end)).join('')")
+                    // Matchable characters must come from this unit, never its preceding/following narration.
+                    val expected = listOf("前", "𠮟猫", "後")[index]
+                    assertEquals(description, expected, Json.decodeFromString<String>(sourceText).filterNot { it in "「」、。 " })
+                    evaluate(webView, ReaderPaginationScripts.highlightSasayakiCueInvocation(cue, true))
+                    composeRule.waitUntil("$description unit $index paint", 10_000) { bluePixelCount() > baseline + 100 }
+                    assertEquals(description, "\"tts-fixture-$index\"", evaluate(webView, "window.hoshiReader.activeCueId"))
+                    evaluate(webView, ReaderPaginationScripts.clearSasayakiCueInvocation())
+                    composeRule.waitUntil("$description clear paint", 10_000) { bluePixelCount() <= baseline + 20 }
+                }
             }
         } finally {
             instrumentation.runOnMainSync { webView.destroy() }

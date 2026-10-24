@@ -8,7 +8,8 @@ data class TtsSpokenPart(val role: TtsTextRole, val text: String)
 
 /** Complete paired ranges are found before sentences are sliced, so unmatched openers cannot leak. */
 internal object TtsDialogue {
-    fun ranges(text: String): List<TtsTextRange> {
+    /** Inclusive source ranges; adjacent quotes stay separate for playback navigation. */
+    fun outerQuotes(text: String): List<IntRange> {
         val stack = ArrayDeque<Pair<Char, Int>>()
         val matched = mutableListOf<IntRange>()
         text.forEachIndexed { index, character -> when (character) {
@@ -25,14 +26,21 @@ internal object TtsDialogue {
         val merged = mutableListOf<IntRange>()
         matched.sortedBy { it.first }.forEach { range ->
             val previous = merged.lastOrNull()
-            if (previous != null && range.first <= previous.last + 1) merged[merged.lastIndex] = previous.first..maxOf(previous.last, range.last)
+            if (previous != null && range.first <= previous.last) merged[merged.lastIndex] = previous.first..maxOf(previous.last, range.last)
             else merged += range
         }
+        return merged
+    }
+
+    fun ranges(text: String, quotes: List<IntRange> = outerQuotes(text)): List<TtsTextRange> {
         return buildList {
             var cursor = 0
-            merged.forEach { range ->
+            quotes.forEach { range ->
                 if (cursor < range.first) add(TtsTextRange(cursor, range.first, TtsTextRole.Narration))
-                add(TtsTextRange(range.first, range.last + 1, TtsTextRole.Dialogue))
+                val previous = lastOrNull()
+                if (previous?.role == TtsTextRole.Dialogue && previous.end == range.first)
+                    this[lastIndex] = previous.copy(end = range.last + 1)
+                else add(TtsTextRange(range.first, range.last + 1, TtsTextRole.Dialogue))
                 cursor = range.last + 1
             }
             if (cursor < text.length) add(TtsTextRange(cursor, text.length, TtsTextRole.Narration))

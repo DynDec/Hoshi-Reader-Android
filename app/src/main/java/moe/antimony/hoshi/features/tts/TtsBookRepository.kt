@@ -26,20 +26,34 @@ class TtsBookRepository @Inject constructor(@param:IoDispatcher private val disp
         override fun hashCode() = 31 * System.identityHashCode(book) + chapter
     }
     private val mutex = Mutex()
-    private val chapters = LinkedHashMap<Key, List<TtsSentence>>(4, .75f, true)
+    private val chapters = LinkedHashMap<Key, TtsChapterText>(4, .75f, true)
 
-    suspend fun chapter(book: EpubBook, index: Int): List<TtsSentence> = withContext(dispatcher) {
+    suspend fun chapter(book: EpubBook, index: Int): List<TtsSentence> = parsedChapter(book, index).sentences
+
+    private suspend fun parsedChapter(book: EpubBook, index: Int): TtsChapterText = withContext(dispatcher) {
         mutex.withLock {
             val key = Key(book, index)
             chapters[key]?.let { return@withLock it }
             val source = book.chapters[index]
             val html = source.html.ifBlank { book.readResource(source.href)?.toString(Charsets.UTF_8).orEmpty() }
-            val sentences = TtsText.chapter(index, html, source.mediaType)
+            val sentences = TtsText.extractChapter(index, html, source.mediaType)
             currentCoroutineContext().ensureActive()
             chapters[key] = sentences
             if (chapters.size > 4) chapters.remove(chapters.keys.first())
             sentences
         }
+    }
+
+    /** Includes trailing and image-only intermediate chapters that the Reader traverses. */
+    internal suspend fun hasImagesBetween(book: EpubBook, from: TtsBookPosition, to: TtsBookPosition): Boolean {
+        if (to.sentence.imageBefore) return true
+        if (from.sentence.chapter == to.sentence.chapter) return false
+        if (parsedChapter(book, from.sentence.chapter).trailingImage) return true
+        for (index in (from.sentence.chapter + 1) until to.sentence.chapter) {
+            val chapter = parsedChapter(book, index)
+            if (chapter.trailingImage || chapter.sentences.any { it.imageBefore }) return true
+        }
+        return false
     }
 
     private fun readable(book: EpubBook) = book.chapters.indices.filter { index ->

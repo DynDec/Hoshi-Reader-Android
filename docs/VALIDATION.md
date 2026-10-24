@@ -258,6 +258,37 @@ These tests do not establish real Google account throughput or proxy behavior.
   timing and valid tokens do not establish recognition accuracy.
 - Runtime download/permission failure injection uses scratch resources.
 
+### TTS playback continuity
+
+`TtsQueuePlaybackDeviceTest` uses generated PCM, isolated Media3 players and
+in-memory preferences. Run it with the data-preserving instrumentation procedure
+above. It compares the former per-unit reset sequence with the production queue,
+including quote/chapter boundaries, multiple audio fragments and deliberately slow
+Reader presentation. Require complete ordered units, one initial prepare and no
+intermediate idle/buffering events for the ready queue. Logs use `HoshiTtsQueue`.
+Elapsed duration is secondary evidence; repeat on the same device and subtract
+the known PCM duration only as aggregate overhead, not a measured acoustic gap.
+`onAudioPositionAdvancing` supplies a wall-clock timestamp; translate it to the
+monotonic clock before comparing elapsed time. This fixture isolates app transport
+cost and does not measure provider silence, synthesis/network stalls or every codec.
+Pair it with `TtsImageHoldDeviceTest`, `TtsLookupPauseDeviceTest` and real WebView
+highlight tests when changing presentation or cancellation boundaries.
+
+`TtsConcurrencyBenchmarkDeviceTest#compareMicrosoftTranslatorConcurrency` is an
+opt-in live provider comparison: add `-e ttsConcurrencyBenchmark true` to the
+explicit instrumentation command. It uses eight public Japanese fragments by default; add
+`-e ttsBenchmarkProfile mixed` for 24 short/medium/long fragments. Both use shared
+warm authorization/catalogs, isolated engines and a unique temporary cache directory. The 1/2/3/4 then 4/3/2/1 order helps expose time/order variation;
+`HoshiTtsConcurrency` reports batch time, individual request time, audio duration
+and failures. `estimatedWait2xMs` models ordered playback from the first ready item
+at 2× speed; it excludes decoder/Reader costs and is not an acoustic measurement.
+It stops on failure rather than amplifying service errors with benchmark retries.
+This measures provider throughput, not acoustic gaps or the production scheduler;
+pair it with `TtsContinuousPlaybackDeviceTest#microsoftTranslatorPlaybackCompletesWithTwentyPrefetchedUnits`
+for real playback, and deterministic controller/repository tests for concurrency
+limits, ordered publication, cancellation and injected failures. Do not infer a
+universal optimum or service rate limit from one device/network session.
+
 ### External TTS and release automation
 
 - `CustomTtsDeviceTest` opts into supplied `vitsUrl` or `openAiUrl`/`openAiModel`

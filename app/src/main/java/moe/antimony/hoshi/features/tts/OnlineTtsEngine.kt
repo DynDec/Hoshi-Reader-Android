@@ -5,8 +5,8 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import moe.antimony.hoshi.di.IoDispatcher
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -25,7 +25,7 @@ class OnlineTtsEngine internal constructor(
     @Inject constructor(transport: OnlineTtsTransport, cipher: TtsCredentialCipher, @IoDispatcher io: CoroutineDispatcher,
         translator: MicrosoftTranslatorSession, catalogs: TtsVoiceCatalogCache) : this(transport, cipher::decrypt, io, translator, catalogs)
     internal constructor(transport: OnlineTtsTransport, cipher: TtsCredentialCipher, io: CoroutineDispatcher) : this(transport, cipher::decrypt, io)
-    private val synthesis = Mutex()
+    private val synthesis = Semaphore(ttsSynthesisConcurrency)
     suspend fun cachedCatalog(settings: TtsSettings): TtsCatalog? = withContext(io) {
         val source = source(settings)
         val config = settings.online[source.id] ?: TtsOnlineConfig()
@@ -55,7 +55,7 @@ class OnlineTtsEngine internal constructor(
     suspend fun synthesize(text: String, settings: TtsSettings, directory: File): List<File> {
         val files = mutableListOf<File>()
         try {
-            return withContext(io) { synthesis.withLock {
+            return withContext(io) { synthesis.withPermit {
                 if (text.isBlank()) throw TtsException(TtsFailure.EmptyText)
                 val source = source(settings)
                 val config = settings.online[source.id] ?: TtsOnlineConfig()

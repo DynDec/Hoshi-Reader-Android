@@ -37,6 +37,7 @@ class TtsException(
     internal val statusCode: Int? = null,
     cause: Throwable? = null,
     message: String? = null,
+    internal val retryAfterMillis: Long? = null,
 ) : Exception(message ?: cause?.localizedMessage ?: statusCode?.let { "HTTP $it" }, cause)
 
 internal fun ttsPlatformError(operation: String, code: Int, failure: TtsFailure): TtsException =

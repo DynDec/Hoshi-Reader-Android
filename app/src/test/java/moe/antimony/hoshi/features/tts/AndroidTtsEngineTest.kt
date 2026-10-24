@@ -78,7 +78,8 @@ class AndroidTtsEngineTest {
             CustomTtsEngine(transport, { _, _ -> error("Unexpected custom source") }, dispatcher))
         val audio = TtsAudioRepository(router, folder.root, dispatcher, TtsExportFallback { _, _ -> error("Unexpected transcoding") })
         val preferences = TtsPreferences(settings.withRouting(TtsVoiceRouting(true, "narration", "dialogue")))
-        val sentence = TtsText.chapter(0, "<p>彼は「はい」と言った。</p>").single()
+        val text = "彼は「はい」と言った。"
+        val sentence = TtsText.selection(TtsText.chapter(0, "<p>$text</p>"), text, 0, 0)
         val later = TtsSentence(0, 8, 3, "後です。")
         val files = audio.audio(sentence, "book", preferences)
         val released = CompletableDeferred<Unit>()

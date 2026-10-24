@@ -40,9 +40,15 @@ data class TtsSentence(
     val roles: List<TtsTextRange> = emptyList(),
 )
 
+internal data class TtsChapterText(val sentences: List<TtsSentence>, val trailingImage: Boolean)
+
 /** Written offsets use the Reader's matchable code points; ruby offsets use UTF-16 within text. */
 object TtsText {
     fun chapter(chapter: Int, html: String, mediaType: String = "text/html"): List<TtsSentence> {
+        return extractChapter(chapter, html, mediaType).sentences
+    }
+
+    internal fun extractChapter(chapter: Int, html: String, mediaType: String): TtsChapterText {
         val result = mutableListOf<TtsSentence>()
         val source = StringBuilder()
         val sourceStarts = mutableListOf<Int>()
@@ -112,8 +118,52 @@ object TtsText {
         } else Jsoup.parse(html).body()
         visit(body)
         flush()
-        val roles = TtsDialogue.ranges(source.toString())
-        return result.mapIndexed { index, sentence -> sentence.copy(roles = TtsDialogue.slice(roles, sourceStarts[index], sourceStarts[index] + sentence.text.length)) }
+        val chapterText = source.toString()
+        val quotes = TtsDialogue.outerQuotes(chapterText)
+        val roles = TtsDialogue.ranges(chapterText, quotes)
+        val boundaries = quotes.flatMap { range ->
+            var end = range.last + 1
+            // Keep the existing sentence-ending punctuation/closers with the dialogue.
+            while (end < chapterText.length && chapterText[end] in "」』）】\"’”！？!?。") end++
+            listOf(range.first, end)
+        }.distinct().sorted()
+        val sentences = result.flatMapIndexed { index, sentence ->
+            val start = sourceStarts[index]
+            val first = boundaries.binarySearch(start).let { if (it >= 0) it else -it - 1 }
+            val cuts = boundaries.subList(first, boundaries.size).asSequence().takeWhile { it < start + sentence.text.length }
+                .map { it - start }.filter { cut -> cut > 0 && sentence.ruby.none { cut > it.start && cut < it.end } }.toList()
+            splitQuotes(sentence.copy(roles = TtsDialogue.slice(roles, start, start + sentence.text.length)), cuts)
+        }
+        return TtsChapterText(sentences, imageBefore)
+    }
+
+    private fun splitQuotes(sentence: TtsSentence, cuts: List<Int>): List<TtsSentence> {
+        if (cuts.isEmpty()) return listOf(sentence)
+        // A punctuation-only piece has no Reader anchor: retain it with a neighboring piece.
+        val spans = mutableListOf<IntRange>()
+        var start = 0
+        for (end in cuts + sentence.text.length) {
+            if (sentence.text.substring(start, end).codePoints().anyMatch { it.isReaderMatchableCodePoint() }) {
+                spans += start until end
+                start = end
+            } else if (end == sentence.text.length && spans.isNotEmpty()) {
+                spans[spans.lastIndex] = spans.last().first until end
+            }
+        }
+        var offset = sentence.start
+        return spans.mapIndexed { index, span ->
+            val end = span.last + 1
+            val value = sentence.text.substring(span.first, end)
+            val length = value.codePoints().filter { it.isReaderMatchableCodePoint() }.count().toInt()
+            val ruby = sentence.ruby.filter {
+                // Zero-width readings at a cut belong to the right piece, except at chapter-unit end.
+                it.start >= span.first && it.end <= end &&
+                    (it.start < end || end == sentence.text.length)
+            }.map { it.copy(start = it.start - span.first, end = it.end - span.first) }
+            sentence.copy(start = offset, length = length, text = value, ruby = ruby,
+                imageBefore = sentence.imageBefore && index == 0,
+                roles = TtsDialogue.slice(sentence.roles, span.first, end)).also { offset += length }
+        }
     }
 
     fun selection(sentences: List<TtsSentence>, text: String, normalizedOffset: Int?, sentenceOffset: Int?): TtsSentence {

@@ -9,6 +9,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OnlineTtsTransportTest {
+    @Test fun edgeHandshakeRateLimitRetainsServerCooldown() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "12"))
+            val error = runCatching {
+                OnlineTtsTransport(client()).edgeAudio(Request.Builder().url(server.url("/edge")).build(), "fixture")
+            }.exceptionOrNull() as TtsException
+            assertEquals(TtsFailure.RateLimited, error.failure)
+            assertEquals(12000L, error.retryAfterMillis)
+        }
+    }
+
+    @Test fun rateLimitRetainsRetryAfterForSynthesisBackoff() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "7"))
+            val error = runCatching {
+                OnlineTtsTransport(client()).request(Request.Builder().url(server.url("/speech")).build())
+            }.exceptionOrNull() as TtsException
+            assertEquals(TtsFailure.RateLimited, error.failure)
+            assertEquals(7000L, error.retryAfterMillis)
+        }
+    }
+
     @Test fun serviceDiagnosticsRedactOnlyTheSubmittedCredential() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(401).setBody("API key echoed-fixture-secret was rejected for this model"))

@@ -258,6 +258,9 @@ class TtsViewModelConfigurationTest {
             override var onEnded: () -> Unit = {}
             override var onPaused: () -> Unit = {}
             override var onError: (Throwable) -> Unit = {}
+            override var onTransition: (Long) -> Unit = {}
+            override fun append(files: List<File>, title: String, sentence: String, token: Long) = Unit
+            override fun discardUpcoming(): Long? = null
             override suspend fun connect() = Unit
             override fun prepare(files: List<File>, title: String, sentence: String) = Unit
             override fun setPlaybackRate(rate: Float) = Unit

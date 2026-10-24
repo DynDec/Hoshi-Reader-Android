@@ -43,6 +43,7 @@ class OnlineTtsTransport internal constructor(private val client: OkHttpClient,
                         if (!it.isSuccessful) {
                             val diagnostic = redactRequestCredentials(it.peekBody(4096).string().trim(), request)
                             throw TtsException(httpFailure(it.code), statusCode = it.code,
+                                retryAfterMillis = ttsRetryAfterMillis(it.header("Retry-After")),
                                 message = redactRequestCredentials("HTTP ${it.code} ${it.message}" + if (diagnostic.isNotEmpty()) "\n$diagnostic" else "", request))
                         }
                         val body = it.body ?: throw TtsException(TtsFailure.InvalidResponse)
@@ -101,7 +102,8 @@ class OnlineTtsTransport internal constructor(private val client: OkHttpClient,
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 complete.completeExceptionally(TtsException(response?.let { httpFailure(it.code) } ?: TtsFailure.Network,
-                    statusCode = response?.code, cause = redactedTransportError(t, request)))
+                    statusCode = response?.code, cause = redactedTransportError(t, request),
+                    retryAfterMillis = ttsRetryAfterMillis(response?.header("Retry-After"))))
             }
         })
         try { complete.await() } finally { socket.cancel() }

@@ -7,8 +7,9 @@ class TtsDialogueTest {
     private fun parts(sentence: TtsSentence, words: List<TtsWord> = emptyList(), ruby: Boolean = true) =
         TtsText.spokenParts(sentence, "book", words, ruby).map { it.role to it.text }
 
-    @Test fun mixedSentenceKeepsOffsetsAndUsesDialogueOnlyInsideQuotes() {
-        val sentence = TtsText.chapter(2, "<p>彼女は「こんにちは」と言った。</p>").single()
+    @Test fun selectedMixedSentenceKeepsOffsetsAndUsesDialogueOnlyInsideQuotes() {
+        val text = "彼女は「こんにちは」と言った。"
+        val sentence = TtsText.selection(TtsText.chapter(2, "<p>$text</p>"), text, 0, 0)
         assertEquals(listOf(TtsTextRole.Narration to "彼女は", TtsTextRole.Dialogue to "「こんにちは」", TtsTextRole.Narration to "と言った。"), parts(sentence))
         assertEquals(2, sentence.chapter)
         assertEquals(0, sentence.start)
@@ -32,7 +33,8 @@ class TtsDialogueTest {
     }
 
     @Test fun replacementAndRubyKeepTheOriginalRoleIncludingRemovedQuoteMarkers() {
-        val sentence = TtsText.chapter(0, "<p>彼は「<ruby>今日<rt>きょう</rt></ruby>😀――いい」と言った。</p>").single()
+        val source = TtsText.chapter(0, "<p>彼は「<ruby>今日<rt>きょう</rt></ruby>😀――いい」と言った。</p>")
+        val sentence = TtsText.selection(source, "彼は「今日😀――いい」と言った。", 0, 0)
         val words = listOf(TtsWord("quote", "「", " "), TtsWord("dash", "――", "、"))
         assertEquals(listOf(TtsTextRole.Narration to "彼は", TtsTextRole.Dialogue to " きょう😀、いい」", TtsTextRole.Narration to "と言った。"), parts(sentence, words))
         assertEquals("彼は 今日😀、いい」と言った。", TtsText.spoken(sentence, "book", words, false))
@@ -50,8 +52,9 @@ class TtsDialogueTest {
 
     @Test fun selectionKeepsClosingQuotesWithDialogueAndFollowingNarrationSeparate() {
         val source = TtsText.chapter(0, "<p>彼は「はい」と言った。</p>")
-        val selected = TtsText.selection(source, source.single().text, 0, 0)
-        assertEquals(parts(source.single()), parts(selected))
+        val selected = TtsText.selection(source, "彼は「はい」と言った。", 0, 0)
+        assertEquals(listOf(TtsTextRole.Narration to "彼は", TtsTextRole.Dialogue to "「はい」",
+            TtsTextRole.Narration to "と言った。"), parts(selected))
     }
 
     @Test fun imageGlyphAtTheEndOfAParagraphKeepsTheSpanningDialogueVoice() {
@@ -61,8 +64,9 @@ class TtsDialogueTest {
 
     @Test fun symbolicDialogueKeepsItsSourceRoleInLookupIncludingRepeatedOccurrences() {
         val source = TtsText.chapter(0, "<p>彼は😀と言った。彼は「😀」と言った。</p>")
-        val quoted = source[1]
-        assertEquals(parts(quoted), parts(TtsText.selection(source, quoted.text, quoted.start, 0)))
+        val selected = TtsText.selection(source, "彼は「😀」と言った。", 6, 0)
+        assertEquals(listOf(TtsTextRole.Narration to "彼は", TtsTextRole.Dialogue to "「😀」",
+            TtsTextRole.Narration to "と言った。"), parts(selected))
     }
 
     @Test fun incompleteInnerMarkerDoesNotPreventAnOuterMatchedDialogue() {

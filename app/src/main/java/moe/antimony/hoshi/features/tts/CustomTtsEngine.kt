@@ -5,8 +5,8 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.*
 import moe.antimony.hoshi.di.IoDispatcher
 import okhttp3.MediaType.Companion.toMediaType
@@ -23,7 +23,7 @@ class CustomTtsEngine internal constructor(
 ) {
     @Inject constructor(transport: OnlineTtsTransport, cipher: TtsCredentialCipher, @IoDispatcher io: CoroutineDispatcher,
         catalogs: TtsVoiceCatalogCache) : this(transport, cipher::decrypt, io, catalogs)
-    private val synthesis = Mutex()
+    private val synthesis = Semaphore(ttsSynthesisConcurrency)
     private fun source(settings: TtsSettings) = settings.customSource()?.validate() ?: throw TtsException(TtsFailure.Configuration)
     private fun catalog(source: TtsCustomSource, voices: List<TtsVoiceInfo>, voice: String) = TtsCatalog(source.id, source.voiceChoices(voices, voice))
 
@@ -60,7 +60,7 @@ class CustomTtsEngine internal constructor(
     suspend fun synthesize(text: String, settings: TtsSettings, directory: File): List<File> {
         val files = mutableListOf<File>()
         try {
-            return withContext(io) { synthesis.withLock {
+            return withContext(io) { synthesis.withPermit {
                 val source = source(settings)
                 if (text.isBlank()) throw TtsException(TtsFailure.EmptyText)
                 val speaker = if (source.protocol == TtsCustomProtocol.Vits) {
