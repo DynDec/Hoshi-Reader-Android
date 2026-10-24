@@ -21,6 +21,7 @@ Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 
 ### Changed
 
+- Label the selected-text menu entry “Hoshi Lookup” (“Hoshi 查词” in Simplified Chinese) to make dictionary lookup easier to identify.
 - Simplify About into compact groups for updates, project links, support and storage cleanup.
 - Edit individual reading sessions in Statistics, with deletions preserved across sync.
 - Replace BIZ UDPGothic with BIZ UDGothic in the recommended fonts.

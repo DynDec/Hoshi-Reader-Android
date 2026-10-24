@@ -122,7 +122,7 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@style/Theme.HoshiReader.ProcessTextOverlay">
-            <intent-filter>
+            <intent-filter android:label="@string/process_text_lookup_label">
                 <action android:name="android.intent.action.PROCESS_TEXT" />
 
                 <category android:name="android.intent.category.DEFAULT" />
