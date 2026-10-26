@@ -28,10 +28,11 @@ class ReaderDisplaySettingsMigrationSourceTest {
     val tempFolder = TemporaryFolder()
 
     @Test
-    fun migrationReadsOnlyGlobalActiveProfileEvenWhenLoadedBookProfileIsInvalid() = runBlocking {
+    fun migrationReadsProfileThatOpenedBookMadeGloballyActive() = runBlocking {
         val filesDir = tempFolder.newFolder("global-profile-files")
         val profiles = ProfileRepository(filesDir)
-        profiles.readerSettingsFile().writeProfileSettings(
+        val defaultProfileId = profiles.state.value.defaultProfileId
+        profiles.readerSettingsFile(defaultProfileId).writeProfileSettings(
             theme = "Custom",
             background = 0xFF111111L,
             text = 0xFFEEEEeeL,
@@ -49,10 +50,10 @@ class ReaderDisplaySettingsMigrationSourceTest {
             BookMetadata(
                 id = "book",
                 lastAccess = 0.0,
-                profileId = profiles.state.value.defaultProfileId,
+                profileId = defaultProfileId,
             ),
         )
-        profiles.readerSettingsFile(profiles.state.value.defaultProfileId).writeText("not valid JSON")
+        assertEquals(defaultProfileId, profiles.state.value.globalActiveProfileId)
         dataStore("global-profile").use { handle ->
             handle.dataStore.edit { it[stringPreferencesKey("theme")] = "Light" }
             val payload = ReaderDisplaySettingsMigrationSource(
@@ -61,8 +62,8 @@ class ReaderDisplaySettingsMigrationSourceTest {
                 profileRepository = profiles,
             ).loadMigrationPayload()
 
-            assertEquals(LegacyDisplayTheme.Dark, payload.activeSettings?.theme)
-            assertEquals(0xFF222222L, payload.activeSettings?.customBackgroundColor)
+            assertEquals(LegacyDisplayTheme.Custom, payload.activeSettings?.theme)
+            assertEquals(0xFF111111L, payload.activeSettings?.customBackgroundColor)
         }
     }
 
