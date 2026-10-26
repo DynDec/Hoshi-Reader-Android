@@ -7,6 +7,8 @@ data class ReaderSelectionData(
     val normalizedOffset: Int?,
     val sentenceOffset: Int? = null,
     val sourceIndex: Int? = null,
+    /** Set when the selection came from a lookup shift swipe in this direction. */
+    val shiftDelta: Int? = null,
 )
 
 data class ReaderSelectionRect(

@@ -673,7 +673,7 @@ window.hoshiSelection = {
         return this.selectFromHit(hit, maxLength, rectX, rectY);
     },
 
-    selectFromHit(hit, maxLength, rectX, rectY) {
+    selectFromHit(hit, maxLength, rectX, rectY, extraPayload = null) {
         const projection = this.options.textProjection;
         this.clearSelection();
 
@@ -749,7 +749,8 @@ window.hoshiSelection = {
             sentence: sentenceContext.sentence,
             rect: this.getSelectionRect(rectX, rectY),
             normalizedOffset,
-            sentenceOffset: sentenceContext.sentenceOffset
+            sentenceOffset: sentenceContext.sentenceOffset,
+            ...extraPayload
         }, this.selection, revision);
 
         return text;
@@ -787,13 +788,19 @@ window.hoshiSelection = {
             if (!this.isLookupStartAt(node.textContent, offset)) continue;
             const rect = this.visibleCharacterRect(node, offset);
             if (!rect) return null;
-            return this.selectFromHit({ node, offset }, maxLength, rect.x + rect.width / 2, rect.y + rect.height / 2);
+            return this.selectFromHit({ node, offset }, maxLength, rect.x + rect.width / 2, rect.y + rect.height / 2, { shiftDelta: delta });
         }
         return null;
     },
 
+    // Small kana, the long vowel mark and iteration marks never begin a word.
+    nonLookupStartCharacters: 'ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿｧｨｩｪｫｯｬｭｮーｰゝゞヽヾ々〻',
+
     isLookupStartAt(text, offset) {
-        return !this.isScanBoundaryAt(text, offset) && /[\p{L}\p{N}]/u.test(this.codePointAt(text, offset));
+        const char = this.codePointAt(text, offset);
+        return !this.isScanBoundaryAt(text, offset) &&
+            !this.nonLookupStartCharacters.includes(char) &&
+            /[\p{L}\p{N}]/u.test(char);
     },
 
     visibleCharacterRect(node, offset) {

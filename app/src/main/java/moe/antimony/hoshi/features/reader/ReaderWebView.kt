@@ -1125,6 +1125,23 @@ fun ReaderWebView(
         }
     }
     readerPopupBridgeHolder.callbacks = ReaderLookupPopupBridgeCallbacks(::handleReaderPopupBridgeMessage)
+    fun showUnmatchedSelection(
+        selection: ReaderSelectionData,
+        selectionRects: (Int, (List<ReaderSelectionRect>) -> Unit) -> Unit,
+    ) {
+        setLookupPopups(emptyList())
+        val selectionCount = onTextSelected(selection)
+        if (selectionCount != null) {
+            selectionRects(selectionCount) { rects ->
+                rootSelectionHighlight = ReaderRootSelectionHighlight(
+                    popupId = null,
+                    rects = rects,
+                )
+            }
+        } else {
+            webView?.evaluateJavascript(ReaderSelectionCommand.ClearSelectionPreview.source, null)
+        }
+    }
     val handleTextSelected: (ReaderSelectionData, (Int, (List<ReaderSelectionRect>) -> Unit) -> Unit) -> Unit = { selection, selectionRects ->
         cancelReaderAutoPage()
         stateHolder.enterFocusModeForReaderInteraction()
@@ -1163,19 +1180,21 @@ fun ReaderWebView(
                     rects = displayRects,
                 )
             }
-        } else {
-            setLookupPopups(emptyList())
-            val selectionCount = onTextSelected(selection)
-            if (selectionCount != null) {
-                selectionRects(selectionCount) { rects ->
-                    rootSelectionHighlight = ReaderRootSelectionHighlight(
-                        popupId = null,
-                        rects = rects,
-                    )
+        } else if (selection.shiftDelta != null && stateHolder.lookupPopups.isNotEmpty()) {
+            // A shifted start without matches keeps the popup and continues in
+            // the same direction until a match or the paragraph/screen edge.
+            webView?.evaluateJavascript(
+                ReaderSelectionCommand.ShiftSelection(
+                    delta = selection.shiftDelta,
+                    maxLength = readerSelectionMaxLength(dictionarySettings),
+                ).source,
+            ) { result ->
+                if (ReaderSelectionResult.fromWebViewResult(result).selectedNothing) {
+                    showUnmatchedSelection(selection, selectionRects)
                 }
-            } else {
-                webView?.evaluateJavascript(ReaderSelectionCommand.ClearSelectionPreview.source, null)
             }
+        } else {
+            showUnmatchedSelection(selection, selectionRects)
         }
     }
     fun handleReaderTapOutside() {

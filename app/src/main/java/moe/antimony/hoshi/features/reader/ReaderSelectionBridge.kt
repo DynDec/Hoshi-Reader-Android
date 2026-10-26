@@ -40,6 +40,7 @@ internal object ReaderSelectionBridgePayload {
             normalizedOffset = payload.normalizedOffset,
             sentenceOffset = payload.sentenceOffset,
             sourceIndex = payload.sourceIndex,
+            shiftDelta = payload.shiftDelta,
         )
     }
 
@@ -70,6 +71,7 @@ internal object ReaderSelectionBridgePayload {
         val normalizedOffset: Int? = null,
         val sentenceOffset: Int? = null,
         val sourceIndex: Int? = null,
+        val shiftDelta: Int? = null,
     )
 
     @Serializable

@@ -11,6 +11,13 @@ class ReaderSelectionBridgeTest {
         assertEquals(2, parsed.sourceIndex)
         assertEquals(4, parsed.normalizedOffset)
         assertEquals(1, parsed.sentenceOffset)
+        assertEquals(null, parsed.shiftDelta)
+    }
+
+    @Test
+    fun shiftedLookupPayloadKeepsShiftDirection() {
+        val payload = """{"text":"犬","sentence":"犬です。","rect":{"x":0.0,"y":0.0,"width":10.0,"height":10.0},"shiftDelta":-1}"""
+        assertEquals(-1, requireNotNull(ReaderSelectionBridgePayload.fromJson(payload)).shiftDelta)
     }
     @Test
     fun parsesTextSelectionPayloadLikeIosMessageBody() {

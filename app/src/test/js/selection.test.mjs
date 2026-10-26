@@ -1373,6 +1373,27 @@ test('lookup shift moves the start one character and skips dots and punctuation'
     assert.equal(selection.shiftSelection(-1, 80), 'は・東京へ行った');
 });
 
+test('lookup shift skips small kana, long vowel and iteration marks', () => {
+    const text = '彼はキャー々と言った';
+    const { selection, selectAt } = loadShiftableSelection(text);
+    selectAt(text.indexOf('キ'));
+
+    assert.equal(selection.shiftSelection(1, 80), 'と言った');
+    assert.equal(selection.shiftSelection(-1, 80), 'キャー々と言った');
+});
+
+test('lookup shift tags its bridge payload with the shift direction', () => {
+    const text = '彼は東京へ行った';
+    const { selection, selectAt } = loadShiftableSelection(text);
+    const posted = [];
+    selection.postTextSelected = (payload) => posted.push(payload);
+    selectAt(text.indexOf('東'));
+    selection.shiftSelection(-1, 80);
+
+    assert.equal(posted[0].shiftDelta, undefined);
+    assert.equal(posted[1].shiftDelta, -1);
+});
+
 test('lookup shift keeps the selection at the paragraph start', () => {
     const text = '「彼は東京へ行った。」';
     const { selection, selectAt } = loadShiftableSelection(text);
