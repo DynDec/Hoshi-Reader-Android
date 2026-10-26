@@ -52,9 +52,9 @@ class ReaderSwipeGestureTrackerTest {
             tracker.onMove(120f, 104f, eventTime = 1_100L) ==
                 ReaderSwipeGestureTracker.Result.None,
         )
-        assertTrue(
-            tracker.onUp(120f, 104f, eventTime = 1_120L) ==
-                ReaderSwipeGestureTracker.Result.None,
+        assertEquals(
+            ReaderSwipeGestureTracker.Result.Drag(-120f, 4f),
+            tracker.onUp(120f, 104f, eventTime = 1_120L),
         )
 
         tracker.onDown(240f, 100f, eventTime = 2_000L)
@@ -170,5 +170,33 @@ class ReaderSwipeGestureTrackerTest {
         val result = tracker.onUp(242f, 103f, eventTime = 1_800L)
 
         assertTrue(result == ReaderSwipeGestureTracker.Result.None)
+    }
+
+    @Test
+    fun dragWithoutPageSwipeIsReportedOnPointerUp() {
+        val tracker = ReaderSwipeGestureTracker(minDistance = 72f)
+
+        tracker.onDown(240f, 100f, eventTime = 1_000L)
+        assertEquals(ReaderSwipeGestureTracker.Result.None, tracker.onMove(236f, 160f, eventTime = 1_100L))
+
+        assertEquals(
+            ReaderSwipeGestureTracker.Result.Drag(-6f, 120f),
+            tracker.onUp(234f, 220f, eventTime = 1_200L),
+        )
+    }
+
+    @Test
+    fun lookupShiftFollowsTheTextLine() {
+        assertEquals(1, readerLookupShiftDelta(dx = 10f, dy = 120f, verticalWriting = true, minDistance = 80f))
+        assertEquals(-1, readerLookupShiftDelta(dx = 10f, dy = -120f, verticalWriting = true, minDistance = 80f))
+        assertEquals(1, readerLookupShiftDelta(dx = 120f, dy = -10f, verticalWriting = false, minDistance = 80f))
+        assertEquals(-1, readerLookupShiftDelta(dx = -120f, dy = 10f, verticalWriting = false, minDistance = 80f))
+    }
+
+    @Test
+    fun lookupShiftIgnoresShortAndCrossLineSwipes() {
+        assertEquals(null, readerLookupShiftDelta(dx = 0f, dy = 60f, verticalWriting = true, minDistance = 80f))
+        assertEquals(null, readerLookupShiftDelta(dx = 140f, dy = 120f, verticalWriting = true, minDistance = 80f))
+        assertEquals(null, readerLookupShiftDelta(dx = 10f, dy = 140f, verticalWriting = false, minDistance = 80f))
     }
 }

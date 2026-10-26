@@ -345,6 +345,7 @@ class ReaderSettingsRepositoryTest {
             assertFalse(settings.volumeKeysNavigatePopupTerms)
             assertFalse(settings.volumeKeysSeekSasayaki)
             assertFalse(settings.reverseVolumeKeyDirection)
+            assertTrue(settings.swipeShiftsLookupStart)
             assertFalse(settings.keepScreenOnWhileReading)
             assertFalse(settings.lockCurrentOrientation)
             assertFalse(settings.openLastReadBookOnLaunch)
@@ -556,6 +557,7 @@ class ReaderSettingsRepositoryTest {
                     volumeKeysNavigatePopupTerms = true,
                     volumeKeysSeekSasayaki = true,
                     reverseVolumeKeyDirection = true,
+                    swipeShiftsLookupStart = false,
                     keepScreenOnWhileReading = true,
                     lockCurrentOrientation = true,
                     openLastReadBookOnLaunch = true,
@@ -624,6 +626,7 @@ class ReaderSettingsRepositoryTest {
             assertTrue(saved.volumeKeysNavigatePopupTerms)
             assertTrue(saved.volumeKeysSeekSasayaki)
             assertTrue(saved.reverseVolumeKeyDirection)
+            assertFalse(saved.swipeShiftsLookupStart)
             assertTrue(saved.keepScreenOnWhileReading)
             assertTrue(saved.lockCurrentOrientation)
             assertTrue(saved.openLastReadBookOnLaunch)

@@ -670,6 +670,11 @@ window.hoshiSelection = {
             return null;
         }
 
+        return this.selectFromHit(hit, maxLength, rectX, rectY);
+    },
+
+    selectFromHit(hit, maxLength, rectX, rectY) {
+        const projection = this.options.textProjection;
         this.clearSelection();
 
         const container = this.findParagraph(hit.node) || document.body;
@@ -748,6 +753,66 @@ window.hoshiSelection = {
         }, this.selection, revision);
 
         return text;
+    },
+
+    // Moves the current lookup start along the text and repeats the lookup.
+    // Characters that cannot start a lookup are skipped; the paragraph and the
+    // visible content viewport bound the move, leaving the selection unchanged.
+    shiftSelection(delta, maxLength) {
+        const current = this.selection;
+        if (!current || !delta) return null;
+        const container = this.findParagraph(current.startNode) || document.body;
+        const walker = this.createWalker(container);
+        walker.currentNode = current.startNode;
+        let node = current.startNode;
+        let offset = current.startOffset;
+        const step = () => {
+            if (delta > 0) {
+                offset = this.nextCodePointOffset(node.textContent, offset);
+                while (node && offset >= node.textContent.length) {
+                    node = walker.nextNode();
+                    offset = 0;
+                }
+            } else if (offset > 0) {
+                offset = this.previousCodePointStartOffset(node.textContent, offset);
+            } else {
+                do {
+                    node = walker.previousNode();
+                } while (node && !node.textContent.length);
+                if (node) offset = this.previousCodePointStartOffset(node.textContent, node.textContent.length);
+            }
+            return !!node;
+        };
+        while (step()) {
+            if (!this.isLookupStartAt(node.textContent, offset)) continue;
+            const rect = this.visibleCharacterRect(node, offset);
+            if (!rect) return null;
+            return this.selectFromHit({ node, offset }, maxLength, rect.x + rect.width / 2, rect.y + rect.height / 2);
+        }
+        return null;
+    },
+
+    isLookupStartAt(text, offset) {
+        return !this.isScanBoundaryAt(text, offset) && /[\p{L}\p{N}]/u.test(this.codePointAt(text, offset));
+    },
+
+    visibleCharacterRect(node, offset) {
+        const end = this.nextCodePointOffset(node.textContent, offset);
+        const semantic = [{ node, start: offset, end }];
+        const projection = this.options.textProjection;
+        const visible = projection ? projection.visibleRangesForSemanticRanges?.(semantic) : semantic;
+        for (const part of visible || []) {
+            const range = document.createRange();
+            range.setStart(part.node, part.start);
+            range.setEnd(part.node, part.end);
+            const viewport = this.contentViewport();
+            const rect = this.rectsForRange(range).find(rect =>
+                rect.width > 0 && rect.height > 0 &&
+                rect.x >= viewport.left - 1 && rect.x + rect.width <= viewport.right + 1 &&
+                rect.y >= viewport.top - 1 && rect.y + rect.height <= viewport.bottom + 1);
+            if (rect) return rect;
+        }
+        return null;
     },
 
     getSelectionRect(x, y) {

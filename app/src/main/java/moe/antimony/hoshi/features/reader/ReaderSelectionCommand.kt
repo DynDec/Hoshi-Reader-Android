@@ -14,6 +14,14 @@ internal sealed interface ReaderSelectionCommand {
             "window.hoshiSelection.selectText($x, $y, $maxLength)"
     }
 
+    data class ShiftSelection(
+        val delta: Int,
+        val maxLength: Int,
+    ) : ReaderSelectionCommand {
+        override val source: String =
+            "window.hoshiSelection.shiftSelection($delta, $maxLength)"
+    }
+
     data class HighlightSelection(
         val count: Int,
     ) : ReaderSelectionCommand {

@@ -152,6 +152,7 @@ data class ReaderSettings(
     val lockCurrentOrientation: Boolean = false,
     val openLastReadBookOnLaunch: Boolean = false,
     val hideBookshelfProgress: Boolean = false,
+    val swipeShiftsLookupStart: Boolean = true,
     val displaySettings: AppDisplaySettings? = null,
 ) {
     val continuousMode: Boolean
@@ -792,6 +793,7 @@ class ReaderSettingsRepository(
             lockCurrentOrientation = this[KEY_LOCK_CURRENT_ORIENTATION] ?: false,
             openLastReadBookOnLaunch = this[KEY_OPEN_LAST_READ_BOOK_ON_LAUNCH] ?: false,
             hideBookshelfProgress = this[KEY_HIDE_BOOKSHELF_PROGRESS] ?: false,
+            swipeShiftsLookupStart = this[KEY_SWIPE_SHIFTS_LOOKUP_START] ?: true,
         )
 
     private fun MutablePreferences.writeReaderSettings(settings: ReaderSettings) {
@@ -871,6 +873,7 @@ class ReaderSettingsRepository(
         this[KEY_LOCK_CURRENT_ORIENTATION] = settings.lockCurrentOrientation
         this[KEY_OPEN_LAST_READ_BOOK_ON_LAUNCH] = settings.openLastReadBookOnLaunch
         this[KEY_HIDE_BOOKSHELF_PROGRESS] = settings.hideBookshelfProgress
+        this[KEY_SWIPE_SHIFTS_LOOKUP_START] = settings.swipeShiftsLookupStart
     }
 
     private fun MutablePreferences.writeGlobalReaderSettings(settings: ReaderSettings) {
@@ -888,6 +891,7 @@ class ReaderSettingsRepository(
         this[KEY_LOCK_CURRENT_ORIENTATION] = settings.lockCurrentOrientation
         this[KEY_OPEN_LAST_READ_BOOK_ON_LAUNCH] = settings.openLastReadBookOnLaunch
         this[KEY_HIDE_BOOKSHELF_PROGRESS] = settings.hideBookshelfProgress
+        this[KEY_SWIPE_SHIFTS_LOOKUP_START] = settings.swipeShiftsLookupStart
     }
 
     private suspend fun profileAppearanceSettingsOrMigrate(
@@ -1011,6 +1015,7 @@ class ReaderSettingsRepository(
         private val KEY_LOCK_CURRENT_ORIENTATION = booleanPreferencesKey("lockCurrentOrientation")
         private val KEY_OPEN_LAST_READ_BOOK_ON_LAUNCH = booleanPreferencesKey("openLastReadBookOnLaunch")
         private val KEY_HIDE_BOOKSHELF_PROGRESS = booleanPreferencesKey("hideBookshelfProgress")
+        private val KEY_SWIPE_SHIFTS_LOOKUP_START = booleanPreferencesKey("swipeShiftsLookupStart")
 
         private val json = Json {
             prettyPrint = true

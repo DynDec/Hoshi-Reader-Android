@@ -91,6 +91,14 @@ fun ReaderBehaviorScreen(
                     )
                     BehaviorDivider()
                     BehaviorSwitchRow(
+                        label = stringResource(ReaderBehaviorRow.SwipeShiftsLookupStart.labelRes),
+                        checked = settings.swipeShiftsLookupStart,
+                        onCheckedChange = {
+                            onSettingsChange { current -> current.copy(swipeShiftsLookupStart = it) }
+                        },
+                    )
+                    BehaviorDivider()
+                    BehaviorSwitchRow(
                         label = stringResource(ReaderBehaviorRow.KeepScreenOn.labelRes),
                         checked = settings.keepScreenOnWhileReading,
                         onCheckedChange = {
@@ -155,6 +163,7 @@ private enum class ReaderBehaviorRow(val labelRes: Int) {
     VolumeKeysNavigatePopupTerms(R.string.reader_behavior_volume_keys_navigate_popup_terms),
     VolumeKeysSeekSasayaki(R.string.reader_behavior_volume_keys_seek_sasayaki),
     ReverseVolumeKeyDirection(R.string.reader_behavior_reverse_volume_key_direction),
+    SwipeShiftsLookupStart(R.string.reader_behavior_swipe_shifts_lookup_start),
     KeepScreenOn(R.string.reader_behavior_keep_screen_on),
     LockCurrentOrientation(R.string.reader_behavior_lock_current_orientation),
     OpenLastReadBookOnLaunch(R.string.reader_behavior_open_last_read_book_on_launch),

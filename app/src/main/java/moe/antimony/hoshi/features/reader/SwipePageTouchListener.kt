@@ -8,6 +8,7 @@ abstract class SwipePageTouchListener(
     swipeDistance: Float = DEFAULT_SWIPE_DISTANCE,
 ) : View.OnTouchListener {
     private val tracker = ReaderSwipeGestureTracker(minDistance = swipeDistance)
+    private var pageSwipesBlocked = false
 
     override fun onTouch(view: View, event: MotionEvent): Boolean {
         if (shouldIgnoreReaderGesture(event)) {
@@ -15,9 +16,12 @@ abstract class SwipePageTouchListener(
             return false
         }
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> tracker.onDown(event.x, event.y, event.eventTime)
+            MotionEvent.ACTION_DOWN -> {
+                pageSwipesBlocked = shouldBlockPageSwipes()
+                tracker.onDown(event.x, event.y, event.eventTime)
+            }
             MotionEvent.ACTION_POINTER_DOWN -> tracker.onAdditionalPointerDown()
-            MotionEvent.ACTION_MOVE -> dispatch(tracker.onMove(event.x, event.y, event.eventTime))
+            MotionEvent.ACTION_MOVE -> if (!pageSwipesBlocked) dispatch(tracker.onMove(event.x, event.y, event.eventTime))
             MotionEvent.ACTION_UP -> dispatch(tracker.onUp(event.x, event.y, event.eventTime))
             MotionEvent.ACTION_CANCEL -> tracker.onCancel()
         }
@@ -27,13 +31,18 @@ abstract class SwipePageTouchListener(
     open fun onLeftSwipe() = Unit
     open fun onRightSwipe() = Unit
     open fun onTap(x: Float, y: Float) = Unit
+    open fun onDrag(dx: Float, dy: Float) = Unit
     open fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean = false
+
+    /** Evaluated when a gesture starts; a blocked gesture never turns the page. */
+    open fun shouldBlockPageSwipes(): Boolean = false
 
     private fun dispatch(result: ReaderSwipeGestureTracker.Result) {
         when (result) {
             ReaderSwipeGestureTracker.Result.LeftSwipe -> onLeftSwipe()
             ReaderSwipeGestureTracker.Result.RightSwipe -> onRightSwipe()
             is ReaderSwipeGestureTracker.Result.Tap -> onTap(result.x, result.y)
+            is ReaderSwipeGestureTracker.Result.Drag -> onDrag(result.dx, result.dy)
             ReaderSwipeGestureTracker.Result.None -> Unit
         }
     }
@@ -87,15 +96,11 @@ internal class ReaderSwipeGestureTracker(
         val elapsedMs = eventTime - downTime
         val wasSwipeDispatched = swipeDispatched
         onCancel()
-        return if (
-            !wasSwipeDispatched &&
-            elapsedMs <= MAX_TAP_DURATION_MS &&
-            abs(dx) < TAP_SLOP &&
-            abs(dy) < TAP_SLOP
-        ) {
-            Result.Tap(x, y)
-        } else {
-            Result.None
+        return when {
+            wasSwipeDispatched -> Result.None
+            abs(dx) >= TAP_SLOP || abs(dy) >= TAP_SLOP -> Result.Drag(dx, dy)
+            elapsedMs <= MAX_TAP_DURATION_MS -> Result.Tap(x, y)
+            else -> Result.None
         }
     }
 
@@ -117,6 +122,7 @@ internal class ReaderSwipeGestureTracker(
         data object LeftSwipe : Result()
         data object RightSwipe : Result()
         data class Tap(val x: Float, val y: Float) : Result()
+        data class Drag(val dx: Float, val dy: Float) : Result()
     }
 
     private companion object {
@@ -126,4 +132,20 @@ internal class ReaderSwipeGestureTracker(
         const val MAX_TAP_DURATION_MS = 500L
         const val MIN_EARLY_SWIPE_VELOCITY_PX_PER_SECOND = 360f
     }
+}
+
+/**
+ * Returns the lookup start shift for a swipe along the text line: down in
+ * vertical writing and right in horizontal writing move forward.
+ */
+internal fun readerLookupShiftDelta(
+    dx: Float,
+    dy: Float,
+    verticalWriting: Boolean,
+    minDistance: Float,
+): Int? {
+    val along = if (verticalWriting) dy else dx
+    val across = if (verticalWriting) dx else dy
+    if (abs(along) < minDistance || abs(along) <= abs(across)) return null
+    return if (along > 0f) 1 else -1
 }

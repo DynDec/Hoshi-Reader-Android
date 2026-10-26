@@ -7,6 +7,8 @@ Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 
 ### Added
 
+- Swipe along the text line while a Japanese lookup popup is open to move the lookup start one character forward or back, skipping punctuation and dots and stopping at the paragraph or screen edge; page-turn swipes pause while the popup is open, and the gesture can be turned off in Behavior settings.
+
 - Revisit the last 100 full-text queries from the Dictionary tab and external lookups, with tap-to-search, individual deletion and clearing, without recording in-book lookups or subsequent character and word selections.
 
 - Sync books, reading progress, highlights, shelves, statistics and audiobook playback with Hoshi on iOS through Google Drive, including devices without Google Play Services, keeping Hoshi and TTU logins independent when connecting or switching providers, with less startup delay for large bookshelves and without replaying part of the current audiobook cue or losing newly created highlights when local state is synced.

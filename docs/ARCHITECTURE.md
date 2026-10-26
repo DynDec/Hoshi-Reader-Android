@@ -227,6 +227,11 @@ dynamic configuration and bridge calls.
 - `ReaderWebViewStateHolder` owns document/restore generations. Stale bridge
   callbacks cannot alter a replacement document. Renderer recovery preserves
   the latest accepted position and rebuilds WebView-local state.
+- Lookup start shifting: `ReaderChapterWebView` reader touch listeners turn
+  along-line drags into `shiftSelection` while a root popup is open (Japanese
+  profiles only, `swipeShiftsLookupStart`), and paginated/VN page swipes are
+  suppressed for that gesture. `selection.js` owns the step, skipping
+  non-lookup characters and stopping at the paragraph or visible viewport edge.
 - DOM selection state owns the navigation lock. `blocked` is distinct from a
   chapter-boundary `limit` result.
 - Reader, Dictionary and Process Text use the same iframe popup host and native

@@ -1347,3 +1347,52 @@ test('continuous native menu clips to the body viewport while retaining full Web
     assert.deepEqual(JSON.parse(JSON.stringify(selection.nativeSelectionMenuRect())),
         { left: 40, right: 360, top: 80, bottom: 720, viewportWidth: 400 });
 });
+
+function loadShiftableSelection(text, visibleUntil = text.length) {
+    const { document, selection, textNode, window } = loadSelection(text);
+    document.pointElement = hitElement([]);
+    selection.postTextSelected = () => {};
+    selection.visibleCharacterRect = (node, offset) =>
+        offset < visibleUntil ? { x: offset * 10, y: 0, width: 10, height: 10 } : null;
+    window.scanNonJapaneseText = false;
+    const selectAt = (offset) => {
+        selection.getCharacterAtPoint = () => ({ node: textNode, offset });
+        return selection.selectText(1, 1, 80);
+    };
+    return { selection, selectAt };
+}
+
+test('lookup shift moves the start one character and skips dots and punctuation', () => {
+    const text = '「彼は・東京へ行った。」';
+    const { selection, selectAt } = loadShiftableSelection(text);
+    assert.equal(selectAt(text.indexOf('彼')), '彼は・東京へ行った');
+
+    assert.equal(selection.shiftSelection(1, 80), 'は・東京へ行った');
+    assert.equal(selection.shiftSelection(1, 80), '東京へ行った');
+    assert.equal(selection.selection.startOffset, text.indexOf('東'));
+    assert.equal(selection.shiftSelection(-1, 80), 'は・東京へ行った');
+});
+
+test('lookup shift keeps the selection at the paragraph start', () => {
+    const text = '「彼は東京へ行った。」';
+    const { selection, selectAt } = loadShiftableSelection(text);
+    selectAt(text.indexOf('彼'));
+
+    assert.equal(selection.shiftSelection(-1, 80), null);
+    assert.equal(selection.selection.startOffset, text.indexOf('彼'));
+    assert.equal(selection.selection.text, '彼は東京へ行った');
+});
+
+test('lookup shift stops at the visible screen edge', () => {
+    const text = '彼は東京へ行った';
+    const { selection, selectAt } = loadShiftableSelection(text, text.indexOf('行'));
+    selectAt(text.indexOf('へ'));
+
+    assert.equal(selection.shiftSelection(1, 80), null);
+    assert.equal(selection.selection.startOffset, text.indexOf('へ'));
+});
+
+test('lookup shift without a current selection does nothing', () => {
+    const { selection } = loadShiftableSelection('彼は東京へ行った');
+    assert.equal(selection.shiftSelection(1, 80), null);
+});

@@ -366,6 +366,22 @@ internal fun ChapterWebView(
                     }
                 }
             }
+            val lookupShiftEnabled = readerSettings.swipeShiftsLookupStart &&
+                contentLanguageProfile.id == ContentLanguageProfile.JapaneseLanguageId
+            fun lookupShiftActive(): Boolean = lookupShiftEnabled && currentReaderPopupFrames.value.isNotEmpty()
+            fun shiftLookup(dx: Float, dy: Float) {
+                if (!lookupShiftActive()) return
+                val delta = readerLookupShiftDelta(
+                    dx = dx,
+                    dy = dy,
+                    verticalWriting = readerSettings.verticalWriting,
+                    minDistance = READER_LOOKUP_SHIFT_MIN_DISTANCE_DP * webView.resources.displayMetrics.density,
+                ) ?: return
+                webView.evaluateJavascript(
+                    ReaderSelectionCommand.ShiftSelection(delta = delta, maxLength = selectionScanLength).source,
+                    null,
+                )
+            }
             fun shouldIgnoreReaderGestureEvent(event: MotionEvent): Boolean {
                 if (currentIsWebViewRestoring.value || webView.isNativeSelectionActive()) {
                     return true
@@ -379,7 +395,7 @@ internal fun ChapterWebView(
             }
             when (readerSettings.viewMode) {
                 ReaderViewMode.Continuous -> {
-                    webView.bindReaderTouchListener(readerSettings to selectionScanLength) {
+                    webView.bindReaderTouchListener(Triple(readerSettings, selectionScanLength, lookupShiftEnabled)) {
                         ContinuousScrollTouchListener(
                             settings = readerSettings,
                             shouldIgnoreReaderGesture = ::shouldIgnoreReaderGestureEvent,
@@ -399,6 +415,7 @@ internal fun ChapterWebView(
                                 if (changed) webView.hideForReaderRestore()
                                 changed
                             },
+                            onDrag = ::shiftLookup,
                         )
                     }
                     webView.setOnScrollChangeListener(null)
@@ -464,12 +481,16 @@ internal fun ChapterWebView(
                     readerPendingProgressSaveCallbacks.remove(webView)?.let(webView::removeCallbacks)
                     webView.setOnScrollChangeListener(null)
                     webView.onContinuousScroll = null
-                    webView.bindReaderTouchListener(readerSettings to selectionScanLength) {
+                    webView.bindReaderTouchListener(Triple(readerSettings, selectionScanLength, lookupShiftEnabled)) {
                         object : SwipePageTouchListener(
                             swipeDistance = readerSettings.pageSwipeThresholdPx.toFloat(),
                         ) {
                             override fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean =
                                 shouldIgnoreReaderGestureEvent(event)
+
+                            override fun shouldBlockPageSwipes(): Boolean = lookupShiftActive()
+
+                            override fun onDrag(dx: Float, dy: Float) = shiftLookup(dx, dy)
 
                             override fun onTap(x: Float, y: Float) {
                                 selectAt(x, y) {
@@ -1429,6 +1450,8 @@ internal fun WebView.flushPendingProgressSave() {
     progressCallback.run()
 }
 
+private const val READER_LOOKUP_SHIFT_MIN_DISTANCE_DP = 32f
+
 internal class ContinuousScrollTouchListener(
     private val settings: ReaderSettings,
     private val shouldIgnoreReaderGesture: (MotionEvent) -> Boolean,
@@ -1436,6 +1459,7 @@ internal class ContinuousScrollTouchListener(
     private val onScrollGesture: () -> Unit,
     private val onNextChapter: () -> Boolean,
     private val onPreviousChapter: () -> Boolean,
+    private val onDrag: (Float, Float) -> Unit = { _, _ -> },
 ) : View.OnTouchListener {
     private var downX = 0f
     private var downY = 0f
@@ -1487,6 +1511,7 @@ internal class ContinuousScrollTouchListener(
                     onTap(event.x, event.y)
                     return false
                 }
+                onDrag(dx, dy)
                 handleBoundarySwipe(webView, dx, dy)
                 focusTracker.onCancel()
             }
