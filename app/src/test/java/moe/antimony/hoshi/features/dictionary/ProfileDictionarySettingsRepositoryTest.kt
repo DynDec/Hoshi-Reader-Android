@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.dictionary
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -9,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import moe.antimony.hoshi.profiles.ProfileRepository
 import moe.antimony.hoshi.testing.CountingCoroutineDispatcher
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -167,7 +167,7 @@ class ProfileDictionarySettingsRepositoryTest {
         val filesDir = tempFolder.newFolder("files")
         val profileRepository = ProfileRepository(filesDir)
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("dictionary-settings-migration.preferences_pb") },
         )
@@ -238,7 +238,7 @@ class ProfileDictionarySettingsRepositoryTest {
         ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
     ): DictionarySettingsRepository {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("dictionary-settings.preferences_pb") },
         )

@@ -3,7 +3,6 @@ package moe.antimony.hoshi.features.display
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import java.io.Closeable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +10,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -42,7 +42,7 @@ class AppDisplaySettingsRepositoryTest {
     fun updatePersistsOpaqueAccentSeedAndPaletteAlpha() = runBlocking {
         val file = tempFolder.newFile("display.preferences_pb")
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        val dataStore = testPreferencesDataStore(scope = scope, produceFile = { file })
         try {
             val first = AppDisplaySettingsRepository(dataStore)
             first.update {
@@ -136,7 +136,7 @@ class AppDisplaySettingsRepositoryTest {
     @Test
     fun completedReleaseMigrationKeepsUserChangesAcrossRestart() = runBlocking {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("release-migration.preferences_pb") },
         )
@@ -177,7 +177,7 @@ class AppDisplaySettingsRepositoryTest {
     @Test
     fun failedReleaseMigrationWriteCanRetryFromUnmodifiedLegacySettings() = runBlocking {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("failed-release-migration.preferences_pb") },
         )
@@ -240,7 +240,7 @@ class AppDisplaySettingsRepositoryTest {
         migrationSource: AppDisplaySettingsMigrationSource? = null,
     ): RepositoryResource {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("display-$suffix-${System.nanoTime()}.preferences_pb") },
         )

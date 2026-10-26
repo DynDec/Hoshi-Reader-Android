@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.dictionary
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import java.io.File
 import java.io.InputStream
 import kotlinx.coroutines.CancellationException
@@ -23,6 +22,7 @@ import moe.antimony.hoshi.dictionary.DictionaryType
 import moe.antimony.hoshi.dictionary.NativeDictionaryImportResult
 import moe.antimony.hoshi.features.anki.AnkiSettings
 import moe.antimony.hoshi.features.anki.AnkiSettingsRepository
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -244,7 +244,7 @@ class DictionaryAutoUpdateSchedulerTest {
 
     private fun settingsRepository(name: String): SettingsHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { temporaryFolder.newFile("$name.preferences_pb") },
         )

@@ -1,7 +1,7 @@
 package moe.antimony.hoshi.features.update
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.test.runTest
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -9,7 +9,7 @@ class PreviewDownloadRecordTest {
     @Test fun previewRecordSurvivesRestartAndCannotOverwriteStableRecordWithSameDownloadId() = runTest {
         val directory = java.nio.file.Files.createTempDirectory("hoshi-preview-records").toFile()
         try {
-            fun datastore(name: String) = PreferenceDataStoreFactory.create(scope = backgroundScope,
+            fun datastore(name: String) = testPreferencesDataStore(scope = backgroundScope,
                 produceFile = { directory.resolve("$name.preferences_pb") })
             val stable = UpdateDownloadStore(datastore("stable"))
             val previewData = datastore("preview")

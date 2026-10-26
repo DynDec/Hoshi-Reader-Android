@@ -1,7 +1,6 @@
 package moe.antimony.hoshi.features.sync
 
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -13,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.test.runTest
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import moe.antimony.hoshi.ui.ErrorDiagnosticEvents
 import moe.antimony.hoshi.ui.UiText
 import moe.antimony.hoshi.ui.resolve
@@ -109,7 +109,7 @@ class GoogleDriveNativeLoginTest {
 
     private class LoginStore(file: File) {
         private val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(scope = scope) { file }
+        val dataStore: DataStore<Preferences> = testPreferencesDataStore(scope = scope) { file }
 
         suspend fun connect() { dataStore.edit { it[booleanPreferencesKey("connected")] = true } }
 

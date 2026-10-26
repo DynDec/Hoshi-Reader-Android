@@ -1,7 +1,6 @@
 package moe.antimony.hoshi.features.statistics
 
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -12,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -120,7 +120,7 @@ class StatisticsSettingsRepositoryTest {
 
     private fun repository(): RepositoryHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("statistics-settings.preferences_pb") },
         )

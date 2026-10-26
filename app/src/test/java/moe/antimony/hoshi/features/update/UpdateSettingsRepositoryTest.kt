@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.update
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -11,6 +10,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -56,7 +56,7 @@ class UpdateSettingsRepositoryTest {
 
     private fun repository(): RepositoryHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("update-settings.preferences_pb") },
         )

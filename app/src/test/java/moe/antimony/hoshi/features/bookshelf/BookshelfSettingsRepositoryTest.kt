@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.bookshelf
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -13,6 +12,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import moe.antimony.hoshi.epub.BookSortOption
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -73,7 +73,7 @@ class BookshelfSettingsRepositoryTest {
     fun restoresCollapsedThumbnailPreferenceAndPreservesItAcrossOtherUpdates() = runBlocking {
         val file = tempFolder.newFile("restored-settings.preferences_pb")
         val firstJob = Job()
-        val firstStore = PreferenceDataStoreFactory.create(
+        val firstStore = testPreferencesDataStore(
             scope = CoroutineScope(Dispatchers.IO + firstJob),
             produceFile = { file },
         )
@@ -84,7 +84,7 @@ class BookshelfSettingsRepositoryTest {
             firstJob.join()
         }
         val secondJob = Job()
-        val secondStore = PreferenceDataStoreFactory.create(
+        val secondStore = testPreferencesDataStore(
             scope = CoroutineScope(Dispatchers.IO + secondJob),
             produceFile = { file },
         )
@@ -123,7 +123,7 @@ class BookshelfSettingsRepositoryTest {
 
     private fun repository(): RepositoryHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("bookshelf-settings.preferences_pb") },
         )

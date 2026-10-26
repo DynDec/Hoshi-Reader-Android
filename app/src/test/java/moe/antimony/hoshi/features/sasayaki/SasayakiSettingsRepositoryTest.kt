@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.sasayaki
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -11,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -133,14 +133,14 @@ class SasayakiSettingsRepositoryTest {
         val file = tempFolder.root.resolve("presets.preferences_pb")
         val firstJob = Job()
         try {
-            val store = PreferenceDataStoreFactory.create(scope = CoroutineScope(Dispatchers.IO + firstJob), produceFile = { file })
+            val store = testPreferencesDataStore(scope = CoroutineScope(Dispatchers.IO + firstJob), produceFile = { file })
             val repository = SasayakiSettingsRepository(store)
             assertEquals(SasayakiTranscriptionPreset.Balanced, repository.settings.first().transcriptionPreset)
             repository.update { it.copy(transcriptionPreset = SasayakiTranscriptionPreset.Light) }
         } finally { firstJob.cancelAndJoin() }
         val secondJob = Job()
         try {
-            val store = PreferenceDataStoreFactory.create(scope = CoroutineScope(Dispatchers.IO + secondJob), produceFile = { file })
+            val store = testPreferencesDataStore(scope = CoroutineScope(Dispatchers.IO + secondJob), produceFile = { file })
             val repository = SasayakiSettingsRepository(store)
             assertEquals(SasayakiTranscriptionPreset.Light, repository.settings.first().transcriptionPreset)
             store.edit { it[stringPreferencesKey("sasayakiTranscriptionPreset")] = "unsupported" }
@@ -152,7 +152,7 @@ class SasayakiSettingsRepositoryTest {
         legacySource: SasayakiSettingsLegacySource? = null,
     ): RepositoryHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { tempFolder.newFile("sasayaki-settings.preferences_pb") },
         )

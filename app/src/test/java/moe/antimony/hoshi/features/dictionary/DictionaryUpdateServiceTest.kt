@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.dictionary
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -31,6 +30,7 @@ import moe.antimony.hoshi.features.anki.AnkiCardFormat
 import moe.antimony.hoshi.features.anki.AnkiSettingsRepository
 import moe.antimony.hoshi.features.anki.DataStoreAnkiSettingsRepository
 import moe.antimony.hoshi.profiles.ProfileRepository
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -487,11 +487,11 @@ class DictionaryUpdateServiceTest {
         val scope = CoroutineScope(Dispatchers.IO + Job())
         val filesDir = temporaryFolder.newFolder("profile-service-files")
         val profileRepository = ProfileRepository(filesDir)
-        val dictionaryDataStore = PreferenceDataStoreFactory.create(
+        val dictionaryDataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { temporaryFolder.newFile("profile-dictionary-update-service.preferences_pb") },
         )
-        val ankiDataStore = PreferenceDataStoreFactory.create(
+        val ankiDataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { temporaryFolder.newFile("profile-anki-update-service.preferences_pb") },
         )
@@ -526,7 +526,7 @@ class DictionaryUpdateServiceTest {
 
     private fun settingsRepository(): SettingsHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
-        val dataStore = PreferenceDataStoreFactory.create(
+        val dataStore = testPreferencesDataStore(
             scope = scope,
             produceFile = { temporaryFolder.newFile("dictionary-update-service.preferences_pb") },
         )

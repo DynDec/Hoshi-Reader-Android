@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.reader
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -17,6 +16,7 @@ import moe.antimony.hoshi.features.display.AppDisplaySettingsRepository
 import moe.antimony.hoshi.features.display.DisplayPalettePreset
 import moe.antimony.hoshi.features.display.LegacyDisplayTheme
 import moe.antimony.hoshi.profiles.ProfileRepository
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -201,7 +201,7 @@ class ReaderDisplaySettingsMigrationSourceTest {
     private fun dataStore(name: String): DataStoreHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
         return DataStoreHandle(
-            dataStore = PreferenceDataStoreFactory.create(
+            dataStore = testPreferencesDataStore(
                 scope = scope,
                 produceFile = { tempFolder.newFile("$name.preferences_pb") },
             ),

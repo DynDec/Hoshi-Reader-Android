@@ -1,11 +1,11 @@
 package moe.antimony.hoshi.features.update
 
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlinx.coroutines.test.runTest
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 
 class UpdateDownloadRecordTest {
     private val update = AvailableUpdate(
@@ -20,7 +20,7 @@ class UpdateDownloadRecordTest {
     fun failedDownloadPersistsActualReasonAndRetryClearsIt() = runTest {
         val directory = java.nio.file.Files.createTempDirectory("hoshi-update-error").toFile()
         try {
-            val dataStore = PreferenceDataStoreFactory.create(
+            val dataStore = testPreferencesDataStore(
                 scope = backgroundScope,
                 produceFile = { directory.resolve("downloads.preferences_pb") },
             )

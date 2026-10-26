@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.audio
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -13,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -81,7 +81,7 @@ class AudioDefaultMigrationTest {
     @Test fun migrationSurvivesClosingAndReopeningDataStore() = runBlocking {
         val file = folder.newFile("restart.preferences_pb")
         val firstJob = Job()
-        val firstStore = PreferenceDataStoreFactory.create(scope = CoroutineScope(Dispatchers.IO + firstJob)) { file }
+        val firstStore = testPreferencesDataStore(scope = CoroutineScope(Dispatchers.IO + firstJob)) { file }
         firstStore.edit {
             it[booleanPreferencesKey("audioSettingsMigratedFromSharedPreferences")] = true
             it[stringPreferencesKey("audioSources")] = Json.encodeToString(listOf(old, custom))
@@ -94,7 +94,7 @@ class AudioDefaultMigrationTest {
         firstJob.cancelAndJoin()
         val nextJob = Job()
         try {
-            val nextStore = PreferenceDataStoreFactory.create(scope = CoroutineScope(Dispatchers.IO + nextJob)) { file }
+            val nextStore = testPreferencesDataStore(scope = CoroutineScope(Dispatchers.IO + nextJob)) { file }
             assertEquals(beforeRestart, AudioSettingsRepository(nextStore).settings.first())
         } finally { nextJob.cancelAndJoin() }
     }
@@ -108,7 +108,7 @@ class AudioDefaultMigrationTest {
     ) {
         val scope = CoroutineScope(Dispatchers.IO + Job())
         try {
-            val store = PreferenceDataStoreFactory.create(scope = scope) { folder.newFile("audio.preferences_pb") }
+            val store = testPreferencesDataStore(scope = scope) { folder.newFile("audio.preferences_pb") }
             if (legacy == null) store.edit {
                 it[booleanPreferencesKey("audioSettingsMigratedFromSharedPreferences")] = true
                 if (sources != null || corrupt) it[stringPreferencesKey("audioSources")] = if (corrupt) "{" else Json.encodeToString(sources!!)

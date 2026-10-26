@@ -1,7 +1,6 @@
 package moe.antimony.hoshi.features.dictionary
 
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.preferencesOf
@@ -21,6 +20,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -129,7 +129,7 @@ class DictionaryLookupHistoryRepositoryTest {
         val file = temporaryFolder.newFile("history.preferences_pb")
         val firstJob = Job()
         val firstScope = CoroutineScope(Dispatchers.IO + firstJob)
-        val firstStore = PreferenceDataStoreFactory.create(scope = firstScope) { file }
+        val firstStore = testPreferencesDataStore(scope = firstScope) { file }
         try {
             val repository = DictionaryLookupHistoryRepository(firstStore, firstScope, Dispatchers.IO)
             repository.record("完整句子。\n次行")
@@ -137,7 +137,7 @@ class DictionaryLookupHistoryRepositoryTest {
         } finally { firstJob.cancelAndJoin() }
         val secondJob = Job()
         val secondScope = CoroutineScope(Dispatchers.IO + secondJob)
-        val secondStore = PreferenceDataStoreFactory.create(scope = secondScope) { file }
+        val secondStore = testPreferencesDataStore(scope = secondScope) { file }
         try {
             val restored = DictionaryLookupHistoryRepository(secondStore, secondScope, Dispatchers.IO)
             assertEquals(listOf("完整句子。\n次行"), restored.state.first { it.isLoaded }.entries)
