@@ -18,6 +18,11 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -31,7 +36,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.PlatformContext
 import coil3.compose.AsyncImage
+import coil3.compose.AsyncImagePainter
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.size.Precision
+import coil3.size.Scale
+import coil3.size.Size
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 import moe.antimony.hoshi.ui.theme.LocalHoshiDarkTheme
 
 internal data class BookCoverArtwork(
@@ -51,6 +66,34 @@ internal fun resolveBookCoverArtwork(
     coverMode == BookshelfCoverMode.Blur -> BookCoverArtwork(coverSource = coverSource, blur = true)
     else -> BookCoverArtwork(coverSource = coverSource, blur = false)
 }
+
+/**
+ * Pixel size every bookshelf cover requests. Grid cells and collapsed previews share it so they hit
+ * the same memory-cache entry, and a fixed size lets Coil serve cache hits before the first frame.
+ */
+internal val LocalBookCoverRequestSize = staticCompositionLocalOf<Size?> { null }
+
+internal fun bookCoverRequestSize(cellWidthPx: Int): Size {
+    val height = ceil(cellWidthPx.coerceAtLeast(1) / BookCoverAspectRatio).toInt()
+        .coerceAtMost(MaxCoverThumbnailDimensionPx)
+    return Size(width = (height * BookCoverAspectRatio).roundToInt().coerceAtLeast(1), height = height)
+}
+
+internal fun bookCoverImageRequest(
+    context: PlatformContext,
+    source: BookCoverSource,
+    size: Size?,
+): ImageRequest = ImageRequest.Builder(context)
+    .data(source)
+    .crossfade(CoverFadeInMillis)
+    .apply {
+        if (size != null) {
+            size(size)
+            scale(Scale.FILL)
+            precision(Precision.INEXACT)
+        }
+    }
+    .build()
 
 internal fun coverFallbackHash(title: String): ULong =
     title.encodeToByteArray().fold(FnvOffsetBasis) { hash, byte ->
@@ -86,12 +129,23 @@ internal fun BookCoverCard(
             .padding(3.dp),
         contentAlignment = Alignment.Center,
     ) {
-        BookCoverFallback(
-            title = title,
-            author = author,
-            modifier = Modifier.fillMaxSize().clip(innerShape),
-        )
-        artwork.coverSource?.let { source ->
+        val source = artwork.coverSource
+        val context = LocalPlatformContext.current
+        val requestSize = LocalBookCoverRequestSize.current
+        var coverFailed by remember(source) { mutableStateOf(false) }
+        // While a cover loads the neutral container shows; the generated fallback only stands in
+        // for books without a usable cover.
+        if (source == null || coverFailed) {
+            BookCoverFallback(
+                title = title,
+                author = author,
+                modifier = Modifier.fillMaxSize().clip(innerShape),
+            )
+        }
+        if (source != null) {
+            val request = remember(context, source, requestSize) {
+                bookCoverImageRequest(context, source, requestSize)
+            }
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val imageModifier = if (artwork.blur) {
                     Modifier.blur(
@@ -102,9 +156,10 @@ internal fun BookCoverCard(
                     Modifier
                 }
                 AsyncImage(
-                    model = source,
+                    model = request,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    onState = { state -> coverFailed = state is AsyncImagePainter.State.Error },
                     modifier = imageModifier.fillMaxSize().clip(innerShape),
                 )
             }
@@ -177,6 +232,8 @@ private fun BookCoverFallback(
 }
 
 private const val BookCoverAspectRatio = 0.709f
+private const val CoverFadeInMillis = 150
+private val MaxCoverThumbnailDimensionPx = coverThumbnailBucket(Int.MAX_VALUE)
 private const val CoverBlurRadiusFraction = 0.05f
 private const val FnvOffsetBasis = 0xcbf29ce484222325uL
 private const val FnvPrime = 0x100000001b3uL

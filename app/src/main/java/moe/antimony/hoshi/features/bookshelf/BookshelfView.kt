@@ -105,6 +105,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -117,6 +118,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -1025,9 +1027,36 @@ private fun BooksTab(
                         isSelecting = isSelecting,
                         fileTaskBlocked = fileTaskBlocked,
                     )
+                    val bookColumnCount = layoutSpec.bookGridColumns(contentWidthDp, bookColumns)
+                    val coverRequestSize = with(LocalDensity.current) {
+                        val gridWidthDp = contentWidthDp - layoutSpec.pageHorizontalPaddingDp * 2
+                        val cellWidthDp = (gridWidthDp - layoutSpec.bookGridSpacingDp * (bookColumnCount - 1)) / bookColumnCount
+                        bookCoverRequestSize(cellWidthDp.dp.roundToPx())
+                    }
+                    val coverPreloadSources = remember(
+                        sections, coverSourcesById, remoteBookEntries, remoteCoverSourcesById,
+                        shelfExpansionState, isSelecting, hideCollapsedShelfThumbnails, contentWidthDp,
+                    ) {
+                        val collapsedShelves = sections
+                            .filter { it.books.isNotEmpty() && !it.isExpanded(shelfExpansionState) }
+                            .map { section -> section.books.map { coverSourcesById[it.metadata.id] } }
+                        val collapsedDrive = remoteBookEntries
+                            .takeIf { !googleDriveSectionPresentation(shelfExpansionState, isSelecting).isExpanded }
+                            ?.map { remoteCoverSourcesById[it.id] }
+                        bookCoverPreloadSources(
+                            collapsedShelves = collapsedShelves + listOfNotNull(collapsedDrive),
+                            previewCount = if (hideCollapsedShelfThumbnails) {
+                                0
+                            } else {
+                                layoutSpec.collapsedShelfPreviewColumns(contentWidthDp)
+                            },
+                        )
+                    }
+                    PreloadBookCovers(coverPreloadSources, coverMode, coverRequestSize)
+                    CompositionLocalProvider(LocalBookCoverRequestSize provides coverRequestSize) {
                     Box(modifier = contentModifier.fillMaxHeight()) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(layoutSpec.bookGridColumns(contentWidthDp, bookColumns)),
+                        columns = GridCells.Fixed(bookColumnCount),
                         modifier = Modifier
                             .fillMaxSize()
                             .pullToRefresh(
@@ -1071,11 +1100,7 @@ private fun BooksTab(
                                 )
                             }
                             val collapseKey = section.collapseKey
-                            val isExpanded = if (!section.isCollapsible) {
-                                true
-                            } else {
-                                collapseKey?.let { key -> shelfExpansionState[key] ?: section.isReading } ?: true
-                            }
+                            val isExpanded = section.isExpanded(shelfExpansionState)
                             item(
                                 key = "header:${section.layoutKey}",
                                 contentType = "sectionHeader",
@@ -1201,6 +1226,7 @@ private fun BooksTab(
                             isRefreshing = false,
                             state = pullRefreshState,
                         )
+                    }
                     }
                     }
                 }

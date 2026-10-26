@@ -314,6 +314,12 @@ upstream. Keep them in this section to limit upstream merge conflicts.
   tests (`GoogleDriveAuthTest`).
 - Bookshelf: Manage Shelves owns a Books per row preference, capped at display
   time by the collapsed shelf preview capacity without rewriting it.
+- Bookshelf cover loading: grid cells and collapsed previews request one shared
+  pixel size (`LocalBookCoverRequestSize`, built by `bookCoverImageRequest`) so
+  they share Coil memory-cache entries and fixed-size cache hits draw on the first
+  frame. `PreloadBookCovers` sequentially decodes non-previewed covers of collapsed
+  shelves within a share of the memory cache. Generated fallbacks appear only
+  without a cover or after a load error; loading shows the neutral container.
 
 ## Maintaining this map
 

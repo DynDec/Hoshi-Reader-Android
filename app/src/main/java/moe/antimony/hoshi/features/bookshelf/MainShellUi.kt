@@ -287,6 +287,9 @@ internal data class GoogleDriveSectionPresentation(
     val allowsHitTesting: Boolean,
 )
 
+internal fun BookshelfSectionModel.isExpanded(shelfExpansionState: Map<String, Boolean>): Boolean =
+    !isCollapsible || collapseKey?.let { key -> shelfExpansionState[key] ?: isReading } ?: true
+
 internal fun googleDriveSectionPresentation(
     shelfExpansionState: Map<String, Boolean>,
     isSelecting: Boolean,

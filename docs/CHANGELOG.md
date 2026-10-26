@@ -56,6 +56,8 @@ Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
   and Gallery scroll position within the current reader session. Browse with
   compact Previous/Next image buttons above the list and previews about 20% shorter
   while preserving image proportions.
+- Show bookshelf covers without flashing generated placeholder covers: covers
+  fade in at startup, and expanding a shelf shows its covers immediately.
 
 ### Fixed
 
