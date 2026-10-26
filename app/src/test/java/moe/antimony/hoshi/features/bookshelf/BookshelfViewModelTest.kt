@@ -1,5 +1,10 @@
 package moe.antimony.hoshi.features.bookshelf
 
+import kotlinx.coroutines.CancellationException
+import moe.antimony.hoshi.ui.ErrorDiagnosticEvents
+import java.io.IOException
+import org.junit.Before
+import org.junit.After
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +29,70 @@ import org.junit.Test
 import java.io.File
 
 class BookshelfViewModelTest {
+    @Before fun clearDiagnostics() { ErrorDiagnosticEvents.buffer.drain() }
+    @After fun drainDiagnostics() { ErrorDiagnosticEvents.buffer.drain() }
+
+    @Test fun manualSyncFailureReachesVisibleStateAndHistory() {
+        val error = IOException("Could not fetch library", IOException("Connection reset"))
+        val repository = FakeBookshelfRepository(syncLibraryError = error)
+        val viewModel = BookshelfViewModel(repository, testScope())
+        viewModel.reloadBookEntries()
+        viewModel.refreshRemoteBooks()
+        val message = viewModel.uiState.value.errorMessage.testString().orEmpty()
+        assertTrue(message, message.contains("Could not fetch library"))
+        assertTrue(message, message.contains("Connection reset"))
+        assertEquals(listOf(error), ErrorDiagnosticEvents.buffer.drain().map { it.error })
+    }
+
+    @Test fun openingCloudBookKeepsDownloadCauseAndBookName() {
+        val entry = bookEntry("Cloud Book").let { it.copy(metadata = it.metadata.copy(epub = null)) }
+        val error = IOException("Download interrupted", IOException("Socket closed"))
+        val repository = FakeBookshelfRepository(downloadBookOperation = { _, _ -> throw error })
+        val viewModel = BookshelfViewModel(repository, testScope())
+        viewModel.openBook(entry)
+        val message = viewModel.uiState.value.errorMessage.testString().orEmpty()
+        for (detail in listOf("Cloud Book", "Download interrupted", "Socket closed")) assertTrue(message, message.contains(detail))
+        assertNull(viewModel.uiState.value.openReaderBookId)
+        assertTrue(viewModel.uiState.value.remoteImportProgressById.isEmpty())
+        assertEquals(listOf(error), ErrorDiagnosticEvents.buffer.drain().map { it.error })
+    }
+
+    @Test fun batchDownloadKeepsEveryBookFailureAndContinues() {
+        val entries = listOf(bookEntry("First Book"), bookEntry("Second Book"), bookEntry("Good Book"))
+        val errors = listOf(IOException("First transfer failed", IOException("Connection lost")), IOException("Second transfer failed"))
+        val attempted = mutableListOf<String>()
+        val repository = FakeBookshelfRepository(downloadBookOperation = { entry, _ ->
+            attempted += entry.metadata.id
+            val index = entries.indexOf(entry)
+            if (index < 2) throw errors[index]
+        })
+        val viewModel = BookshelfViewModel(repository, testScope())
+        viewModel.downloadBooks(entries)
+        val message = viewModel.uiState.value.errorMessage.testString().orEmpty()
+        for (detail in listOf("First Book", "Second Book", "First transfer failed", "Connection lost", "Second transfer failed")) assertTrue(message, message.contains(detail))
+        assertEquals(entries.map { it.metadata.id }, attempted)
+        assertEquals(errors, ErrorDiagnosticEvents.buffer.drain().map { it.error })
+        // The production sync notification schedules this reload after a successful download.
+        viewModel.reloadBookEntries()
+        assertEquals(message, viewModel.uiState.value.errorMessage.testString())
+        viewModel.consumeErrorMessage()
+        viewModel.reloadBookEntries()
+        assertNull(viewModel.uiState.value.errorMessage)
+    }
+
+    @Test fun cancelledBatchDownloadDoesNotReportFailureOrDownloadNextBook() {
+        val attempted = mutableListOf<String>()
+        val repository = FakeBookshelfRepository(downloadBookOperation = { entry, _ ->
+            attempted += entry.metadata.id
+            throw CancellationException("Download cancelled")
+        })
+        val viewModel = BookshelfViewModel(repository, testScope())
+        viewModel.downloadBooks(listOf(bookEntry("First"), bookEntry("Second")))
+        assertEquals(listOf("First"), attempted)
+        assertNull(viewModel.uiState.value.errorMessage)
+        assertTrue(ErrorDiagnosticEvents.buffer.drain().isEmpty())
+    }
+
     @Test
     fun initialStateWaitsForFirstShelfLoadBeforeShowingEmptyBooks() {
         val viewModel = BookshelfViewModel(FakeBookshelfRepository(), testScope())
@@ -198,7 +267,7 @@ class BookshelfViewModelTest {
 
             viewModel.refreshRemoteBooks()
 
-            assertEquals("Failed to fetch books from Google Drive.", viewModel.uiState.value.errorMessage.testString())
+            assertEquals("Failed to fetch books from Google Drive.\n${error.message}", viewModel.uiState.value.errorMessage.testString())
             assertEquals(listOf(remote), viewModel.uiState.value.remoteBookEntries)
         }
     }
@@ -218,7 +287,12 @@ class BookshelfViewModelTest {
 
             viewModel.reloadBookEntries()
 
-            assertEquals("Failed to fetch books from Google Drive.", viewModel.uiState.value.errorMessage.testString())
+            val message = viewModel.uiState.value.errorMessage.testString().orEmpty()
+            assertTrue(message.startsWith("Failed to fetch books from Google Drive.\n"))
+            assertTrue(message.contains(requireNotNull(error.message)))
+            if (error is GoogleDriveApiException) {
+                assertTrue(message.contains(requireNotNull(error.statusCode).toString()))
+            }
         }
     }
 
@@ -236,7 +310,7 @@ class BookshelfViewModelTest {
 
         viewModel.refreshRemoteBooks()
 
-        assertEquals("Failed to fetch books from Google Drive.", viewModel.uiState.value.errorMessage.testString())
+        assertEquals("Failed to fetch books from Google Drive.\nNo internet connection.", viewModel.uiState.value.errorMessage.testString())
         assertEquals(listOf(remote), viewModel.uiState.value.remoteBookEntries)
     }
 
@@ -451,7 +525,7 @@ class BookshelfViewModelTest {
     }
 
     @Test
-    fun remoteLoadFailurePublishesStableGoogleDriveError() {
+    fun remoteLoadFailureKeepsGoogleDriveContextAndDiagnostic() {
         val repository = FakeBookshelfRepository(
             entries = listOf(bookEntry("local-book")),
             remoteLoadError = RuntimeException("drive failed"),
@@ -461,13 +535,13 @@ class BookshelfViewModelTest {
         viewModel.reloadBookEntries()
 
         assertEquals(
-            "Failed to fetch books from Google Drive.",
+            "Failed to fetch books from Google Drive.\ndrive failed",
             viewModel.uiState.value.errorMessage.testString(),
         )
     }
 
     @Test
-    fun remoteImportFailurePublishesStableGoogleDriveError() {
+    fun remoteImportFailureKeepsGoogleDriveContextAndDiagnostic() {
         val remote = remoteEntry("drive-folder", "Remote Book")
         val repository = FakeBookshelfRepository(remoteImportError = RuntimeException("drive import failed"))
         val viewModel = BookshelfViewModel(repository, testScope())
@@ -475,13 +549,13 @@ class BookshelfViewModelTest {
         viewModel.importRemoteBook(remote, syncStats = true, syncAudioBook = true)
 
         assertEquals(
-            "Failed to import book from Google Drive.",
+            "Failed to import book from Google Drive.\ndrive import failed",
             viewModel.uiState.value.errorMessage.testString(),
         )
     }
 
     @Test
-    fun remoteDeleteFailurePublishesStableGoogleDriveError() {
+    fun remoteDeleteFailureKeepsGoogleDriveContextAndDiagnostic() {
         val remote = remoteEntry("drive-folder", "Remote Book")
         val repository = FakeBookshelfRepository(remoteDeleteError = RuntimeException("drive delete failed"))
         val viewModel = BookshelfViewModel(repository, testScope())
@@ -489,7 +563,7 @@ class BookshelfViewModelTest {
         viewModel.deleteRemoteBook(remote)
 
         assertEquals(
-            "Failed to delete book from Google Drive.",
+            "Failed to delete book from Google Drive.\ndrive delete failed",
             viewModel.uiState.value.errorMessage.testString(),
         )
     }
@@ -564,27 +638,29 @@ class BookshelfViewModelTest {
     }
 
     @Test
-    fun tappingAnotherCloudBookCancelsPreviousDownloadAndSkipsSecondOpenSync() {
+    fun tappingAnotherCloudBookKeepsPreviousDownloadAndSkipsSecondOpenSync() {
         val first = bookEntry("first")
         val second = bookEntry("second")
         val gate = CompletableDeferred<Unit>()
-        var firstCancelled = false
-        val repository = FakeBookshelfRepository(entries = listOf(first, second), openBookOperation = { entry, progress ->
+        var firstFinished = false
+        val repository = FakeBookshelfRepository(entries = listOf(first, second), openBookId = second.metadata.id, downloadBookOperation = { entry, progress ->
             progress(0.5)
             if (entry.metadata.id == first.metadata.id) {
-                try { gate.await() } finally { firstCancelled = true }
+                gate.await()
+                firstFinished = true
             }
-            entry.metadata.id
         })
         val viewModel = BookshelfViewModel(repository, testScope())
         viewModel.openBook(first)
         assertEquals(0.5, viewModel.uiState.value.remoteImportProgressById[first.metadata.id])
         viewModel.openBook(first)
-        assertFalse(firstCancelled)
         viewModel.openBook(second)
-        assertTrue(firstCancelled)
         assertEquals(second.metadata.id, viewModel.uiState.value.openReaderBookId)
         assertTrue(viewModel.uiState.value.openReaderSkipSync)
+        assertEquals(mapOf(first.metadata.id to 0.5), viewModel.uiState.value.remoteImportProgressById)
+        gate.complete(Unit)
+        assertTrue(firstFinished)
+        assertEquals(second.metadata.id, viewModel.uiState.value.openReaderBookId)
         assertTrue(viewModel.uiState.value.remoteImportProgressById.isEmpty())
         assertEquals(listOf(BookSortOption.Recent), repository.loadRequests)
     }
@@ -662,7 +738,7 @@ class BookshelfViewModelTest {
             error("bad epub")
         }
 
-        assertEquals("Failed to import EPUB.", viewModel.uiState.value.errorMessage.testString())
+        assertEquals("Failed to import EPUB.\nbad epub", viewModel.uiState.value.errorMessage.testString())
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.blockingProgressMessage.testString())
 
@@ -675,6 +751,76 @@ class BookshelfViewModelTest {
 
         assertNull(viewModel.uiState.value.openReaderBookId)
         assertNull(viewModel.uiState.value.errorMessage.testString())
+    }
+
+    @Test
+    fun importingMalformedEpubKeepsNativeParserReasonAndWrappedCause() {
+        val viewModel = BookshelfViewModel(FakeBookshelfRepository(), testScope())
+
+        viewModel.importBook("content://books/broken.epub", "broken.epub") {
+            throw java.io.IOException(
+                "Failed to read package document",
+                uniffi.hoshiepub.EpubException.Parse("ill-formed document: expected </meta>"),
+            )
+        }
+
+        assertEquals(
+            "Failed to import EPUB.\nFailed to read package document\nmsg=ill-formed document: expected </meta>",
+            viewModel.uiState.value.errorMessage.testString(),
+        )
+    }
+
+    @Test
+    fun importWithoutExceptionMessageStillShowsDiagnosticType() {
+        val viewModel = BookshelfViewModel(FakeBookshelfRepository(), testScope())
+
+        viewModel.importBook("content://books/broken.epub", "broken.epub") {
+            throw java.io.IOException()
+        }
+
+        assertEquals("Failed to import EPUB.\nIOException", viewModel.uiState.value.errorMessage.testString())
+    }
+
+    @Test
+    fun bookshelfEditsAndRefreshExposeFileFailureDetails() {
+        val entry = bookEntry("book-a")
+        val cause = java.io.IOException("Saving metadata failed", java.io.IOException("Disk full"))
+        val repository = FakeBookshelfRepository(entries = listOf(entry), localUpdateError = cause)
+        val scope = CoroutineScope(Dispatchers.Unconfined + kotlinx.coroutines.CoroutineExceptionHandler { _, _ -> })
+        val viewModel = BookshelfViewModel(repository, scope)
+
+        viewModel.renameBook(entry, "Renamed")
+
+        assertEquals("Could not update the bookshelf.\nSaving metadata failed\nDisk full", viewModel.uiState.value.errorMessage.testString())
+
+        val loadViewModel = BookshelfViewModel(FakeBookshelfRepository(localLoadError = cause), scope)
+        loadViewModel.reloadBookEntries()
+
+        assertEquals("Could not update the bookshelf.\nSaving metadata failed\nDisk full", loadViewModel.uiState.value.errorMessage.testString())
+        assertFalse(loadViewModel.uiState.value.hasLoadedBooks)
+    }
+
+    @Test
+    fun failedBookEditDoesNotClearAnotherImportsProgress() {
+        val entry = bookEntry("book-a")
+        val continueImport = CompletableDeferred<Unit>()
+        val viewModel = BookshelfViewModel(
+            FakeBookshelfRepository(entries = listOf(entry), localUpdateError = java.io.IOException("Disk full")),
+            testScope(),
+        )
+        viewModel.importBook("content://books/import.epub", "import.epub") {
+            continueImport.await()
+            "imported-book"
+        }
+
+        viewModel.renameBook(entry, "Renamed")
+
+        assertTrue(viewModel.uiState.value.isLoading)
+        assertEquals("Importing import.epub...", viewModel.uiState.value.blockingProgressMessage.testString())
+        assertEquals("Could not update the bookshelf.\nDisk full", viewModel.uiState.value.errorMessage.testString())
+
+        continueImport.complete(Unit)
+        assertFalse(viewModel.uiState.value.isLoading)
     }
 
     @Test
@@ -786,7 +932,7 @@ class BookshelfViewModelTest {
         )
 
         assertEquals(listOf("bad", "good"), importedKeys)
-        assertEquals("Failed to import:\nbad.epub", viewModel.uiState.value.errorMessage.testString())
+        assertEquals("Failed to import:\nbad.epub\nbad epub", viewModel.uiState.value.errorMessage.testString())
         assertNull(viewModel.uiState.value.openReaderBookId)
         assertEquals(listOf(BookSortOption.Recent), repository.loadRequests)
         assertFalse(viewModel.uiState.value.isLoading)
@@ -860,12 +1006,12 @@ class BookshelfViewModelTest {
         viewModel.reloadBookEntries()
         viewModel.deleteBook(entry)
         assertEquals(listOf(entry), viewModel.uiState.value.bookEntries)
-        assertEquals(UiText.Resource(R.string.bookshelf_delete_failed), viewModel.uiState.value.errorMessage)
+        assertEquals("Could not delete the book or save its statistics archive. The book has been kept.\ndisk full", viewModel.uiState.value.errorMessage.testString())
         viewModel.startSelecting()
         viewModel.toggleSelectedBook(entry)
         viewModel.deleteSelectedBooks()
         assertEquals(setOf("book-a"), viewModel.uiState.value.selectedBookIds)
-        assertEquals(UiText.Resource(R.string.bookshelf_delete_failed), viewModel.uiState.value.errorMessage)
+        assertEquals("Could not delete the book or save its statistics archive. The book has been kept.\ndisk full", viewModel.uiState.value.errorMessage.testString())
         assertFalse(viewModel.uiState.value.isLoading)
     }
 
@@ -1029,7 +1175,7 @@ class BookshelfViewModelTest {
         assertTrue(viewModel.uiState.value.isSelecting)
         assertEquals(setOf("book-a"), viewModel.uiState.value.selectedBookIds)
         assertEquals(
-            "Failed to create the shelf. Try again.",
+            "Failed to create the shelf. Try again.\ndisk details",
             (viewModel.uiState.value.shelfCreationMoveStatus as ShelfCreationMoveStatus.Failed).message.testString(),
         )
     }
@@ -1337,7 +1483,7 @@ class BookshelfViewModelTest {
             error("bad epub")
         }
 
-        assertEquals("Failed to import EPUB.", viewModel.uiState.value.errorMessage.testString())
+        assertEquals("Failed to import EPUB.\nbad epub", viewModel.uiState.value.errorMessage.testString())
 
         viewModel.consumeErrorMessage()
 
@@ -1396,7 +1542,8 @@ class BookshelfViewModelTest {
         var entries: List<BookEntry> = emptyList(),
         var progressById: Map<String, Double> = emptyMap(),
         var openBookId: String = "book-a",
-        var openBookOperation: (suspend (BookEntry, (Double) -> Unit) -> String)? = null,
+        var syncLibraryError: Throwable? = null,
+        var downloadBookOperation: (suspend (BookEntry, (Double) -> Unit) -> Unit)? = null,
         var importBookId: String = "imported-book",
         var shelves: List<BookShelf> = emptyList(),
         var coverSourcesById: Map<String, BookCoverSource> = emptyMap(),
@@ -1409,6 +1556,8 @@ class BookshelfViewModelTest {
         val remoteImportError: Throwable? = null,
         val remoteDeleteError: Throwable? = null,
         val localDeleteError: Throwable? = null,
+        val localUpdateError: Throwable? = null,
+        val localLoadError: Throwable? = null,
         val remoteImportGate: CompletableDeferred<Unit>? = null,
         val remoteDeleteGate: CompletableDeferred<Unit>? = null,
         val remoteImportProgress: List<Double> = emptyList(),
@@ -1450,6 +1599,7 @@ class BookshelfViewModelTest {
             sortOption: BookSortOption,
             onLegacyBookMigrationProgress: (LegacyBookMigrationProgress) -> Unit,
         ): BookshelfLoadResult {
+            localLoadError?.let { throw it }
             loadRequests += sortOption
             migrationProgressEvents.forEach(onLegacyBookMigrationProgress)
             val plan = loadPlans.removeFirstOrNull()
@@ -1469,7 +1619,7 @@ class BookshelfViewModelTest {
             return entries.associate { it.metadata.id to progressById.getValue(it.metadata.id) }
         }
 
-        override suspend fun syncLibrary() = Unit
+        override suspend fun syncLibrary() { syncLibraryError?.let { throw it } }
 
         override suspend fun loadRemoteBooks(localEntries: List<BookEntry>): RemoteBookshelfLoadResult {
             remoteLoadRequests += localEntries.map { it.metadata.id }
@@ -1482,7 +1632,11 @@ class BookshelfViewModelTest {
             )
         }
 
-        override suspend fun openBook(entry: BookEntry, onProgress: (Double) -> Unit): String = openBookOperation?.invoke(entry, onProgress) ?: openBookId
+        override suspend fun openBook(entry: BookEntry): String = openBookId
+
+        override suspend fun downloadBook(entry: BookEntry, onProgress: (Double) -> Unit) {
+            downloadBookOperation?.invoke(entry, onProgress)
+        }
 
         override suspend fun importBook(uri: android.net.Uri): String = importBookId
 
@@ -1554,6 +1708,7 @@ class BookshelfViewModelTest {
         }
 
         override suspend fun renameBook(entry: BookEntry, title: String?) {
+            localUpdateError?.let { throw it }
             renamedBooks += entry to title
         }
 
@@ -1609,7 +1764,9 @@ private fun UiText?.testString(): String? =
             R.string.bookshelf_importing_progress_format -> "Importing ${args[0]} / ${args[1]}..."
             R.string.bookshelf_legacy_migration_progress_format -> "Preparing older books ${args[0]} / ${args[1]}..."
             R.string.bookshelf_import_failed -> "Failed to import EPUB."
-            R.string.bookshelf_import_failed_list_format -> "Failed to import:\n${args[0]}"
+            R.string.bookshelf_update_failed -> "Could not update the bookshelf."
+            R.string.bookshelf_import_failed_list_format -> "Failed to import:\n${(args[0] as? UiText)?.testString() ?: args[0]}"
+            R.string.bookshelf_delete_failed -> "Could not delete the book or save its statistics archive. The book has been kept."
             R.string.bookshelf_scanning_folder -> "Scanning folder..."
             R.string.bookshelf_no_epub_files_found -> "No EPUB files found."
             R.string.bookshelf_syncing -> "Syncing..."

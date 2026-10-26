@@ -154,6 +154,7 @@ import moe.antimony.hoshi.importing.SafImportDirectoryScanner
 import moe.antimony.hoshi.profiles.ProfileState
 import moe.antimony.hoshi.importing.importDisplayName
 import moe.antimony.hoshi.ui.HoshiBlockingProgressOverlay
+import moe.antimony.hoshi.ui.ErrorDetailsText
 import moe.antimony.hoshi.ui.UiText
 import moe.antimony.hoshi.ui.asString
 import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
@@ -402,6 +403,7 @@ fun BookshelfView(
                 syncAudioBook = sasayakiSettings.enabled && sasayakiSettings.syncEnabled,
             )
         },
+        onDownloadBook = { booksViewModel.downloadBooks(listOf(it)) },
     )
         SnackbarHost(
             hostState = snackbarHostState,
@@ -427,7 +429,7 @@ fun BookshelfView(
         AlertDialog(
             onDismissRequest = booksViewModel::consumeErrorMessage,
             title = { Text(stringResource(R.string.dialog_error_title)) },
-            text = { Text(message.asString()) },
+            text = { ErrorDetailsText(message.asString()) },
             confirmButton = {
                 TextButton(onClick = booksViewModel::consumeErrorMessage) {
                     Text(stringResource(R.string.action_ok))
@@ -952,6 +954,7 @@ private fun BooksTab(
     syncSettings: SyncSettings,
     driveAuthStatus: DriveAuthStatus?,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
+    onDownloadBook: (BookEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val fileTaskBlocked = blockingProgressMessage != null
@@ -1134,6 +1137,7 @@ private fun BooksTab(
                                             onSetBookProfile = onSetBookProfile,
                                             syncSettings = syncSettings,
                                             onSyncBook = onSyncBook,
+                                            onDownloadBook = onDownloadBook,
                                         )
                                     }
                                 }
@@ -1691,6 +1695,7 @@ private fun BookContextMenu(
     onSetBookProfile: (BookEntry, String?) -> Unit,
     syncSettings: SyncSettings,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
+    onDownloadBook: (BookEntry) -> Unit,
 ) {
     var moveMenuExpanded by remember { mutableStateOf(false) }
     var syncMenuExpanded by remember { mutableStateOf(false) }
@@ -1708,7 +1713,7 @@ private fun BookContextMenu(
         expanded = expanded && !moveMenuExpanded && !syncMenuExpanded && !profileMenuExpanded,
         onDismissRequest = onDismiss,
     ) {
-        if (syncSettings.enabled) {
+        if (syncSettings.enabled && (syncSettings.provider == SyncProvider.Ttu || entry.metadata.epub == null)) {
             if (syncSettings.provider == SyncProvider.Ttu && syncSettings.mode == SyncMode.Manual) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bookshelf_sync)) },
@@ -1720,11 +1725,20 @@ private fun BookContextMenu(
                     },
                     onClick = { syncMenuExpanded = true },
                 )
-            } else {
+            } else if (syncSettings.provider == SyncProvider.Ttu) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bookshelf_sync)) },
                     onClick = {
                         onSyncBook(entry, null)
+                        onDismiss()
+                    },
+                )
+            }
+            if (syncSettings.provider == SyncProvider.Gdrive && entry.metadata.epub == null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_download)) },
+                    onClick = {
+                        onDownloadBook(entry)
                         onDismiss()
                     },
                 )

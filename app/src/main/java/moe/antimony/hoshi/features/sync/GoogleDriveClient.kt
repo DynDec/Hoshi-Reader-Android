@@ -24,11 +24,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -76,9 +74,8 @@ class GoogleDriveClient internal constructor(
         method: String = "GET",
         body: ByteArray? = null,
         contentType: String? = "application/json",
-        upload: Boolean = false,
     ): ByteArray = performRequest(
-        url = driveUrl(path, query).let { if (upload) it.replace("/drive/v3/", "/upload/drive/v3/") else it },
+        url = driveUrl(path, query),
         method = method,
         body = body,
         contentType = contentType,
@@ -90,39 +87,18 @@ class GoogleDriveClient internal constructor(
         parent: String,
         fileId: String? = null,
         contentType: String = "application/octet-stream",
-    ): GoogleDriveFile = writeMultipart(data.size.toLong(), name, parent, fileId, contentType) { it.write(data) }
+    ): GoogleDriveFile = write(data.size.toLong(), name, parent, fileId, contentType) { it.write(data) }
 
-    suspend fun write(
-        file: File,
+    suspend fun write(file: File, name: String, parent: String): GoogleDriveFile =
+        write(file.length(), name, parent, limited = false) { output -> file.inputStream().use { it.copyTo(output) } }
+
+    private suspend fun write(
+        length: Long,
         name: String,
         parent: String,
         fileId: String? = null,
         contentType: String = "application/octet-stream",
-    ): GoogleDriveFile {
-        val length = withContext(ioDispatcher) { file.length() }
-        val context = currentCoroutineContext()
-        val connection = connectionId
-        return writeMultipart(length, name, parent, fileId, contentType) { output ->
-            // Reopen for each HTTP retry; never retain a whole EPUB or multipart body in memory.
-            file.inputStream().use { input ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    context.ensureActive()
-                    checkConnection(connection)
-                    val count = input.read(buffer)
-                    if (count == -1) break
-                    output.write(buffer, 0, count)
-                }
-            }
-        }
-    }
-
-    private suspend fun writeMultipart(
-        length: Long,
-        name: String,
-        parent: String,
-        fileId: String?,
-        contentType: String,
+        limited: Boolean = true,
         writer: (OutputStream) -> Unit,
     ): GoogleDriveFile {
         val metadata = buildJsonObject {
@@ -130,18 +106,17 @@ class GoogleDriveClient internal constructor(
             if (fileId == null) put("parents", JsonArray(listOf(JsonPrimitive(parent))))
         }.toString()
         val boundary = UUID.randomUUID().toString()
-        val prefix = ("--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$metadata" +
-            "\r\n--$boundary\r\nContent-Type: $contentType\r\n\r\n").toByteArray()
+        val prefix = "--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$metadata\r\n--$boundary\r\nContent-Type: $contentType\r\n\r\n".toByteArray()
         val suffix = "\r\n--$boundary--\r\n".toByteArray()
-        val url = driveUrl(
-            fileId?.let { "files/${it.urlPathSegment()}" } ?: "files",
-            mapOf("uploadType" to "multipart", "fields" to "id,name,mimeType,md5Checksum,createdTime"),
-        ).replace("/drive/v3/", "/upload/drive/v3/")
         return SyncFormat.json.decodeFromString(performStreamingUpload(
-            url = url,
+            url = driveUrl(
+                fileId?.let { "files/${it.urlPathSegment()}" } ?: "files",
+                mapOf("uploadType" to "multipart", "fields" to "id,name,mimeType,md5Checksum,createdTime"),
+            ).replace("/drive/v3/", "/upload/drive/v3/"),
             method = if (fileId == null) "POST" else "PATCH",
             contentType = "multipart/related; boundary=$boundary",
-            contentLength = prefix.size.toLong() + length + suffix.size,
+            contentLength = prefix.size + length + suffix.size,
+            limited = limited,
         ) { output ->
             output.write(prefix)
             writer(output)
@@ -151,6 +126,14 @@ class GoogleDriveClient internal constructor(
 
     suspend fun trashFile(fileId: String) {
         request("files/${fileId.urlPathSegment()}", method = "PATCH", body = "{\"trashed\":true}".toByteArray())
+    }
+
+    suspend fun renameFile(fileId: String, name: String) {
+        request("files/${fileId.urlPathSegment()}", method = "PATCH", body = buildJsonObject { put("name", name) }.toString().toByteArray())
+    }
+
+    suspend fun deleteFile(fileId: String) {
+        request("files/${fileId.urlPathSegment()}", method = "DELETE", contentType = null)
     }
 
     suspend fun performRequest(
@@ -170,7 +153,7 @@ class GoogleDriveClient internal constructor(
         destination: File,
         progress: (Long, Long?) -> Unit,
     ) {
-        perform(url, "GET", null) { connection ->
+        perform(url, "GET", null, limited = false) { connection ->
             destination.parentFile?.mkdirs()
             val total = connection.contentLengthLong.takeIf { it >= 0 }
             var downloaded = 0L
@@ -196,8 +179,9 @@ class GoogleDriveClient internal constructor(
         method: String,
         contentType: String,
         contentLength: Long,
+        limited: Boolean = true,
         writer: (OutputStream) -> Unit,
-    ): ByteArray = perform(url, method, contentType, configure = { connection ->
+    ): ByteArray = perform(url, method, contentType, limited = limited, configure = { connection ->
         connection.setFixedLengthStreamingMode(contentLength)
         connection.doOutput = true
         connection.outputStream.use(writer)
@@ -209,6 +193,7 @@ class GoogleDriveClient internal constructor(
         contentType: String?,
         retry: Boolean = true,
         attempt: Int = 0,
+        limited: Boolean = true,
         configure: (HttpURLConnection) -> Unit = {},
         read: (HttpURLConnection) -> ByteArray,
     ): ByteArray {
@@ -216,7 +201,9 @@ class GoogleDriveClient internal constructor(
         unavailable { checkInternet() }
         val connection = connectionId
         val token = unavailable { auth.accessToken() }
-        val timeout = if (provider() == SyncProvider.Ttu) 10_000 else 60_000
+        val currentProvider = provider()
+        val metadataRequest = currentProvider == SyncProvider.Gdrive && limited
+        val timeout = if (currentProvider == SyncProvider.Ttu) 10_000 else 60_000
         val request = openConnection(url).apply {
             requestMethod = method
             connectTimeout = timeout
@@ -224,8 +211,8 @@ class GoogleDriveClient internal constructor(
             setRequestProperty("Authorization", "Bearer $token")
             contentType?.let { setRequestProperty("Content-Type", it) }
         }
-        val (status, data) = limit.withPermit { coroutineScope {
-            suspendCancellableCoroutine { continuation ->
+        val (status, data) = try { limit.withPermitIf(limited) { coroutineScope {
+            suspendCancellableCoroutine<Pair<Int, ByteArray>> { continuation ->
                 val job = launch(ioDispatcher) {
                     continuation.resumeWith(runCatching {
                         connections.add(request)
@@ -236,7 +223,7 @@ class GoogleDriveClient internal constructor(
                             val status = request.responseCode
                             status to if (status >= 400) request.errorStream?.use { it.readBytes() } ?: byteArrayOf() else read(request)
                         } catch (error: IOException) {
-                            throw GoogleDriveUnavailableException(error)
+                            throw if (metadataRequest) GoogleDriveMetadataNetworkException(error) else GoogleDriveUnavailableException(error)
                         } finally {
                             connections.remove(request)
                             request.disconnect()
@@ -248,32 +235,39 @@ class GoogleDriveClient internal constructor(
                     job.cancel()
                 }
             }
-        } }
+        } } } catch (error: GoogleDriveMetadataNetworkException) {
+            checkConnection(connection)
+            currentCoroutineContext().ensureActive()
+            // A create may already have succeeded. Reconcile it in the next sync pass,
+            // rather than replaying a POST and creating a duplicate folder/state file.
+            if (attempt >= 4 || method !in setOf("GET", "HEAD", "PATCH", "PUT", "DELETE")) throw error
+            delay(1_000L * (1L shl attempt) + Random.nextLong(1_000))
+            checkConnection(connection)
+            return perform(url, method, contentType, retry, attempt + 1, limited, configure, read)
+        }
         checkConnection(connection)
         currentCoroutineContext().ensureActive()
         if (status == 401 && retry) {
             auth.clearAccessToken(token)
             checkConnection(connection)
             currentCoroutineContext().ensureActive()
-            return perform(url, method, contentType, false, attempt, configure, read)
+            return perform(url, method, contentType, false, attempt, limited, configure, read)
         }
         if (status >= 400) {
             val error = runCatching { SyncFormat.json.parseToJsonElement(data.decodeToString()).jsonObject["error"]?.jsonObject }.getOrNull()
-            if (attempt < 4 && isTransient(method, status, error)) {
+            val reasons = runCatching {
+                error?.get("errors")?.jsonArray?.mapNotNull { it.jsonObject["reason"]?.jsonPrimitive?.content }?.toSet()
+            }.getOrNull().orEmpty()
+            val message = runCatching { error?.get("message")?.jsonPrimitive?.content }.getOrNull()
+            val failure = GoogleDriveApiException(message ?: "Request failed with status $status", status, reasons)
+            if (attempt < 4 && (failure.isRateLimited || (status >= 500 && method != "POST"))) {
                 delay(1_000L * (1L shl attempt) + Random.nextLong(1_000))
                 checkConnection(connection)
-                return perform(url, method, contentType, retry, attempt + 1, configure, read)
+                return perform(url, method, contentType, retry, attempt + 1, limited, configure, read)
             }
-            val message = runCatching { error?.get("message")?.jsonPrimitive?.content }.getOrNull()
-            throw GoogleDriveApiException(message ?: "Request failed with status $status", status)
+            throw failure
         }
         return data
-    }
-
-    private fun isTransient(method: String, status: Int, error: JsonObject?): Boolean {
-        val reason = runCatching { error?.get("errors")?.jsonArray?.firstOrNull()?.jsonObject?.get("reason")?.jsonPrimitive?.content }.getOrNull()
-        val limited = status == 429 || (status == 403 && reason?.endsWith("ateLimitExceeded") == true)
-        return limited || (status >= 500 && method != "POST")
     }
 
     private inline fun <T> unavailable(action: () -> T): T = try {
@@ -299,7 +293,7 @@ internal fun String.urlQueryComponent(): String =
 internal fun String.urlPathSegment(): String =
     split("/").joinToString("/") { it.urlQueryComponent() }
 
-private fun checkValidatedInternet(context: Context) {
+internal fun checkValidatedInternet(context: Context) {
     val connectivityManager = context.applicationContext.getSystemService(ConnectivityManager::class.java)
     val network = connectivityManager?.activeNetwork
         ?: throw GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage)
@@ -314,3 +308,6 @@ private fun checkValidatedInternet(context: Context) {
         throw GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage)
     }
 }
+
+private suspend fun <T> Semaphore.withPermitIf(limited: Boolean, action: suspend () -> T): T =
+    if (limited) withPermit { action() } else action()

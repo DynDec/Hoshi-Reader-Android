@@ -1,5 +1,4 @@
 import java.util.Properties
-import hoshi.build.PrepareSherpaTask
 
 plugins {
     alias(libs.plugins.android.application)
@@ -69,11 +68,6 @@ val androidNdkHome = configuredNdkDir ?: defaultNdkDir
         "Android NDK $targetNdkVersion was not found. Set ANDROID_NDK_HOME or androidNdkHome."
     )
 
-val sherpaOnnxArtifact = "com.k2fsa.sherpa:sherpa-onnx:${libs.versions.sherpaOnnx.get()}@aar"
-val sherpaOnnxArchive by configurations.creating {
-    isCanBeConsumed = false
-    isTransitive = false
-}
 val secrets = Properties().apply {
     val secretsFile = rootProject.file("secrets.properties")
     if (secretsFile.isFile) secretsFile.inputStream().use { load(it) }
@@ -86,6 +80,20 @@ val releaseAbi = providers.gradleProperty("releaseAbi").getOrElse("arm64-v8a")
 require(releaseAbi in listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
 val releaseVersionName = providers.gradleProperty("releaseVersionName").orNull
 val releaseVersionCode = providers.gradleProperty("releaseVersionCode").orNull?.toIntOrNull()
+val buildCommitSha = providers.gradleProperty("buildCommitSha").orElse(
+    if (rootProject.file(".git").exists()) {
+        providers.exec {
+            workingDir(rootProject.projectDir)
+            commandLine("git", "rev-parse", "HEAD")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.map { it.trim() }
+    } else {
+        providers.provider { "" }
+    }
+).get()
+require(buildCommitSha.isEmpty() || buildCommitSha.matches(Regex("[0-9a-f]{40}"))) {
+    "buildCommitSha must be a full lowercase Git commit SHA."
+}
 if (providers.gradleProperty("releaseVersionCode").isPresent && releaseVersionCode == null) {
     throw GradleException("releaseVersionCode must be an integer.")
 }
@@ -129,6 +137,7 @@ android {
         versionName = "1.4.7.5"
         releaseVersionCode?.let { versionCode = it }
         releaseVersionName?.let { versionName = it }
+        buildConfigField("String", "BUILD_COMMIT_SHA", "\"$buildCommitSha\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
@@ -207,19 +216,7 @@ android {
     sourceSets["release"].jniLibs.directories.add(rustReleaseJniLibsDir.absolutePath)
 }
 
-val prepareSherpa by tasks.registering(PrepareSherpaTask::class) {
-    archive.set(layout.file(sherpaOnnxArchive.elements.map { it.single().asFile }))
-    releaseBaseUrl.set("https://github.com/HuangAntimony/Hoshi-Reader-Android/releases/download/transcription-sherpa-${libs.versions.sherpaOnnx.get()}-633c2432")
-    outputDirectory.set(layout.buildDirectory.dir("generated/sherpa"))
-    assetsDirectory.set(outputDirectory.dir("assets"))
-}
-androidComponents.onVariants { variant ->
-    variant.sources.assets?.addGeneratedSourceDirectory(prepareSherpa, PrepareSherpaTask::getAssetsDirectory)
-}
-
 dependencies {
-    implementation(files(prepareSherpa.map { it.outputDirectory.file("bindings.jar").get() }))
-    sherpaOnnxArchive(sherpaOnnxArtifact)
     implementation(libs.google.play.services.auth)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.androidx.browser)
@@ -227,6 +224,7 @@ dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.material3)
     implementation(libs.material.color.utilities)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
@@ -255,10 +253,13 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     implementation(libs.ankidroid.api)
     implementation(libs.google.dagger.hilt.android)
+    implementation(libs.re2j)
+    implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.google.dagger.hilt.android.compiler)
+    testImplementation(libs.mockwebserver)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly("net.java.dev.jna:jna:${libs.versions.jna.get()}@jar")
@@ -373,7 +374,6 @@ val buildRustAndroidRelease by tasks.registering(Exec::class) {
 
 tasks.named("preBuild") {
     dependsOn(generateUniffiKotlin)
-    dependsOn(prepareSherpa)
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

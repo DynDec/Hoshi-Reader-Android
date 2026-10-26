@@ -1,9 +1,12 @@
 package moe.antimony.hoshi.features.update
 
 import android.os.Build
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import moe.antimony.hoshi.ui.diagnosticMessage
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
@@ -52,6 +55,9 @@ internal data class AvailableUpdate(
     val downloadUrl: String,
     val fallbackDownloadUrls: List<String> = emptyList(),
     val sha256: String?,
+    val previewCommitSha: String? = null,
+    val previewTag: String? = null,
+    val previewPublishedAt: String? = null,
 )
 
 internal fun AvailableUpdate.downloadUrlCandidates(): List<String> =
@@ -114,7 +120,7 @@ private object AndroidSupportedAbis {
         runCatching { Build.SUPPORTED_ABIS.toList() }.getOrDefault(emptyList())
 }
 
-private fun GitHubReleaseAsset.normalizedSha256(): String? =
+internal fun GitHubReleaseAsset.normalizedSha256(): String? =
     digest
         ?.removePrefix("sha256:")
         ?.takeIf { it.matches(Regex("[A-Fa-f0-9]{64}")) }
@@ -158,28 +164,10 @@ internal class GitHubReleaseUpdateRepository private constructor(
     )
 
     override suspend fun latestRelease(): GitHubRelease {
-        val headers = mapOf(
-            "Accept" to "application/vnd.github+json",
-            "User-Agent" to "Hoshi-Reader-Android",
-        )
-        var lastError: Throwable? = null
-        latestReleaseCandidates().forEachIndexed { index, url ->
-            val preferMirrors = index > 0
-            runCatching {
-                GitHubReleaseJson
-                    .parse(httpClient.get(url, headers))
-                    .withDownloadMirrors(downloadMirrorPrefixes, preferMirrors)
-            }.onSuccess { release ->
-                return release
-            }.onFailure { error ->
-                lastError = error
-            }
+        return readGitHubApi(latestReleaseUrl, apiMirrorPrefixes, httpClient) { body, preferMirrors ->
+            GitHubReleaseJson.parse(body).withDownloadMirrors(downloadMirrorPrefixes, preferMirrors)
         }
-        throw GitHubReleaseException(lastError?.message ?: "GitHub update check failed.")
     }
-
-    private fun latestReleaseCandidates(): List<String> =
-        (listOf(latestReleaseUrl) + apiMirrorPrefixes.map { prefix -> prefix + latestReleaseUrl }).distinct()
 
     private fun GitHubRelease.withDownloadMirrors(
         mirrorPrefixes: List<String>,
@@ -213,28 +201,44 @@ internal object UrlConnectionGitHubHttpClient : GitHubHttpClient {
         connection.readTimeout = 15_000
         return connection.use {
             val code = it.responseCode
-            if (code !in 200..299) {
-                val retryAfter = it.getHeaderField("Retry-After")
-                throw GitHubReleaseException("GitHub update check failed with HTTP $code${retryAfter?.let { value -> " (retry after $value)" }.orEmpty()}.")
+            val details = buildString {
+                append("HTTP $code\n${it.url}")
+                listOf(
+                    "Content-Type", "Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining",
+                    "X-RateLimit-Reset", "X-RateLimit-Used", "X-RateLimit-Resource",
+                ).forEach { name ->
+                    it.getHeaderField(name)?.let { value -> append("\n$name: $value") }
+                }
             }
-            it.inputStream.bufferedReader().use { reader -> reader.readText() }
+            val body = try {
+                val stream = if (code in 200..299) it.inputStream else it.errorStream
+                stream?.bufferedReader()?.use { reader -> reader.readText() }.orEmpty()
+            } catch (error: IOException) {
+                throw GitHubReleaseException(details, error)
+            }
+            val mediaType = it.contentType?.substringBefore(';')?.trim().orEmpty()
+            val isJson = mediaType.equals("application/json", ignoreCase = true) ||
+                (mediaType.startsWith("application/", ignoreCase = true) && mediaType.endsWith("+json", ignoreCase = true))
+            if (code !in 200..299 || !isJson) {
+                throw GitHubReleaseException(listOf(details, body).filter { value -> value.isNotBlank() }.joinToString("\n\n"))
+            }
+            body
         }
     }
 }
 
-private val DefaultApiMirrorPrefixes = listOf(
+internal val DefaultApiMirrorPrefixes = listOf(
     "https://ghproxy.vip/",
-    "https://githubproxy.cc/",
 )
 
-private val DefaultDownloadMirrorPrefixes = listOf(
+internal val DefaultDownloadMirrorPrefixes = listOf(
     "https://gh-proxy.com/",
     "https://gh.llkk.cc/",
     "https://ghpull.com/",
     "https://fastgit.cc/",
 )
 
-internal class GitHubReleaseException(message: String) : RuntimeException(message)
+internal class GitHubReleaseException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 internal object GitHubReleaseJson {
     private val json = Json { ignoreUnknownKeys = true }
@@ -275,3 +279,25 @@ private inline fun <T : HttpURLConnection, R> T.use(block: (T) -> R): R =
     } finally {
         disconnect()
     }
+
+internal fun <T> readGitHubApi(
+    url: String,
+    mirrorPrefixes: List<String>,
+    client: GitHubHttpClient,
+    parse: (String, Boolean) -> T,
+): T {
+    val headers = mapOf("Accept" to "application/vnd.github+json", "User-Agent" to "Hoshi-Reader-Android")
+    val failures = mutableListOf<Pair<String, Throwable>>()
+    (listOf(url) + mirrorPrefixes.map { it + url }).distinct().forEachIndexed { index, candidate ->
+        try {
+            return parse(client.get(candidate, headers), index > 0)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            failures += candidate to error
+        }
+    }
+    if (failures.size == 1) throw GitHubReleaseException(failures.single().first, failures.single().second)
+    throw GitHubReleaseException(failures.joinToString("\n\n") { (source, error) -> "$source\n${error.diagnosticMessage()}" })
+        .apply { failures.forEach { (_, error) -> addSuppressed(error) } }
+}

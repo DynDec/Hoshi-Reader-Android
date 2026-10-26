@@ -1,349 +1,319 @@
-# Validation Guide
+# Agent Validation and Automation
 
-This file contains durable validation policy for Hoshi Reader Android. Update it
-only when validation requirements, test data, or stable manual QA flows change.
+Reusable commands, measurement methods and verified pitfalls for agent sessions.
+Read the sections relevant to the change; test code holds individual cases.
 
-## Required Commands
+## Choose and run checks
 
-Before claiming implementation complete, run:
+Run focused behavior tests while working, then the applicable completion checks.
+All commands below run from the repository root.
 
-```bash
-./gradlew test
-./gradlew assembleDebug
-```
+| Change | Completion checks |
+| --- | --- |
+| Documentation only | `git diff --check`; verify referenced paths/anchors and commands against their owners; preserve release headings and issue links when editing changelog |
+| App code, data or architecture implementation | `./gradlew test` and `./gradlew assembleDebug` |
+| Reader/popup/selection web assets | Also `node --test app/src/test/js/*.test.mjs`; use real WebView evidence for painting, geometry or native gestures |
+| Resources, manifest, UI wiring, packaging, framework integration | Also `./gradlew lint` |
+| Visible strings | Also `./gradlew :app:testDebugUnitTest --tests moe.antimony.hoshi.LocalizationResourceTest` |
+| SDK/ABI/signing/native packaging or release behavior | Also `./gradlew :app:assembleRelease`; inspect affected APK libraries, version, signature and build commit |
+| Release workflows or publisher tools | `actionlint`; `python3 -m pip install -r tools/tests/requirements.txt`; `python3 -m unittest discover -s tools/tests -p 'test_*.py'` |
+| Transcription runtime packaging | `python3 tools/build-transcription-audio.py --check`; component build/publication procedure below |
 
-Run lint when changing resources, manifest, UI, packaging, or release-facing
-build behavior:
-
-```bash
-./gradlew lint
-```
-
-For transcription runtime packaging or binding transforms, also run
-`./gradlew -p buildSrc test` and `python3 tools/build-transcription-audio.py --check`.
-When changing the FFmpeg decoder or its CMake configuration, build all component
-ABIs with `python3 tools/build-transcription-audio.py --ndk <NDK-29.0.14206865>
---cmake <CMake-3.31.6>`. Commit the generated
-`app/src/main/assets/transcription-audio-runtime.json` with those sources.
-Before shipping the APK, publish `build/transcription-audio/distribution` using
-`tools/publish-transcription-components.py --catalog <catalog> --directory <distribution>
---notice app/src/main/res/raw/ffmpeg_license.txt --extra <generated-source-archive>
---target <remote-commit>`. Include the generated source archive so the component
-can be rebuilt independently of the APK.
-This publishes an immutable component prerelease and never replaces existing
-files. Use `--remote-check --catalog <catalog>` to verify public download hashes.
-
-Run a release build when changing `minSdk`, `targetSdk`, `compileSdk`, ABI
-filters, signing, native packaging, or other release packaging behavior:
+JVM filtering uses the variant task, not the `test` aggregate:
 
 ```bash
-./gradlew :app:assembleRelease
+./gradlew :app:testDebugUnitTest --tests moe.antimony.hoshi.features.reader.ReaderPaginationScriptsTest
 ```
 
-For `minSdk` changes, validate both the newly admitted Android version when
-available and an existing supported Android 9+ device path. Preserve app data
-for existing-user checks, compare release APK structure when packaging output
-changes, and keep older-version compatibility fixes guarded so Android 9+
-behavior stays on the existing path.
-
-For a single JVM unit test, do not use `./gradlew test --tests ...`; the
-`:app:test` aggregate task does not support filtering. Use:
+Locate relevant tests with:
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests fully.qualified.TestClassName
-./gradlew :app:testDebugUnitTest --tests fully.qualified.TestClassName.testMethodName
+rg --files app/src/test/java app/src/test/js app/src/androidTest/java tools/tests
+rg -n 'restoreProgress|selection|Sasayaki' app/src/test/js
 ```
 
-For localization changes, run:
+Kotlin tests generally mirror production packages under `app/src/test/java`;
+real Android/WebView tests live under `app/src/androidTest/java`. JS tests execute
+the actual reader assets with generated DOM fixtures. CI configuration and build
+prerequisites are in `.github/workflows/android-ci.yml` and `app/build.gradle.kts`.
+Rendering and latency claims require device evidence.
+
+## Test and fixture pitfalls
+
+- Test code through API, behavior, state-flow and operation-count assertions;
+  test manifest/resources/Gradle/provider declarations through parsed structure.
+- CI fixtures are constructed by tests or use tracked assets. Ignored `testdata/`
+  may contain optional local EPUB, dictionary, font, SRT, M4B and Opus samples;
+  inspect availability first.
+- JVM tests replacing `Dispatchers.Main` must cancel **and join** the ViewModel
+  scope before `resetMain()`, or late callbacks can fail unrelated tests.
+- MockWebServer WebSocket fixtures must answer `onClosing` with
+  `webSocket.close(code, reason)`; otherwise shutdown can hang or fail teardown.
+- Duplicate English strings with intentionally different contexts need matching
+  `comment` attributes on every duplicate in both language resource files.
+- Settings state tests use delayed first emissions, read failure/retry and stale
+  profile responses, asserting that controls appear after confirmed loading.
+- For [error-path contracts](ARCHITECTURE.md#errors-and-diagnostics), inject
+  test-owned failures with specific messages and nested causes, and observe both
+  visible state and diagnostic events. Assert that cancellation and form validation
+  leave runtime history unchanged. Adapter/store examples are `ui/ErrorDetailsTest`
+  and `features/diagnostics/NonfatalDiagnosticsTest` in the JVM test tree.
+
+## Device execution without data loss
+
+- Select the intended serial/package explicitly. Preserve installed app data;
+  never uninstall, clear data, reset preferences or alter user files for a test.
+  A disposable-device exception requires explicit user authorization.
+- Do not use `connectedDebugAndroidTest`, `connectedAndroidTest`,
+  `installDebugAndroidTest` or other tasks that may reinstall/clear/uninstall app
+  data on an existing device. Build APKs separately, install with `adb install -r`,
+  then run only a reviewed class/method whose fixtures are isolated.
+- Read the chosen test's setup/teardown first. Use scratch stores/media and
+  explicitly supplied test endpoints and credentials.
+- Unlock the device and keep the screen on for UI/focus tests. Resolve labels
+  from resources in the user's current language.
+- SAF imports go through DocumentsUI or an authorized `content://` URI. Samples
+  may be pushed to Downloads, then selected through DocumentsUI to obtain a grant.
+
+Example for the generated-content-only viewport test; replace the serial after
+checking `adb devices -l`. Installation must use the same application ID/signing
+identity as the existing debug app; stop on a mismatch instead of uninstalling.
 
 ```bash
-./gradlew :app:testDebugUnitTest --tests moe.antimony.hoshi.LocalizationResourceTest
+./gradlew assembleDebug assembleDebugAndroidTest
+hoshi_serial='REPLACE_WITH_DEVICE_SERIAL'
+adb -s "$hoshi_serial" install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s "$hoshi_serial" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb -s "$hoshi_serial" shell am instrument -w -r \
+  -e class moe.antimony.hoshi.features.reader.ReaderViewportWebViewTest \
+  moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-When separate translation contexts intentionally share an English string value,
-add a `comment` explaining the context to every duplicate entry, including the
-existing entry, and mirror those comments in Chinese resources.
-`DuplicateCrowdInStrings` still fails if only the new entry has a comment.
+`am instrument` may return shell status 0 on test failure. Require the final
+`OK (N tests)` and inspect `FAILURES`, `INSTRUMENTATION_FAILED` and stack traces.
+Report tested API/WebView versions, commands, results, artifact paths and any
+unexecuted checks in the current task.
 
-For reader web asset changes, run the focused JavaScript tests:
+## Drive metadata timeout isolation
+
+Run `python3 tools/drive-metadata-isolation-fixture.py` on the host and
+`adb -s "$hoshi_serial" reverse tcp:18766 tcp:18766`, then explicitly run
+`moe.antimony.hoshi.features.sync.DriveMetadataIsolationDeviceTest` with
+`-e driveIsolationUrl http://127.0.0.1:18766`. Build/install debug and test APKs
+using the data-preserving procedure above. Restart the fixture server for each run.
+The opt-in test owns scratch stores/settings and generated files (one 60 MiB,
+seven 24 MiB); no production credentials or library files are used. It waits for
+all eight server sessions to receive payload bytes before arming a real 60-second
+metadata read timeout, then drops subsequent metadata responses to exhaust retries.
+Assertions require all eight payloads to advance and remain active after failure,
+then finish and publish references after recovery. Expect roughly two minutes.
+Stop the fixture and remove only this reverse mapping after testing.
+
+## WebView and UI automation pitfalls
+
+- Material 3 `ModalBottomSheet` applies its caller modifier before the internal
+  sheet offset; an outer `border` can remain on the scrim at the unshifted height.
+  Check short and shrinking E-ink sheets, not only full-height lists.
+  `SyncQueueViewTest` captures the real dialog window and checks for stray lines
+  above the sheet while its queue shrinks.
+
+- Cold launch normally lands on Bookshelf; open a book before testing Reader.
+  Single-tap text opens lookup; long press tests native selection/highlights.
+- Standalone reader fixtures must inject measured
+  `readerViewportCssLayout(...).cssVariables()` and wait for `HoshiReaderRestore`.
+  Shell injection alone can leave VN with a zero-height viewport.
+- Use screenshots/recordings for painting, menu visibility and handle movement.
+  CSS Custom Highlights can clip vertical glyph edges despite a correct DOM Range.
+- Native-handle fixtures need real long-press/drag events with both
+  `SOURCE_TOUCHSCREEN` and `TOOL_TYPE_FINGER`. Recovery presses need tap timeout plus
+  long-press timeout and a release margin; observe after that deadline.
+- Geometry polling and JDWP method tracing can mask or stall gesture bugs.
+  Record endpoints/text in memory without layout reads, collect after the gesture,
+  and retain an uninstrumented recording as the control.
+- Remove fixture WebViews from their parent before destroying them. Count retained
+  DevTools targets across repeated entry/exit before attributing slowdown to parsing.
+- Browser OAuth activity tests use the debug caller fixture and require window
+  focus. External-process browser fixtures use framework-only Java to run without
+  the target App's dependencies. Test tokens/stores remain isolated from login.
+
+## Performance baseline and diagnosis
+
+Measure before changing code. Keep the same device/build, book/chapter/position,
+profile, mode, writing direction, theme, playback state and cold/warm condition.
+Record explicit start/end markers, repeated run count, outliers and artifacts in
+a run-specific temp directory. User-reported device latency needs evidence on
+that device class; debug/emulator results describe only their tested conditions.
+
+For Reader opening, separate `tap -> WebView target -> restore/ready -> visible
+paint`. The first interval covers native routing, EPUB work and WebView creation;
+the second covers web setup/layout/restore. A ready flag does not prove paint.
+Compare relevant controls, such as first/repeated entry, short/long chapters,
+Sasayaki on/off and VN cue merging on/off.
+
+For a debuggable process, locate its WebView through CDP:
 
 ```bash
-node --test app/src/test/js/*.test.mjs
+hoshi_serial='REPLACE_WITH_DEVICE_SERIAL'
+hoshi_package=moe.antimony.hoshi.debug
+hoshi_pid="$(adb -s "$hoshi_serial" shell pidof "$hoshi_package" | tr -d '\r')"
+adb -s "$hoshi_serial" forward tcp:9222 "localabstract:webview_devtools_remote_$hoshi_pid"
+curl --fail http://127.0.0.1:9222/json
 ```
 
-## Google Drive OAuth Build Configuration
+Select the intended `appassets.androidplatform.net` target. VN readiness is
+`window.hoshiReader.ensureReady()`; paginated/continuous expose `didInitialize`.
+Check `calculateProgress()` after restore and pair it with screenshots for blank
+or incorrect content. Collect `Performance.getMetrics` and a focused CDP CPU
+profile; identify app-owned callers and self/inclusive time.
 
-Copy `secrets.properties.example` to ignored `secrets.properties` and set
-`HOSHI_GOOGLE_CLIENT_ID_DEBUG` and `HOSHI_GOOGLE_CLIENT_ID_RELEASE` to the
-corresponding Android OAuth client IDs. Use the same Google Cloud project as iOS,
-register each build's package and signing certificate, and enable Custom URI
-scheme in each client's advanced settings for browser authorization. These are
-public client IDs; no OAuth client secret is needed. Environment variables with
-the same names override the file.
+| Signal | Next measurement |
+| --- | --- |
+| Late WebView target, low JS CPU | Kotlin/repository log markers; Perfetto for scheduler, binder, locks and main/render-thread waits |
+| CPU-heavy Kotlin/native path | Simpleperf sampling; distinguish app callers from framework frames |
+| Jank | `dumpsys gfxinfo` for repeated identical swipes; Perfetto separately for diagnosis so profiling overhead does not contaminate frame comparisons |
+| Worse after repeated entry | Live WebView targets, process CPU, heap retention and pending callbacks before/after each cycle |
+| Reader JS scales badly | Look for nested block×text/cue×screen scans and layout reads after DOM writes; protect improvements with operation-count tests |
+| Bookshelf cover jank | Separate original `HoshiCoverPipeline: source_decode` from cached thumbnail decode; a second unchanged warm round trip should not decode originals |
+| Blank bookshelf at startup | Compare the same signed release and library over repeated force-stop launches; use recording frame timestamps for shelf chrome → first books → covers. `am start -W` measures Activity display, not bookshelf data readiness. Measure repository stages and concurrent sync preparation separately on an isolated sidecar copy; do not compare debug/JIT timings directly with release latency. |
+| Statistics scrolling | Keep period/book expansion/heatmap/font state fixed; distinguish viewport drawing from repeated offscreen card recomposition |
+| Transcription slowness | Same compressed input and resume position; measure decoding, model load, inference and saving/alignment, plus thermal state, RSS/PSS and CPU/wall time |
 
-The release workflow reads the repository secret `HOSHI_GOOGLE_CLIENT_ID_RELEASE`
-and requires it before building. The test/lint workflow needs no OAuth values,
-including for fork pull requests. Browser sign-in reports missing configuration
-when its client ID is absent. Play Services authorization continues to use
-package/signing registration independently.
+Transcription stages can overlap; do not sum them or call total-minus-inference
+time “decoder time.” Predecoded PCM benchmarks omit real pipeline costs. Extra
+threads need full-pipeline evidence plus token/timestamp parity and bounded
+read-ahead. Low sampled CPU alone does not locate a waiting bottleneck.
 
-When changing auth, check both generated `BuildConfig` values and merged manifest
-redirect schemes, including a build with empty environment values. Run
-`GoogleDriveBrowserAuthTest` and `GoogleDriveBrowserAuthActivityTest` on a device
-using a separately built test APK and the explicit instrumentation runner. Their
-token fixtures, DataStore files and intercepted browser launches are test-owned;
-they do not change the user's connection or contact Google. Require `OK (18 tests)`.
-Run the activity tests through the debug caller fixture so callback routing uses
-an app-owned task. Keep the external browser fixture framework-only Java: an
-activity launched in the test APK's own process cannot rely on Kotlin or other
-target-app dependencies being packaged in that APK.
-The tests cover PKCE/state/redirect validation, one-time exchange, cancellation,
-activity recreation, pending-request persistence, token persistence and
-refresh failure handling. `GoogleDriveBrowserTokenTest` uses a local HTTP server
-to verify form encoding, token responses, failures and rejected HTTP redirects.
-Also verify real Custom Tab sign-in, Back/close cancellation and return to Sync
-settings on a device without Play Services.
+After a change, rerun the same baseline/control and relevant behavior tests.
+Report before/after measurements and scope of the claim. Remove temporary adb
+forwards (`adb -s "$hoshi_serial" forward --remove tcp:9222`) and restore only
+task-owned device changes; keep logs/recordings outside the repository.
 
-Run `GoogleDriveAuthTest` with the explicit instrumentation runner and require
-`OK (5 tests)`. It uses in-memory credentials to check independent Hoshi/TTU
-logins, provider token routing, cancellation, and provider-scoped sign-out for
-both account-picker and browser connections without touching saved accounts.
-For real sign-in, connect TTU then Hoshi, and Hoshi then TTU; switch providers
-and confirm both retain their connection. Sign out of each provider and confirm
-the other remains connected. Cover both Play Services and browser authorization.
+## Specialized build and service setup
 
-## Sasayaki Subtitle Export
+### Google Drive browser authentication
 
-- From Resources, export the current match using both Subtitles and Transcription.
-  Save through the system document picker, cancel and retry, and open the system
-  share sheet without selecting a recipient. Verify UTF-8 text, cue times and
-  multiline text survive export/import. Only matched cues are exported.
-- During transcription, export a partial match without pausing or changing Reader
-  or playback position; later matches must not alter the already prepared file.
-  `SasayakiSrtTest` covers both-source rematching and timestamp rounding;
-  `SasayakiSubtitleExportTest` covers readable shared URIs, snapshot persistence,
-  picker cancellation, and save failure recovery using test-owned cache files.
+Copy `secrets.properties.example` to ignored `secrets.properties`; set
+`HOSHI_GOOGLE_CLIENT_ID_DEBUG` / `HOSHI_GOOGLE_CLIENT_ID_RELEASE`. Environment
+values override the file. Android clients use package/signing registration in
+the same Google Cloud project as iOS, with Custom URI scheme enabled; no client
+secret is used. Release CI requires its release ID; ordinary unit/lint CI does
+not. Auth changes must check generated BuildConfig and merged redirect schemes,
+including empty environment values. Protocol and activity tests live under
+`features/sync` in the JVM/device test trees.
 
-On Windows, `tools/build-transcription-audio.py --check` hashes source bytes.
-If the unchanged native sources fail this check, verify their LF-normalized hash
-against the catalog and use LF checkout bytes for the two audio sources and the
-build script. Do not regenerate the catalog for a CRLF-only difference.
+### Drive payload transfer fixtures
 
-## Device And Emulator Safety
+`DriveFileTransferTest` covers resumable protocol recovery and persistence with
+MockWebServer. `BookTransferSchedulerTest` and `SyncTransferTrackerTest` cover
+concurrency and monotonic-clock effective speed measurement without real network timing.
+`SyncQueueViewTest` renders isolated upload/download rows and checks that active
+row reordering/completion preserves the queue head or the user's manually scrolled
+position without accessing the book repository or account; its screenshot is in target cache
+`sync-queue-fixture.png`.
 
-- Preserve app data by default.
-- `am instrument` can exit with shell status 0 despite failing tests. Require its
-  final `OK (N tests)` summary; inspect `FAILURES`, `INSTRUMENTATION_FAILED`, and
-  test stack traces before reporting a device run as passed.
-- Do not run `connectedDebugAndroidTest`, `connectedAndroidTest`,
-  `installDebugAndroidTest`, or any connected instrumentation task that clears,
-  reinstalls, or uninstalls app data unless the user explicitly permits a
-  disposable device.
-- EPUB import must use DocumentsUI or an equivalent authorized `content://` URI.
-  Do not use `file:///sdcard/...` or shell-created unauthorized content URIs.
-- Command-line setup may push samples to emulator Downloads before selecting
-  them through DocumentsUI.
-- Use a clean disposable emulator only when the target explicitly requires first
-  launch, empty-library, duplicate-import, migration, or corrupted-data coverage.
+For device restart recovery, build/install the debug and androidTest APKs under
+the signature/data-protection rules above. Start
+`python3 tools/drive-transfer-fixture.py`, then use
+`adb -s "$hoshi_serial" reverse tcp:18765 tcp:18765`. Run these methods separately
+with `am instrument -w -r -e class <class>#<method> -e driveFixtureUrl
+http://127.0.0.1:18765 moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner`:
 
-## Test Data
+1. `moe.antimony.hoshi.features.sync.DriveTransferDeviceTest#prepareInterruptedUpload`
+   waits for a confirmed chunk and a deliberately dropped subsequent connection.
+2. Call `curl -X POST http://127.0.0.1:18765/allow-resume`, then run
+   `DriveTransferDeviceTest#resumeAfterProcessRestartAndDownload` with the same
+   full class package. It checks a different PID, resumes the saved session,
+   compares downloaded SHA-256, and removes only its generated cache fixture.
 
-- EPUB: `testdata/test.epub`, `testdata/test2.epub`.
-- Stored ZIP data descriptor and Kadokawa-like spine regression: generated by
-  `EpubBookParserTest`; do not depend on ignored local `testdata/` files.
-- Dictionaries: `testdata/JMdict_english.zip`, `testdata/MK3.zip`,
-  `testdata/freq.zip`, `testdata/pitch.zip`; use a Yomitan Kanji archive and a
-  mixed term-meta/Kanji archive when validating Kanji or complete pitch import.
-- Font: `testdata/KleeOne-SemiBold.ttf`.
-- Sasayaki: `testdata/test.srt`, `testdata/test.m4b`,
-  `testdata/opus_test.opus`. Unit tests generate tracked M4B and Ogg Opus
-  fixtures instead of depending on these ignored local files.
+The loopback server throttles payload reads/writes and exposes `/stats` to verify
+that the new process queried the saved session and resumed at the acknowledged
+byte instead of creating another upload. Require `OK (1 test)` for each method;
+Android instrumentation's final code alone does not distinguish assertion
+failures. Remove the task-owned reverse with
+`adb -s "$hoshi_serial" reverse --remove tcp:18765` and stop the server afterward.
+For a controlled before/after comparison, start the fixture with
+`--benchmark --response-delay 4` and run
+`DriveTransferDeviceTest#measureUploadThroughputAndConfirmationSpeed` on the old
+and new debug APKs with the same test APK and loopback argument. The method
+reports elapsed seconds and zero-speed samples while awaiting acknowledgement;
+`-e expectEffectiveSpeed true` asserts no such zero samples for the new build.
+It uploads the same generated 12 MiB file each time; `/stats` reports payload
+request counts and ranges. Compare total duration, not the UI's estimated speed.
 
-## Reader And Lookup
+These tests do not establish real Google account throughput or proxy behavior.
 
-- Gallery: Previous/Next moves exactly one image without wrapping, including rapid
-  taps and after manual scrolling. Buttons stay above the image viewport; portrait
-  and wide previews retain their full proportions at 80% of the former size.
-  Contents dismissal, tab changes, and fullscreen viewing preserve Gallery's
-  image and pixel offset; leaving Reader and opening a new book session resets it.
-  `ReaderGalleryTest` uses generated in-memory images without opening user books
-  or modifying preferences. Build its APK separately and run the explicit class
-  with `adb install -r` and `am instrument`, preserving device data.
+### Transcription components and benchmarks
 
-- Dictionary tab history: search A, follow a definition link to B, swipe back to
-  A, switch to Settings and return. A and its scroll/expanded definitions must
-  remain visible; forward must still reach B and back must return to A. Also
-  switch tabs while on B, repeat after a child lookup, and start a fresh search
-  to verify old history is cleared. `DictionarySearchSessionTest` checks WebView
-  session retention with in-memory pages without changing installed app data.
-  Record the Settings-to-Dictionary transition and inspect the first visible
-  frames for blank results. Check external lookup followed by Settings does not
-  show a keyboard on Settings; repeated Dictionary selection still focuses search.
-  `RetainedTabContentTest` checks that inactive content remains attached, has a
-  CREATED lifecycle, and cannot consume another tab's Back action.
+- `tools/build-transcription-audio.py --help` owns build options. After decoder or
+  CMake changes, build supported ABIs using the pinned NDK/CMake from CI and commit
+  `app/src/main/assets/transcription-audio-runtime.json` with the source change.
+- `tools/publish-transcription-components.py --help` owns publication options.
+  Publish binaries, license notice and generated source archive to an immutable
+  component prerelease before shipping its catalog; use `--remote-check` to verify
+  deployed hashes. Existing component releases are immutable.
+- Nakuru device tests require already verified resources; they do not download
+  them. `NakuruDeviceTest` takes `nakuruClip` (app-readable 16 kHz PCM16 mono WAV).
+  `TranscriptionBenchmarkDeviceTest#benchmarkExcerpt` takes `clip` (at most 300 s)
+  and `preset` (1/2/3). Read their assertions/output handling before running;
+  timing and valid tokens do not establish recognition accuracy.
+- Runtime download/permission failure injection uses scratch resources.
 
-- Book search: verify literal spaces/punctuation, case-insensitive matches,
-  paragraph/`br` boundaries, ruby exclusion, complete bracketed sentence
-  snippets, 100-result limit, and supplementary-plane characters before/inside
-  matches. In paginated, continuous and VN modes with horizontal/vertical
-  writing, jump within/across chapters and to the current position, then
-  search again rapidly; only the latest restored target should receive a blue
-  mark. Check actual painting, not just Range geometry. Page navigation and
-  other jumps clear the mark; jump history must not recreate it. Search marks
-  never appear in saved Highlights or sidecars. Punctuation-only queries remain
-  searchable but a zero-normalized-length result paints no mark.
-  `ReaderSearchHighlightWebViewTest` uses in-memory content to verify blue
-  pixels and clearing in all six mode/writing-direction combinations, without
-  opening books or changing preferences. Standalone reader WebView fixtures must
-  inject `readerViewportCssLayout(...).cssVariables()` using the measured view
-  dimensions and wait for `HoshiReaderRestore`; loading only the shell script
-  can leave VN with a zero-height clipped viewport. Build instrumentation
-  separately and use `adb install -r` plus the explicit class runner; do not use connected
-  Gradle tasks on a device with user data.
+### TTS playback continuity
 
-- In paginated, continuous, and VN modes, use the native selection color menu
-  on plain text and ruby split across styled nodes. Contents should show base
-  text with parenthesized readings, while old highlights without readings still
-  show plain text. Select exactly the same raw range to recolor without adding
-  a record, then choose its current color to remove it. Partial overlaps and
-  repeated text at different positions remain independent. Include whitespace,
-  punctuation and supplementary characters before/inside the range; verify
-  Contents jumps, chapter changes, restart and sync preserve location/readings.
-  In VN, also complete progressive reveal, leave/return to rebuild the screen,
-  and check both overlapping highlights still paint their full visible ranges.
-  Selecting only a visible part of a cross-screen highlight creates a separate
-  range rather than editing the complete stored range. Preserve device data.
+`TtsQueuePlaybackDeviceTest` uses generated PCM, isolated Media3 players and
+in-memory preferences. Run it with the data-preserving instrumentation procedure
+above. It compares the former per-unit reset sequence with the production queue,
+including quote/chapter boundaries, multiple audio fragments and deliberately slow
+Reader presentation. Require complete ordered units, one initial prepare and no
+intermediate idle/buffering events for the ready queue. Logs use `HoshiTtsQueue`.
+Elapsed duration is secondary evidence; repeat on the same device and subtract
+the known PCM duration only as aggregate overhead, not a measured acoustic gap.
+`onAudioPositionAdvancing` supplies a wall-clock timestamp; translate it to the
+monotonic clock before comparing elapsed time. This fixture isolates app transport
+cost and does not measure provider silence, synthesis/network stalls or every codec.
+Pair it with `TtsImageHoldDeviceTest`, `TtsLookupPauseDeviceTest` and real WebView
+highlight tests when changing presentation or cancellation boundaries.
 
-### Theme
+`TtsConcurrencyBenchmarkDeviceTest#compareMicrosoftTranslatorConcurrency` is an
+opt-in live provider comparison: add `-e ttsConcurrencyBenchmark true` to the
+explicit instrumentation command. It uses eight public Japanese fragments by default; add
+`-e ttsBenchmarkProfile mixed` for 24 short/medium/long fragments. Both use shared
+warm authorization/catalogs, isolated engines and a unique temporary cache directory. The 1/2/3/4 then 4/3/2/1 order helps expose time/order variation;
+`HoshiTtsConcurrency` reports batch time, individual request time, audio duration
+and failures. `estimatedWait2xMs` models ordered playback from the first ready item
+at 2× speed; it excludes decoder/Reader costs and is not an acoustic measurement.
+It stops on failure rather than amplifying service errors with benchmark retries.
+This measures provider throughput, not acoustic gaps or the production scheduler;
+pair it with `TtsContinuousPlaybackDeviceTest#microsoftTranslatorPlaybackCompletesWithTwentyPrefetchedUnits`
+for real playback, and deterministic controller/repository tests for concurrency
+limits, ordered publication, cancellation and injected failures. Do not infer a
+universal optimum or service rate limit from one device/network session.
 
-Preserve app data and cover all four tabs, every settings category, native Reader
-panels, dialogs, menus, and Process Text lookup:
+### External TTS and release automation
 
-- Both switching modes show Light / Sepia / Custom Light and Dark / Warm Dark /
-  Custom Dark. Automatic mode has one selection per group; manual mode has one
-  selection across all six options. Change system night mode while foregrounded
-  and backgrounded: only automatic mode changes the active group. Editing the
-  inactive automatic slot must not change the current theme.
-  Use identical custom colors, and backgrounds opposite to their group's brightness:
-  Custom Light must use a light native interface and black-on-white dictionary
-  popups; Custom Dark must use a dark interface and white-on-black popups. Check
-  Reader, Dictionary, recursive lookup and Process Text, preserving reading
-  colors, position, selection and lookup history when switching groups.
-- Disabling automatic switching keeps the currently displayed palette. Re-enabling
-  uses both saved slots, including edits made in manual mode. Each of the two
-  slots retains its custom colors after preset changes. Canceling any editor
-  keeps the previous settings, including alpha.
-  Change palettes/accents while scrolled to the bottom, including delayed and
-  failed saves: swatches, preview, text brightness, row positions and scroll offset
-  must remain stable while saving; only confirmed settings change the theme.
-  `DisplaySettingsViewTest` covers the one-versus-two palette selections and
-  layout preservation during a suspended save using in-memory settings, without
-  writing the installed app's preferences.
-- Compare Theme with other grouped settings, including its Reader
-  panel: palette, accent and E-ink rows use the same 16dp inset dividers; E-ink
-  keeps the enclosing group outline continuous.
-  Open Theme from the Reader's bottom-right menu: the title scrolls away with
-  the settings and returns when scrolled to the top, while the drag handle stays
-  available. The full Theme settings page keeps its top app bar fixed.
-- Reading Settings selected segments form rounded capsules with a visible neutral
-  track around every edge and no vertical separators. Check text orientation,
-  furigana mode, reading mode, VN screen content and progress position in light/dark themes
-  with system/manual accents, and inverse selection in both E-ink modes.
-  Selecting another option must move the highlight without changing row size or
-  reducing the original clickable area. `ReaderAppearanceSelectionTest` checks
-  rendered fills, text and the visible track above selections for all five
-  controls, using temporary font storage and in-memory reading preferences.
-- System dynamic colors on Android 12+, the fixed fallback on older Android,
-  all eight accent seeds and extreme custom seeds. Reader background/text retain
-  their own colors while controls and native containers use the accent scheme.
-  Across all four tabs, check that bottom/side navigation has a consistent tint
-  and that the status-bar inset matches its page. Dictionary search must retain
-  this continuity both with the keyboard open and after showing results; its
-  field remains distinguishable, with an explicit field outline in E-ink and no
-  extra separator below the search header, above the bottom tabs, or beside the
-  navigation rail. Verify both portrait bottom tabs and landscape side navigation
-  on a device; they use separate shell layouts.
-  Compare strongly tinted system palettes and manual blue/red/green accents:
-  page, navigation, nested controls and overlays should keep a subtle neutral
-  tint and distinct tonal levels. Group dividers should remain visible without
-  dominating white cards; input outlines and active accents retain their contrast.
-  Repeat in dark mode and confirm E-ink still uses full black/white boundaries.
-- Light and dark E-ink: compare every tonal container with ordinary mode and
-  verify actual outlines on groups, nested controls, filled buttons, segmented
-  tracks/selections, popups and panels. Lazy groups need a
-  continuous closed outline with one row, multiple rows and during scrolling.
-  E-ink optimization sits directly below automatic switching. Enabling it hides
-  palette/accent choices and shows an explanation; automatic switching stays available. With
-  automatic switching off, only the light/dark choice appears below the switches.
-  Its selection survives restart without changing any stored palette or accent.
-  With automatic switching on, E-ink follows the system even if a custom palette
-  has the opposite brightness. Disabling automatic switching keeps the displayed
-  brightness; disabling E-ink restores the normal palette/accent choices and colors.
-- Upgrade from the v1.3.3 release settings format for every theme, including Sepia
-  inversion and alpha custom colors. Do not use intermediate development schemas
-  as upgrade baselines.
-  Start with a global profile and a different last-book profile, with automatic
-  book opening enabled: migration must use the global profile before opening the
-  book. Reopen, change language/profile, and create/copy profiles; colors and E-ink
-  must stay global. The custom editor has no legacy-palette import list.
-  Missing, empty, truncated or invalid profile settings must fall back to Reader
-  DataStore, then legacy SharedPreferences, then defaults, so both Activity hosts
-  can finish loading. Preserve source files. Failed migration writes must remain
-  unmarked and retry successfully; after migration, restart must preserve the user's
-  new global settings without reading or reapplying old profile colors.
-- Test narrow Chinese layouts and enlarged fonts, empty/loading/error/disabled
-  states, cold launch, restart, foreground/background, and opening both Reader
-  settings panels. Reading Settings identifies the effective profile. Changing
-  display settings preserves reading position, selection, and an open lookup.
-- Check initial loading/migration failures and retriable persistence failures:
-  no default-theme content flash, no lost confirmed setting, and localized errors.
-  Rapidly change two independent reading settings during delayed storage and
-  confirm that both survive; repeated stepper taps must accumulate every increment.
-  MainActivity and Process Text must agree on theme.
+- `CustomTtsDeviceTest` opts into supplied `vitsUrl` or `openAiUrl`/`openAiModel`
+  endpoints using public samples and test-owned stores. Read required arguments
+  in the test. VITS expects exactly
+  `Content-Type: application/json`, without a charset suffix.
+- Mocked protocols cover repeatable provider failures; live network tests need
+  explicit endpoints/credentials and cannot be treated as deterministic CI.
+- Publisher fixtures in `tools/tests` cover stale commits, draft/corrupt uploads
+  and owned-preview cleanup. `.github/actionlint.yaml` documents the narrow
+  actionlint exception for GitHub's `queue: max`; structured tests still cover it.
 
-Automated display regressions live in `features/display`, Reader settings/host
-tests, Reader display-update tests, and `ui/theme/HoshiSurfaceRolesTest`.
-Device inspection remains necessary for outlines and transitions; passing JVM
-tests does not establish visual acceptance.
+## Fork-specific checks
 
-### Reading And Lookup Flows
+This fork's debug package is `moe.requited.hoshi.debug`; use it (and
+`moe.requited.hoshi.debug.test`) in place of upstream's package names in `adb`
+commands. Keep fork-only checks in this section.
 
-Reader work should compare against
-`reference/Hoshi-Reader-iOS/Features/Reader/ReaderWebView/ReaderWebView.swift`
-and the matching JS/CSS before adding Android-specific behavior.
-
-When manually validating reader and lookup flows, do not assume app launch opens
-the reader. Cold start lands on Bookshelf; tap a book cover to enter Reader
-unless the test explicitly restores an existing Reader route. Do not long-press
-reader text for lookup. Hoshi lookup opens from a single tap on reader text; long
-press is for native selection/highlight-style flows when those are under test.
-
-Validate lookup deep links with:
-
-```bash
-adb shell "am start -a android.intent.action.VIEW -d 'hoshi://search?text=%E7%8C%AB'"
-adb shell "am start -a android.intent.action.VIEW -d 'hoshi://search?text=%E7%8C%AB&mode=app'"
-```
-
-The first link opens the default popup overlay and the second opens the
-Dictionary tab. Cover cold start, an existing foreground task, two consecutive
-identical links, URL-encoded Japanese text, and missing or blank `text`; empty
-text must open a cleared, focused Dictionary search instead of an empty popup.
-
-Validate Dictionary pull-to-clear after a normal search and after an app-mode
-lookup deep link. At the top of the results, pull past the trigger threshold:
-only the search field should clear, focus, and show the keyboard. Results,
-recursive popups, and back/forward history must remain usable. Repeat with an
-empty field and after hiding the keyboard; type a new query and confirm the
-old results remain until search is submitted. A pull below the threshold must
-not clear the field or results. Explicit blank external lookups must still
-reset the search as described above.
-Also tap the search field's clear button after a normal search and an app-mode
-lookup deep link, with the keyboard hidden: the field must clear, gain focus,
-and show the keyboard while preserving results and navigation history.
-
-Manual reader validation should cover:
-
+- Sync logins: run `GoogleDriveAuthTest` with the explicit instrumentation runner and require
+  `OK (5 tests)`. It uses in-memory credentials to check independent Hoshi/TTU
+  logins, provider token routing, cancellation, and provider-scoped sign-out for
+  both account-picker and browser connections without touching saved accounts.
+  For real sign-in, connect TTU then Hoshi, and Hoshi then TTU; switch providers
+  and confirm both retain their connection. Sign out of each provider and confirm
+  the other remains connected. Cover both Play Services and browser authorization.
 - Continuous chapter grouping: `ContinuousReadingGroupsTest` generates EPUBs and
   covers text-image-text, consecutive/first/last images, front matter before the
   first named TOC target, one-sided/nested/fragment TOC boundaries, duplicate
@@ -376,145 +346,14 @@ Manual reader validation should cover:
   directions; ordinary images within text sources and unmerged chapters must
   retain their original spacing. The existing chapter-swipe threshold must
   trigger only at the far edge.
-- Renderer termination in paginated, continuous and VN modes: after moving
-  beyond the saved bookmark (including a continuous scroll before its idle
-  save), terminate the renderer and verify the loading frame restores the latest
-  accepted position, settings, highlights and Sasayaki cue. Repeat during
-  restore and after an internal fragment jump. Open lookup and native selection
-  before termination; neither may survive or reappear from a stale callback.
-  Check paused and playing Sasayaki, including an image auto-page hold, then
-  verify navigation and Close during/after recovery. Trigger renderer exit only
-  on the intended test WebView; do not force-stop the app or clear its data.
-
-- cover image pages and multi-image illustration pages.
-- `ReaderViewportWebViewTest` uses generated content without changing books or
-  preferences to check vertical page height/padding, forward traversal to the
-  last text and end-position restore at zero/nonzero padding and normal/large
-  fonts. Run it via the explicit instrumentation runner with data-preserving
-  APK installation; never use connected Gradle tasks on an existing device.
-- paginated, continuous, and VN modes in vertical and horizontal writing.
-  Check default and enlarged line heights with ruby and inline images: glyphs,
-  readings, and images must remain visible without overlapping adjacent lines;
-  page/scroll progress and restoring the same passage must remain stable.
-- VN block and sentence screens, reveal speed 0/45/120, blank-area click
-  advance, text lookup taps, links, images, restore, and chapter boundaries.
-- VN cross-screen lookup with a word split at the current-screen boundary:
-  verify the lookup text continues into later screens, the mined sentence
-  includes the complete source sentence, `sentenceOffset`/Sasayaki alignment
-  stays chapter-relative, and the underline/popup anchor uses only the visible
-  current-screen intersection. Repeat for block and sentence modes, large-font
-  viewport splitting, horizontal and vertical writing, ruby and supplementary
-  characters, and both incomplete and completed reveal.
-- long text page turns, chapter-list jumps into mid-book chapters, and bookmark
-  restore.
-- paginated and VN swipe thresholds below, at, and above the default value;
-  verify zero disables both normal and fast swipe page turns while Page Up/Down
-  and enabled volume-key turns still work. With a nonzero threshold, press at
-  one position, add a second finger elsewhere, then release the first finger;
-  the pointer handoff must not turn the page or suppress the next single-finger
-  tap/lookup.
-- Contents with nested and percent-encoded TOC fragments that share one XHTML
-  file: verify distinct row positions/current selection, current-chapter
-  centering without first flashing the default list position when the chapter
-  tab opens, true chapter progress and time remaining, jump/restore behavior,
-  and Gallery first-appearance order. After scrolling away, current-row updates
-  must not reposition the open list; switching away from Chapters and back must
-  center the then-current row once again.
-  Include duplicate, gaiji, SVG, missing, and absent images; Gallery items must
-  open the existing fullscreen copy/save/share viewer. Verify the tabs appear as
-  Chapters, Highlights, Gallery, Search and none of their scrolling content
-  stretches or glows past either edge.
-- furigana Off/Dimmed/Toggle/Hidden in paginated, continuous, and VN modes,
-  with horizontal/vertical writing and XHTML lowercase ruby nodes. Toggle first
-  taps reveal adjacent ruby separated only by ASCII whitespace without lookup or
-  page advance; punctuation or styled sibling elements stop the group. Second
-  taps perform lookup. Verify highlights, Sasayaki, progress/restore, VN return
-  to a revealed screen, profile switching/restart, and legacy boolean migration.
-- forward and backward chapter boundaries, including reverse landing at the
-  previous chapter end.
-- page progress monotonicity, per-page progress updates, and restore landing
-  inside large text nodes.
-- lookup popup open/dismiss, recursive lookup, parent-scroll child dismissal,
-  duplicate state, redirect history, audio/autoplay errors, Anki actions,
-  Sasayaki controls, dictionary media images, outside tap dismissal, and
-  absence of invisible touch blockers after dismissal.
-- volume-key popup term navigation in paginated, continuous, and VN modes:
-  verify the root or topmost recursive popup takes priority over enabled page
-  turns and Sasayaki seeking, default and reversed directions reach adjacent
-  term headers aligned exactly to the popup top without wrapping; repeat at
-  popup scales 0.8, 1.0, 1.5, and 2.0. Verify long-press repeats work while
-  asynchronously rendered terms appear, manual scrolling resumes from the
-  visible term, and closing the popup restores the previously configured
-  volume-key behavior.
-- E-ink selection marks, horizontal and vertical lookup underlines, reduced
-  motion popup scrolling, and slow-device first-visible-content behavior.
-- reader chrome behavior: focus mode, transient system bars, Android Back
-  revealing chrome before closing, bottom progress band, title/back-button
-  settings, compact bottom buttons, and progress indicators hidden from the text
-  area when configured. With whole-book and chapter progress both enabled,
-  verify the top bubble stays on one line and the transient bottom bubble shows
-  two complete lines.
-- statistics reset time at 00:00 and a non-midnight minute boundary, including
-  both sides of the boundary, app restart, a system time-zone change, and the
-  Statistics dashboard using the same adjusted Today date.
-- active statistics tracking while opening and dismissing Appearance, Contents,
-  Statistics, Sasayaki, and fullscreen images. Modal time and character jumps
-  must not be counted; overlapping surfaces and lifecycle stop/start must not
-  resume tracking until every visible surface is closed.
-- current-book cover publishing when enabled: opening two different books
-  updates only the lock-screen wallpaper in sequence; fixed-file export keeps
-  the same SAF document URI while replacing its PNG contents; missing covers,
-  revoked URI grants, and device wallpaper restrictions leave Reader usable and
-  report a localized failure. On compatible E-ink hardware, select the exported
-  file in the vendor sleep-screen tool and confirm the next suspend rereads it.
-  Also switch books rapidly while a wallpaper update is in flight and verify
-  the newest cover wins. With portrait, landscape, very wide, and very tall
-  covers, verify Fit shows the full cover with white padding, Fill preserves
-  proportions while center-cropping, and Stretch fills the screen without
-  preserving proportions; repeat in portrait, landscape, and split-screen. On
-  compatible iReader firmware, first open any book in iReader’s built-in
-  reader, then select the system Book Cover screen saver and tap Apply. Enable
-  Hoshi’s iReader integration and open two books. Confirm
-  `/data/zhangyue/logo/book` contains one newly named `.png` after each open and
-  that the visible sleep screen changes without reapplying it in system
-  settings. Repeat once with SELinux enforcing when the firmware supports it;
-  vendor directory permissions or policy denial must leave Reader usable and
-  report a localized failure.
-
-For reader pagination bugs, inspect WebView metrics such as `scrollTop`,
-`scrollHeight`, and `clientHeight`. If a page can still scroll but native
-navigation changes chapter, compare native gesture boundaries with JS boundary
-checks. For blank trailing pages, check small fractional overflow from images,
-spacers, column gap, or CSS sizing.
-
-For performance investigation workflow, see `docs/PERFORMANCE.md`.
-
-## Bookshelf, Import, And Backup
-
-Validate relevant bookshelf/import changes with:
-
-- top-level Books, Dictionary, and Settings tab switching, confirming Navigation3
-  back-stack behavior and selected tab state remain stable.
-- Settings detail open/return behavior, confirming returning from a detail route
-  lands back on Settings without changing top-level tab state.
-- multi-EPUB DocumentsUI import and recursive EPUB folder import.
-- EPUB and TTU bookdata imports whose metadata title exceeds 250 UTF-8 bytes,
-  including Japanese and emoji: confirm the full title remains visible, the
-  Reader opens, reimport deduplicates, Android TTU export/restore succeeds, and
-  neither successful nor failed imports add persistent `ImportTemp` residue.
-- external EPUB open/import requests, confirming the request is consumed once
-  and routes to Reader after import succeeds.
-- shelf-name entry, including user shelves named Reading alongside the virtual
-  Reading Shelf.
-- E-ink multi-select markers, confirming unselected books show empty circles and
-  selected books show check marks.
-- bookshelf covers for local and Google Drive books in expanded and collapsed
-  shelves: verify missing covers show deterministic title artwork with an
-  optional author, legacy metadata without an author remains readable, decode
-  failures use the same fallback, and progress/read/multi-select overlays stay
-  intact. Verify Show/Blur/Hide persist across restart in dark and E-ink themes;
-  Hide must not reveal the real cover, Blur must visibly blur on Android 12+
-  and safely show fallback artwork on Android 8-11.
+- Gallery: Previous/Next moves exactly one image without wrapping, including rapid
+  taps and after manual scrolling. Buttons stay above the image viewport; portrait
+  and wide previews retain their full proportions at 80% of the former size.
+  Contents dismissal, tab changes, and fullscreen viewing preserve Gallery's
+  image and pixel offset; leaving Reader and opening a new book session resets it.
+  `ReaderGalleryTest` uses generated in-memory images without opening user books
+  or modifying preferences. Build its APK separately and run the explicit class
+  with `adb install -r` and `am instrument`, preserving device data.
 - Manage Shelves: “Books per row” defaults to 2 and persists. Its maximum equals
   the collapsed preview capacity for the Library content width, even with empty
   shelves or hidden thumbnails. Check local, Reading, Unshelved, and Google Drive
@@ -523,291 +362,6 @@ Validate relevant bookshelf/import changes with:
   the grid and slider show 4 while narrow and restore 6 afterward. An explicit
   lower selection replaces the saved value. Collapsed previews and shelf
   expansion state must remain unchanged.
-- Manage Shelves: “Hide thumbnails when collapsed” defaults off and persists
-  across restart. Enable it and confirm local, Reading, and Google Drive collapsed
-  sections show only one title/count/arrow row, with no preview placeholder.
-  Verify long shelf names stay on one line, headers still expand/collapse, and
-  disabling restores previews without changing expansion state. Check all three
-  cover modes, expanded cards, and Google Drive selection-mode restrictions.
-- Google Drive bookshelf Recent/Title sorting: compare books with newer reading
-  progress, newer audiobook progress, only bookdata last access, and malformed or
-  missing timestamps. Recent places unknown times last; Title uses natural title
-  order. Switch sort while refresh is delayed/offline, then refresh and import a
-  remote book; remaining entries must retain the selected ordering.
-- Hoshi cloud-book titles: check long titles wrap to two lines with the cloud
-  icon inline on the first line and the second line using the full card width.
-  Open the delete dialog for an uploaded local book and check Delete Local,
-  Delete Everywhere, and Cancel stack vertically at narrow widths and large
-  font sizes; dismiss without deleting during layout checks.
-- dark and E-ink editable text fields, confirming visible cursors and horizontal
-  scrolling for long values.
-- Android-created `Books` and `Dictionaries` `.hoshi` archives restored by iOS
-  when backup compatibility changes.
-- Android-created profile-aware `Dictionaries` `.hoshi` archives restored by
-  iOS/older Android as the default Japanese single-profile dictionary config,
-  and restored by current Android with all profile-scoped dictionary
-  config/settings intact.
-- Books context-menu EPUB export and Android-created TTU bookdata backup import
-  by iOS/ッツ where possible.
-- iOS/ッツ TTU bookdata backups imported into Android, confirming reader open,
-  cover, progress, and statistics.
-- bookshelf-to-reader open latency and loading frames when reader route or EPUB
-  parsing behavior changes.
-- Reader open/close behavior from bookshelf, confirming close returns to the
-  previous bookshelf state and Android Back exits through the same close path as
-  the Reader chrome back action.
-- bookmark restoration and bookshelf progress refresh after returning from
-  Reader.
-
-## Statistics
-
-Preserve existing app data when validating statistics:
-
-- After upgrading with the former statistics and tab switches disabled, Stats
-  is still visible. Its upper-right Settings button opens the tab-local settings
-  route; returning from settings or a book editor preserves dashboard period,
-  selected chart bucket, heatmap scroll and page scroll. Advanced has no Statistics row.
-- Statistics settings groups both autostart switches together with the Reader
-  access hint below, then reset time in its own group. Sync has a heading and
-  Merge/Replace explanation below its two rows; Archive has a heading, a clear
-  action and a book-count footer. Verify Sync is absent when global sync is off,
-  Archive is absent when empty, and clear still requires confirmation. Check
-  English/Chinese narrow layouts, light/dark and E-ink borders.
-- Unset statistics sync defaults on; an explicit opt-out remains off. Both
-  autostart options default off and work independently. Opening Stats does not
-  start tracking, and existing daily goals and Reader display preferences stay
-  unchanged. Check manual start/stop, modal pause, foreground/background and
-  close-save paths alongside the Reader matrix above.
-- Delete one book and a selected batch with active dates, no activity and an
-  undecodable cover. Active history remains visible with an archive marker;
-  required archive write/read failures keep the affected book and show an error.
-  The distribution marks archived books with a small trash icon; their detail
-  page has the same book title and Days section as local books, without an extra
-  Archived label. Dashboard and book-page titles keep the same size and weight
-  during navigation and loading; long book titles remain on one ellipsized line.
-  Restore the same normalized folder via EPUB, Drive, TTU and Books `.hoshi`;
-  newer dates win, equal dates keep the specified first input, and interrupted
-  restore duplicates are counted once. Include NFC/NFD-equivalent paths and
-  iOS archives with omitted cover metadata or long folder names.
-- Open a distribution row from a short period and verify that the editor shows
-  all dates in ascending order. Verify grouped row dividers, date and character
-  count on the left, duration and chevron on the right, and matching chevrons in
-  the book distribution. Check half-minute rounding, character/hour/minute
-  editing, cancel, zero removal, single-day deletion from inside the edit sheet
-  (no delete action on the date list), confirmed delete-all,
-  last-archive cleanup and confirmed archive clearing. Failures retain input;
-  return/resume refreshes aggregates. Merge may restore remote deleted records;
-  deleting locally does not claim to clear the remote copy.
-  In light/dark E-ink, the date rows have one continuous rounded outer outline,
-  inset internal dividers, and an outlined delete-all button. Check one record,
-  several records, and scrolling a long list; normal themes keep filled groups.
-- The dashboard contains Daily Goal (gauge, history and display-only heatmap),
-  Reading Time, and Books, with uniform headings and grouped cards. There is no
-  separate calendar, heatmap date selection, yearly dropdown, Day segment,
-  This Week card or weekly target editor. Upgrades preserve daily goals and data.
-- Tap the daily goal to open the anchored value wheel without moving the page.
-  It starts at the saved value, snaps after scrolling, and supports tapping a
-  nearby value. Switching Characters/Duration preserves each saved target;
-  outside tap and Back dismiss it. Cover both ends of each range, reopen,
-  E-ink contrast and persistence failure/retry. In light and dark E-ink modes,
-  both goal types have a visible fixed center outline enclosing the snapped
-  value; normal mode retains its filled selection band.
-- Check the current Week as the initial reading-time period, including while
-  loading; returning from settings or a book editor preserves a manual selection.
-  Week/Month/Year/All switching
-  lives in Reading Time; each mode starts at the current period. Swipe the chart
-  to browse earlier natural periods, stopping at the first activity and today;
-  All does not page. Check cross-year weeks, leap February, locale week starts,
-  empty buckets and incomplete periods. Only selected/adjacent chart pages are
-  prepared even with decades of sparse history.
-- Reading-time axes follow the calendar: Week shows narrow weekday names,
-  Month marks locale week starts (April 2026 is 5/12/19/26 for Sunday-first
-  locales), Year marks every two months, and All starts at the earliest month
-  with three-month intervals, thinned for long histories. Dashed vertical grid
-  lines align with tick dates; bars and tap targets share the date scale,
-  including leap February and unequal month lengths. Bars have flat baselines.
-  Verify the average line, 0/top-hour labels, complete rounded comparison with
-  clearly distinguishable up/down arrows, and Characters Read / Reading Speed
-  rows in English, Chinese, narrow layouts and enlarged fonts. Long comparisons may move below the value,
-  but must not truncate. E-ink fills all bars without a single-bucket selection;
-  with a selection, only that bar stays filled and the others become hollow.
-  The unselected headline explicitly labels Week/Month as Daily Average and
-  Year/All as Monthly Average in both languages. Selecting a bar shows that
-  day's or month's total without an average label; clearing restores the label.
-- The heatmap shows all history and initially scrolls to the latest dates.
-  Reading intensity grows with character counts across all history; today
-  has a subtle outline and the Less/More legend matches. Taps have no action. Changing chart mode,
-  page or bucket must not move or recolor the heatmap. Manual heatmap scrolling
-  and settings/editor round trips preserve its position.
-- Heatmap weekday labels remain complete and centered on their corresponding
-  rows in English and Chinese, including larger system fonts and E-ink mode.
-  Their text height must not be clipped to the smaller heatmap cell height;
-  labels and cells follow the same locale-specific first day of the week.
-- Fast vertical dashboard swipes retain the fixed cards rather than recreating
-  their charts on re-entry; use the Statistics flow in `docs/PERFORMANCE.md` for
-  frame and trace comparisons. Heatmap horizontal position, chart selection,
-  expanded book count and vertical position survive settings/editor round trips.
-- Reading-time bars, summary rows and book rows display together. Within
-  week/month a bar selects a day; within year/all it selects a month. The
-  full chart remains while the headline, summary and books follow that bucket.
-  Re-tapping the bar or the close button clears it; paging or changing mode
-  also clears it. Settings/editor round trips and refresh preserve selection.
-  Check empty buckets, the first partial month and future-bucket rejection.
-  Book bars rank by time independently of goal type, five rows show initially,
-  and each row shows grouped character counts and duration for the current
-  period or selected bucket above its time bar. Check local and archived books,
-  English/Chinese, large counts and larger fonts: metadata wraps when needed
-  without clipping or squeezing the bar, and the whole row still opens the editor.
-  Show More is left-aligned with the card content, has the same inset divider
-  above it as the book rows, and expands the list. Once all books are visible,
-  both the button and its divider disappear.
-  No Books section appears for an empty result.
-- In light and dark E-ink modes, initial display and clearing selection fill all
-  reading-time bars, matching the full-period headline, summary and book list.
-  Selecting one bar keeps it filled and makes all other bars hollow, matching
-  the selected bucket's statistics. Re-tapping the bar, closing selection,
-  paging or changing period mode restores all filled bars. Check switching
-  between bars, short/narrow bars, and normal
-  color mode retaining its existing color-based selection.
-  Period and goal-type selectors have outlined tracks; the selected segment
-  has a solid fill with inverse text in both light and dark E-ink.
-- Compare average duration and prior-period percentages with missing reading
-  days/months, including prior average zero. Goal history spans active and
-  archived books regardless of selected period, recalculates after goal changes,
-  and picks the earliest equal longest streak or best day.
-- Exercise the daily-goal semicircle and its compact history metrics with both
-  goal types, zero/partial/over-goal values, Chinese narrow screens, large values,
-  the day-edit keyboard and E-ink contrast. Check that all section headings share
-  the same style and inset, that compact chart/summary/book rows stay legible,
-  and that history metric values and their detail rows align across both columns.
-  Archive JPEG decoding/scaling needs a device check in addition
-  to generated-file JVM tests.
-
-## Dictionary, Audio, And Anki
-
-Validate relevant dictionary/audio changes with:
-
-- recommended dictionary downloads for JMdict, JMnedict, Jiten, and Jitendex.
-- lookup frequency sorting in Auto/Ascending/Descending/Disabled modes across
-  Reader, Dictionary, recursive popups and Process Text; explicit dictionary
-  selection, equal/missing frequencies, disable/delete/reorder, update renames,
-  profile switching and restart. Scan controls, frequency sort order and the
-  conditional dictionary selector must share one Lookup card: dividers inside,
-  rounded corners only on the outer group. `DictionaryFrequencyNativeTest` exercises the
-  JNI bridge using generated dictionaries in a unique cache directory. Build
-  with `./gradlew assembleDebug :app:assembleDebugAndroidTest`, install both
-  APKs using `adb install -r`, and run only this class with `adb shell am
-  instrument -w -e class moe.antimony.hoshi.dictionary.DictionaryFrequencyNativeTest
-  moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner`;
-  do not use connected Gradle tasks that reinstall or clear app data.
-- manual multi-dictionary import with invalid/unreadable archives, confirming
-  later archives still import and the error dialog lists each filename and
-  reason in English/Chinese. Check all-failed and mixed batches, Unicode names,
-  empty native diagnostics, cancellation and preservation of installed data.
-  `DictionaryImportNativeTest` uses generated cache fixtures to verify native
-  errors, including Unicode paths; run it with the same data-preserving
-  instrumentation procedure as `DictionaryFrequencyNativeTest`.
-- Low Memory Usage Mode with a large Yomitan archive. Automatic dictionary
-  updates must use low-memory import even with this setting off; manual imports
-  and updates must follow the setting, and automatic updates must not change it.
-- dictionary row long-press deletion, keeping the left reorder handle dedicated
-  to dragging.
-- term/frequency/pitch/Kanji import, enable, reorder, delete, and update behavior
-  across profile switches and dictionary backup restore. Categorize term
-  dictionaries as none/monolingual/bilingual/exclude and confirm excluded data
-  remains installed while disappearing immediately from lookup.
-- stroke-order font download visibility: confirm it is absent without Kanji
-  dictionaries, appears after importing one, shows the 17 MB confirmation,
-  automatically imports a verified `KanjiStrokeOrders` font, and remains visible
-  but disabled afterward. Confirm a failed or interrupted download leaves no
-  partial font and restores the enabled action, then verify numbered strokes in
-  Reader, Dictionary, and Process Text Kanji popups.
-- local-first audio latency: with an enabled local source before slow or
-  unreachable remote sources, default playback/autoplay and mining must use
-  the local recording without requesting later sources. Opening the full
-  recording menu may load remote candidates, but must not block concurrent
-  default playback. Verify empty earlier sources still fall through in order.
-  Long-press with delayed sources: the menu must appear with localized loading
-  rows immediately, start all enabled sources concurrently, and make each
-  completed source selectable in configured order. Select a later source while
-  an earlier source is pending and verify playback/mining share its URL, even
-  if autoplay or mining began before that selection. Concurrent default mining
-  must not cancel a requested playback. Close
-  or reset the popup during loading; late results must not reopen its menu.
-  With definitions already scrolled, swipe inside the recording menu at its
-  top/bottom and with too few rows to overflow: definitions must stay still,
-  and the menu must not stretch or glow from overscroll.
-  With overflowing rows, internal menu scrolling must still work; after
-  dismissal, definitions must scroll normally again. In a short bottom popup,
-  open a long recording list: it must fit above or below the audio button
-  without covering it, including as delayed candidates arrive. Repeat with
-  the trigger near the bottom and popup scales 0.8, 1, and 2.
-- default remote word audio: new settings list JapanesePod101, LanguagePod101,
-  then Jisho. Upgrade from an enabled and a disabled old built-in proxy source;
-  verify in-place expansion, retained custom/local sources and ordering, and
-  persistence after restart. Existing custom entries using the old proxy URL
-  must remain custom entries. Disable/reorder the new sources and verify
-  playback and the candidate menu in Reader (all modes), Dictionary, Process
-  Text, and recursive popups. Check kanji with reading and kana-only queries,
-  a missing JapanesePod101 recording falling through to later sources, and all
-  sources unavailable. Select a Jisho/LanguagePod101 candidate and verify Anki
-  exports that recording; JapanesePod101's `audiomp3.php` URL must export as MP3,
-  never as PHP or the known placeholder recording. Use deterministic HTTP/HTML
-  fixtures in JVM tests; live service availability is a separate manual check.
-  `AnkiRemoteAudioDeviceTest` is an opt-in live test for all three sources and
-  actual AnkiDroid MP3 export. It requires initialized AnkiDroid with Hoshi's
-  existing database-access grant, uses in-memory settings, and deletes only
-  its three uniquely named notes in `finally`. Exported content-addressed media
-  can remain in Anki's media collection. AnkiDroid may append filename suffixes;
-  validate saved sound references and extensions rather than exact filenames.
-  Build/install the test APK with the
-  same data-preserving commands as `AnkiTagsDeviceTest` below, then run:
-
-  ```bash
-  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiRemoteAudioDeviceTest -e ankiRemoteAudioSmoke true moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
-  ```
-- local audio database source ordering and per-source enable controls with
-  imported MP3 and Opus `android.db` files. Disable the highest-priority source
-  and confirm lookup playback and Anki audio export use the next enabled source;
-  disable every source and confirm both return no local audio; then re-enable
-  and reorder sources and confirm the preserved priority takes effect. In
-  Reader, Dictionary, Process Text, and recursive popups, long-press the audio
-  button and verify all local/remote candidates are named in source order,
-  duplicate names are numbered, the current choice is marked, and an empty or
-  failing source produces the disabled no-audio state. Select a non-default
-  candidate and confirm immediate playback and both Anki backends use that same
-  recording; autoplay, redirects, Kanji lookup, Back/Forward, and new popup
-  results must reset entry-scoped candidate state. Repeat in light, dark, and
-  light/dark E-ink themes at popup scales 0.8, 1, and 2.
-- Sasayaki MP3, M4B, and Opus imports from local or seekable SAF sources before pressing Play: confirm the total
-  duration is already visible; M4B/Opus title, artist, cover, and chapters load
-  together without a delayed artist row; playback preparation may subsequently
-  correct the displayed duration without resetting the current position.
-- deinflection explanations for conjugated lookups such as `食べた`.
-- popup theme contrast for deinflection explanations and JMdict forms tables.
-- Dictionary tab and Process Text iframe popup cold paths after reader popup
-  changes.
-- Source-text lookup in Dictionary and external `PROCESS_TEXT`, `SEND`, and
-  `TRANSLATE` entry points: use long/multiline text, leading punctuation with no
-  initial match, repeated words, and supplementary characters before the tapped
-  word. Verify the complete source stays visible; an empty Process Text root
-  remains open and tapping a later word finds results. Confirm successful taps
-  mark the matched span and preserve result scroll, while failed taps preserve
-  results, selection, mining context, and history. Exercise back/forward,
-  including `猫と猫` and `𠮟猫と猫`: tap the first then second occurrence and
-  verify Back/Forward restores both the marked occurrence and mined cloze
-  position. Test popup scales 0.8/1/2 with delayed result rendering while the
-  source is partially scrolled; the visual scroll position must survive the
-  temporarily empty entries container.
-  Also exercise recursive children, Kanji, audio, outside dismissal, and swipe
-  dismissal.
-  Repeat with source sizes 12/22/48, light/dark/E-ink themes and profile switching;
-  Reader and child popups must not gain source text. Mine through AnkiDroid and
-  AnkiConnect and verify the full original sentence and exact repeated-word
-  cloze position, including UTF-16 offsets after supplementary characters and
-  a successful non-suffix glossary redirect followed by a failed source tap.
-- Android AnkiConnect and AnkiDroid flows when Anki behavior changes, including
-  duplicate checks, media references, add-note, and sync behavior.
 - Anki `{book-cover-reuse}` appears immediately after `{book-cover}` in both
   normal and Show All Handlebars lists. With AnkiDroid, mine two different words
   from one book, then restart Hoshi and mine another: all exported image `src`
@@ -823,8 +377,8 @@ Validate relevant dictionary/audio changes with:
   `AnkiBookCoverReuseDeviceTest` provides an opt-in live API check using generated
   cover data, an isolated local DataStore, and in-memory Anki settings. Each
   phase deletes only its own uniquely marked notes; one uploaded image can
-  remain unused in Anki media. Build both debug APKs and install with `adb
-  install -r` as above. Use the same fresh alphanumeric run ID for both phases:
+  remain unused in Anki media. Build both debug APKs and install them with `adb
+  install -r`. Use the same fresh alphanumeric run ID for both phases:
 
   ```bash
   adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiBookCoverReuseDeviceTest -e ankiCoverReuseSmoke true -e ankiCoverReuseRunId UNIQUE_RUN_ID -e ankiCoverReusePhase first moe.requited.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
@@ -843,7 +397,7 @@ Validate relevant dictionary/audio changes with:
   title mappings, or an unavailable query fall back to normal cover upload.
   Do not hardcode `MiscInfo`, limit discovery to a deck, inspect source-cover
   bytes, or read image files. A rejected note must retain a discovered reference;
-  a cache persistence failure must prevent note creation.
+  a cache read or persistence failure must still add the note, without a cover.
   `AnkiBookCoverDiscoveryDeviceTest` is an opt-in benchmark and live export check.
   It creates 500 uniquely marked notes with generated 5 KB field content in an
   existing note type and deck, uses isolated DataStore files and in-memory
@@ -862,367 +416,7 @@ Validate relevant dictionary/audio changes with:
   Discovery timings include query, field transfer, title comparison, and image
   extraction; they exclude note creation and cover upload. Report initial
   provider access separately from warm timings, and preserve existing user data.
-- Anki tag templates through both backends: mix literal tags with
-  `{document-title}` and `{expression}`; substituted spaces, tabs, newlines,
-  non-breaking spaces, and full-width spaces become underscores without
-  joining separate literal tags. Check missing title/unknown handlebars,
-  independent format tags, `hoshi` on new/rebuilt formats, and preservation of
-  saved empty/custom tags after duplication, restart, profile switch, and fetch.
-  Before diagnosing AnkiDroid availability, confirm the installed package with
-  `adb shell pm list packages anki`; the standard package is `com.ichi2.anki`.
-  The opt-in `AnkiTagsDeviceTest` requires initialized AnkiDroid and an existing
-  database-access grant for Hoshi Debug. It uses an existing deck/model, creates
-  one uniquely tagged note, reads its saved tags, and deletes only that note in
-  `finally`; it uses in-memory settings. Run it without connected Gradle tasks
-  that reinstall or clear app data:
 
-  ```bash
-  ./gradlew assembleDebug :app:assembleDebugAndroidTest
-  adb install -r app/build/outputs/apk/debug/app-debug.apk
-  adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiTagsDeviceTest -e ankiTagSmoke true moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
-  ```
+## What belongs here
 
-- Reader, Dictionary tab, and Process Text popups with one, two, and three Anki
-  formats. Confirm button order and icon size, independent duplicate state,
-  disabled formats whose first model field is unmapped, and safe failure after
-  deleting a format or disconnecting AnkiConnect.
-- Reader, Dictionary tab, and Process Text popup Kanji redirects: tap individual
-  Kanji in furigana and plain term headers, verify readings/meanings and
-  back/forward restoration, and confirm one touch does not issue a duplicate
-  click query. Repeat with numeric and H/L pitch data, 1-based nasal/devoice
-  markers, cross-dictionary effective-pattern deduplication, compact pitch,
-  dark mode, and light/dark E-ink mode.
-- Anki format add/edit/duplicate/delete behavior across app restart and profile
-  switches: a duplicate receives a new stable ID and automatic name while
-  copying the source icon, deck, model, mappings, and tags, then returns to the
-  format list; all values persist, a fourth format cannot be added or duplicated,
-  and the last format cannot be deleted. Confirming a deck/model fetch resets
-  every format mapping while retaining IDs, names, icons, and tags.
-- Duplicate-note search through AnkiConnect `guiBrowse` and the AnkiDroid card
-  browser Intent for collection, deck, and deck-root scopes, including the
-  all-models option and the global hide-search-button setting. Confirm the
-  search button is absent when duplicate checking reports no matching note.
-  First select an unrelated deck in AnkiDroid, then open a matching note from
-  Hoshi: results must honor Hoshi’s scope without prompting to search all decks.
-  Do not combine a URI `search` parameter with the Intent extras: AnkiDroid
-  prioritizes the URI and retains its previous deck filter.
-  With an existing `あり難い` note, verify the `あり難い` dictionary result also
-  shows the duplicate icon and disables mining when duplicates are disallowed.
-  AnkiDroid first-field checksums must follow Anki’s NFC normalization before
-  HTML stripping; do not use NFKC, which would also fold full-width/half-width forms.
-- Exact cloze output for repeated matches, incorrect stored offsets, and
-  supplementary-plane characters; selected-glossary fallback `None`,
-  `{glossary-first}`, monolingual, bilingual, and both category fallback
-  directions; all ordinary/brief/no-dictionary monolingual and bilingual
-  handlebars against persisted dictionary order, excluded dictionaries,
-  profile switches, and version-suffixed titles. Validate numeric and H/L pitch
-  graph single/multiple/deduplicated output and
-  `{pitch-accent-graphs-first}`. Popup pitch text includes 1-based nasal/devoice
-  markers; exported Anki pitch SVGs follow iOS and do not encode those markers.
-- Anki Advanced keeps `{selected-glossary} Fallback` visible as a literal
-  handlebar label, accepts both custom text and every preset fallback option,
-  and separates general settings, fallback editing, and the grouped term
-  dictionary category list in iOS order. Confirm all four category labels,
-  especially `Monolingual`, remain fully visible without abbreviation.
-- Cross-format audio, Sasayaki audio, cover, and dictionary-media mining through
-  both backends. Recheck after restart and profile switching without clearing
-  app data.
-
-When adb text input for Japanese is unreliable, inspect input methods before
-assuming Japanese cannot be entered:
-
-```bash
-$ANDROID_HOME/platform-tools/adb -s emulator-5554 shell ime list -s
-$ANDROID_HOME/platform-tools/adb -s emulator-5554 shell dumpsys input_method | rg -n "mCurrentSubtype|Subtype|RotationList" -C 2
-```
-
-With Japanese Gboard QWERTY, romaji input can test `食べる` / `たべる`:
-
-```bash
-$ANDROID_HOME/platform-tools/adb -s emulator-5554 shell input tap <search_x> <search_y>
-$ANDROID_HOME/platform-tools/adb -s emulator-5554 shell input text taberu
-$ANDROID_HOME/platform-tools/adb -s emulator-5554 shell input keyevent 66
-```
-
-If automation is blocked, allow manual input and continue from the current
-emulator state without clearing data or reimporting.
-
-## Settings, Themes, And Localization
-
-Validate relevant settings/theme changes with:
-
-- Compose scrolling surfaces across Bookshelf, Contents, Statistics, Settings,
-  and modal sheets do not stretch or glow past either edge; normal scrolling,
-  flinging, pull-to-refresh, and sheet dragging remain available.
-- settings controls update immediately and route changes avoid fade transitions
-  on E-ink displays.
-- dark-theme cold start does not show a light `No Books` frame before bookshelf
-  loads.
-- build variant labels keep release as `Hoshi Reader` and debug as
-  `Hoshi Debug` on English and Simplified Chinese devices.
-- reader/dictionary theme combinations in Light, Sepia Light, Dark, Sepia Dark,
-  Custom, System, and E-ink modes, including status/navigation icon contrast,
-  lookup taps, popup display, reader color updates without unnecessary WebView
-  reload, and cursor visibility.
-- Reader Appearance fonts: cancel and retry an offline recommended-font
-  download without changing the active font; verify one Noto variable download
-  enables every advertised weight while static families download variants
-  independently. Verify family and named variant use separate selectors and a
-  default-variant download shows progress directly below the selected family.
-  On an OEM build without Noto, verify the two platform choices remain labeled
-  as generic system serif/sans-serif. Restart and switch profiles to confirm
-  per-family variant memory. Import two TTF/OTF variants of one family, replace
-  an existing family/weight/style slot, confirm its old basename selection and
-  dictionary CSS alias still resolve, delete the family, and verify WOFF/WOFF2
-  remain standalone while TTC is not offered. Recheck paginated, continuous,
-  and VN rendering in horizontal/vertical writing plus Reader, Dictionary, and
-  Process Text lookup popups.
-- App Language on Android 13+: the Advanced settings Language card appears,
-  Follow system clears the app locale, and Android 12 or lower follows the
-  system language without showing the card.
-- `docs/TRANSLATING.md` remains aligned with supported locale resource
-  directories.
-
-## Sync, Updates, And Sasayaki
-
-`GoogleDriveRetryTest` uses fake HTTP responses to cover rate-limit/server retries,
-non-idempotent creates, token-refresh limits, backoff cancellation and the shared
-eight-connection cap. `GoogleDriveBrowserAuthTest` uses an in-memory DataStore
-and fixture tokens to check missing configuration, canceled/invalid/denied
-callbacks, PKCE, one-time exchange, token restoration and sign-out without
-reading installed credentials. Build the instrumentation APK separately; run
-that explicit class only on an available device using data-preserving installs.
-
-
-Validate relevant sync/update/Sasayaki changes with:
-
-- Large Hoshi uploads: run `GoogleDriveStreamingUploadTest`, `GoogleDriveRetryTest`
-  and `GoogleDriveSyncManagerTest`. Verify bounded file writes, fixed-length HTTP
-  streaming, complete replay after authentication/rate-limit retries, and stream
-  cleanup on cancellation or failure. On a device, sync a library containing
-  multiple 100 MB EPUBs while reading; uploads must not allocate whole-file or
-  whole-multipart buffers or publish file state before successful completion.
-- Hoshi sync: verify GIS consent for the installed package/signing certificate and
-  `drive.file` access to the same Hoshi Reader folder as iOS. Cancel the account
-  picker and test a rejected authorization: both must show a localized error
-  dialog and re-enable Connect. Pass every GIS activity result to
-  `getAuthorizationResultFromIntent`, including non-`RESULT_OK` results, so SDK
-  failures are surfaced. On a device without Play Services, Connect must open a
-  browser, return through the build's custom URI scheme and show Connected only
-  after token exchange. Check browser cancellation, denied consent, restart,
-  expired/rejected tokens and local sign-out. A browser login must keep working
-  if Play Services later becomes available. Test first upload,
-  cloud-only download on tap, canceled downloads, Delete Local/Everywhere,
-  offline metadata/bookmark/highlight/shelf/session conflicts, session deletion,
-  reimport generations, live reader updates/deletion, Sasayaki position/matches,
-  sign-out, cache clearing and Books backup restore. Check foreground activation,
-  release 120-second polling/30-second local-edit debounce, debug 5-second
-  polling/2-second debounce, background final pass and
-  network restoration. Unsupported `formatVersion` must block file transfers and
-  cursor advancement until a successful full pass; restart must retain cursor
-  and version skips. Preserve both devices' app data.
-- TTU Google Drive Device Code connect/sign-out, clear cached Drive folders/covers,
-  remote-only bookshelf list, pull-to-refresh, import, long-press delete,
-  transient network behavior, manual import/export result dialogs,
-  reader-open import-only behavior, auto-export timing, close/background flush,
-  statistics merge/replace, and Sasayaki last-position sync. For automatic
-  bookshelf refresh, test offline/DNS failure, stalled OAuth token and Drive
-  list responses, and connection reset: cached entries remain visible without
-  an error dialog. Repeat via manual refresh/import/export and confirm a
-  localized error. HTTP authorization/server errors and TLS failures must stay
-  visible even during automatic refresh. OAuth and Drive connect/read waits
-  use 10-second timeouts (not a total-operation deadline).
-- GitHub update prompts, skip-version, manual checks, completed-download
-  prompts, user-triggered install, same-version APK cleanup, and split APK
-  updates on arm64-v8a and armeabi-v7a targets.
-- Sasayaki defaults, reader toggle visibility, auto-scroll, auto-pause on
-  lookup, subtitle cue matching that starts immediately after selecting a valid
-  SRT without a separate Match action, lookup taps on active cue text in normal
-  and E-ink VN rendering, skip controls across reader/sheet/system media controls,
-  volume-key seek, safe-area playback controls, and e-ink cue/lookup overlays
-  when those areas change. For subtitle matcher changes, include a
-  combined-volume EPUB with separate per-volume SRT files: both volumes should
-  align automatically, repeated text in the other volume must not capture the
-  starting cue sequence, unique cues immediately before the selected starting
-  sequence should be recovered while repeated prefix text remains unmatched,
-  and a large local text gap should recover only from a coherent later cue
-  sequence.
-- Sasayaki highlight rendering changes: on a real WebView, compare unhighlighted
-  text and active cues in horizontal/vertical writing with ruby and publisher
-  `text-emphasis`. Verify complete glyph edges, ruby, and emphasis marks as well
-  as stable text positions. CSS Highlight API availability and unchanged Range
-  geometry alone do not establish correct painting. In VN, repeat the first cue
-  pass, revisit cues on the same screen, then leave and return to rebuild the
-  screen; check both normal and E-ink modes.
-- Sasayaki transcription: import MP3/M4B/M4A or Opus through the audiobook card
-  and select Transcription; there must be no second audio picker or permanent
-  model-download notice. Starting with missing or invalid models or runtime files asks to download
-  the missing size before any network request; cancelling or leaving Reader
-  dismisses the request without writing an empty transcript or changing existing
-  progress. Cached models plus runtime files and realignment must not prompt.
-  Verify a model-only cache requests just the runtime, and fully cached resources
-  work offline. Runtime files must be read-only and SHA-256 verified before native
-  loading; corrupt or cancelled downloads must not publish a library. Check release
-  APKs contain no FFmpeg/ONNX/sherpa native libraries, and component release assets
-  match the URLs, byte sizes and hashes embedded in `transcription-runtime.json`. Display processed/total
-  audio time only once, both while running and paused; resuming must retain it
-  during preparation so the controls do not jump as the source is loaded. Check model
-  download/progress, pause, close/reopen the sheet, and background/foreground the
-  app. Closing the sheet must keep transcription progressing while reading;
-  reopening must show that same task with Pause enabled. Match coverage and usable
-  cues must grow while transcription is still running, without requiring Pause.
-  Check first-batch publication and throttled updates after further batches,
-  including slow matching (no queue of obsolete snapshots), silence (no redundant
-  rematching), a partial sentence extended by later speech, and a previously
-  unmatched gap gaining a right-hand anchor. Live updates must preserve the
-  playback position, current page, VN typewriter reveal, lookup popup, and image
-  hold/automatic resume. Completion must agree with a fresh full alignment.
-  The opt-in `SasayakiIncrementalMatchDeviceTest` accepts `-e matchBookRoot <root>`;
-  it reads an existing book/transcript without writing sidecars and places timing
-  and allocation results in `cache/incremental-match-benchmark/report.json`.
-  Verify Lightweight/Balanced/Fast defaults to Balanced and persists across restart.
-  Preset selection is locked while running; pausing, changing preset and resuming
-  must retain committed progress, and closing/reopening the sheet keeps the choice.
-  With cached models, `SasayakiTranscriptionDeviceTest` compares all three presets'
-  native token text/order/timestamps on an explicit scratch `realClip`, and checks
-  cancellation in Fast followed by resume in Lightweight. Pure pipeline tests cover
-  out-of-order completion, bounded work, silence ordering and failure/cancellation.
-  After pausing, Resume
-  must work without changing tabs to refresh the audio source. Backgrounding
-  the app must not actively pause the task; while its process can execute,
-  completed batches continue advancing and returning shows the latest progress.
-  A pending download confirmation must remain unconfirmed through a background/
-  foreground cycle. Removing the Reader route saves and pauses, including when
-  waiting for download approval; reopening offers Resume. Configuration recreation
-  must not be treated as leaving the route. Background execution is best-effort,
-  with no foreground service or WorkManager guarantee; after process reclamation,
-  starting again resumes the saved checkpoint;
-  incomplete speech segments must neither vanish nor duplicate. Changing the
-  source or duration starts a new transcript. Complete transcripts offer
-  realignment; confirming Clear Transcription keeps the existing match. Verify
-  another book cannot start concurrent transcription, and deleting the active
-  book cannot recreate its files. Check download/decoder failures use localized
-  errors and leave usable checkpoints; retry with cached models while offline
-  and confirm no downloading label appears. Keep the screen awake while the
-  Reader transcription task is active, including with its sheet closed.
-  Compare highlighted passages and timing with the book/audio, especially
-  introductions, repeated text, ruby, silence, omitted sentences and audio ends.
-  Reproduce ASR omissions with PCM from the production decoder, preserving its
-  equal-weight channel mixing and absolute sample clock; generic FFmpeg mono
-  conversion can change the input gain. Confirm the original token text and
-  timestamps on the target device before comparing segment boundaries or padding;
-  desktop quantized inference can differ even with identical PCM and model files.
-  Inspect energy scores and actual recognition input ranges to distinguish
-  skipped speech from words omitted by recognition.
-  Check quiet openings, changes in background level, expressive loud dialogue,
-  short replies with syllable gaps, and final words just after a 20-second hard
-  cut. Segment rejection must not discard a short continuation of accepted speech.
-  Around silence-separated ASR segments, verify the next word's first character
-  survives even if its model timestamp falls inside leading context. Compare
-  continuous and checkpoint-resumed output for missing or duplicated prefixes;
-  keep hard-cut speech context. Existing transcripts may recover short word
-  fragments between real anchors; short entirely omitted interior cues can share
-  a neighboring highlight but must not receive fabricated independent word times.
-  Partial-word repair must not bridge token-free long silence. Explicitly recognized words after a
-  long pause must retain their token times. Check kana/kanji rewrites around a
-  local exact phrase and punctuation, a missing whole reply beside a recognized
-  prefix, ambiguous readings on either side of a sentence boundary, and a partial
-  ruby reading error sharing one base character. Repaired syllables must preserve
-  the exact syllables' timing; deleted letters inside a spoken word must not allocate
-  a neighbor's token to an independent omitted cue. A single short cue enclosed by reliable
-  anchors and complete speech tokens should retain the book's wording even when ASR
-  mishears it; check rewritten short replies, numeric values, contracted phrases,
-  and `%`/`％` output. Contextual cross-cue allocation must not split a recognized
-  neighboring word to invent a missing interjection. Long estimated token intervals must
-  retain recognized words, sentence endings, and supported rewrites without a fixed
-  duration cap. A short suffix attached to the next sentence's exact anchor must stay
-  with the recognized earlier sentence when its local context supports that ownership;
-  let a wholly omitted interior sentence share a neighbor rather than take that suffix
-  as its own cue. Check one- and two-character
-  endings, a fully or partially recognized middle sentence, and competing endings
-  including ruby readings. Check omitted questions split by commas, missing sentences
-  beside long first/last tokens, and short cries/replies with ordinary token durations,
-  both with and without an inter-cue pause. Include mixed gaps containing a missing
-  sentence-ending character, a whole omitted reply and/or a missing next-word opening:
-  restore edge fragments only to their own cues before assigning the whole reply.
-  Check short neighboring cues with contiguous recognized context; context must stop
-  at missing text or a long audio pause, and inferred text must not become new evidence.
-  Grouping must preserve the opposite cue's timing,
-  keep text/time ranges non-overlapping, update IDs/offsets and unmatched counts, stop
-  at real intervening matches and never propagate across chapter boundaries or book ends.
-  Sparse sentences must retain supported fragments; dense cues must also split around
-  token-free gaps across long silence. Distinguish unmatched ASR wording from silence,
-  including overlapping same-frame multi-character tokens. Incremental matching must
-  agree with full alignment.
-  Character coverage and subtitle cue match rate are different metrics; neither
-  alone verifies transcript accuracy. Exclude toc/caution/colophon source paths
-  for both SRT and transcription, retaining existing SRT multi-volume behavior.
-  `SasayakiTranscriptionReaderTest` checks asynchronous audio-source readiness,
-  download confirmation/cancellation, a single progress display, closing/reopening
-  controls, completion during reading and background/foreground continuation
-  using isolated cache fixtures. `SasayakiAudioDecoderDeviceTest` checks native
-  stereo downmixing, anti-alias filtering, absolute seek phase, MP3/Opus gapless beginnings,
-  AAC decoding, consistent first-audio-track selection, bounded descriptor slices,
-  and failure cleanup using generated
-  WAV and tracked synthetic compressed tones. Run it after native audio changes;
-  all fixtures live in cache and do not change books or preferences. Native
-  decoder tests require the verified runtime cache. To provision it explicitly,
-  run `SasayakiRuntimeDeviceTest#installRuntimeFromPublishedUrls` with
-  `-e downloadRuntime true`; this downloads only the pinned components and
-  verifies subsequent preparation emits no download prompt/progress. The separate
-  `verifiedPrivateLibrariesLoadAndCachedFilesWorkOffline` method uses isolated
-  cache storage and accepts `-e runtimePayloads <scratch-directory>` for local
-  payloads or `-e downloadRuntime true` for public download verification.
-  `SasayakiTranscriptionDeviceTest` also checks the Kotlin decoder boundary; its optional
-  native ASR test needs verified models and runtime files in the app's no-backup directories
-  and an explicit `-e realClip` scratch audio path; otherwise it is skipped and
-  never downloads models. Build the test APK separately, install with `adb
-  install -r`, and run the explicit class with `am instrument`. Remove only
-  the scratch audio afterwards. Also pause within the final 1.5 seconds: an
-  Android checkpoint must still offer Resume until all audio is processed.
-- Sasayaki linked and copied Ogg Opus playback with `testdata/opus_test.opus`.
-  Confirm its title and artist metadata, all 22 `CHAPTERnnn` chapter entries,
-  current-chapter centering without first flashing the default list position
-  when the chapter tab opens, chapter seeking, and EPUB-cover fallback because
-  this sample has no embedded cover. Validate embedded Opus cover display with
-  a separate OpusTags
-  `METADATA_BLOCK_PICTURE` fixture when cover parsing changes. Scroll away and
-  let playback cross a chapter boundary without allowing selection updates to
-  reposition the list; switching away from Chapters and back must center the
-  new current chapter. If no chapter is current when Chapters opens, later
-  playback updates must not trigger an automatic scroll.
-- Sasayaki media-session notification return behavior, confirming it restores
-  the existing app task instead of creating a duplicate task.
-- Sasayaki paused task-removal behavior, confirming that pausing playback and
-  then removing the app from recent tasks clears the Sasayaki notification and
-  leaves no active media session or foreground service.
-- Sasayaki long-running background playback on a physical device. Check the
-  package app-op before triage. The normal path should use Media3's
-  MediaSession APIs and Android's `mediaPlayback` foreground-service type.
-  Sasayaki may customize notification rendering only through Media3's
-  `MediaNotification.Provider`; Media3 must own foreground-service start/stop
-  for the same MediaSession-backed notification id while audio is playing or
-  buffering. Paused task-removal cleanup should clear the service player before
-  calling Media3's `pauseAllPlayersAndStopSelf()`. Do not add a second fallback
-  notification path, private notification action receiver, or direct
-  NotificationManager cancellation path around Media3. A detached transport
-  notification without a foreground service can leave the process in
-  cached/background-restricted state and make playback stop while the
-  notification remains visible:
-
-  ```bash
-  adb shell appops get <package-name> | rg 'RUN_ANY_IN_BACKGROUND|START_FOREGROUND|WAKE_LOCK'
-  adb shell dumpsys activity services <package-name> | rg 'SasayakiPlaybackService|foreground|startRequested|allowStartForeground'
-  adb shell dumpsys notification --noredact | rg 'hoshi_sasayaki_playback|android.mediaSession|NotificationRecord'
-  ```
-
-  `RUN_ANY_IN_BACKGROUND: ignore` or `deny`, or
-  `ActivityManager.isBackgroundRestricted() == true`, means the device or user
-  is intentionally restricting background execution. Android's documented
-  behavior for that state is aggressive background restriction; at minimum,
-  foreground services cannot be started unless an app activity is in the
-  foreground. Do not classify background playback failure in that state as a
-  Media3 lifecycle regression until the same flow is reproduced with the app
-  allowed to run in the background. Record both restriction states in manual QA
-  notes.
+Document ownership and update rules live in [AGENTS.md](../AGENTS.md#文档维护规则).

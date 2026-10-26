@@ -38,7 +38,7 @@ class SyncStorage @Inject constructor(
     val booksChanged = revision.asStateFlow()
     var onChange: (() -> Unit)? = null
     var syncEnabled: (suspend () -> Boolean)? = null
-    var applyReaderState: (suspend (String, SyncBook, Boolean) -> Unit)? = null
+    var applyReaderState: (suspend (key: String, book: SyncBook, bookmarkChanged: Boolean, audiobookChanged: Boolean, highlightsChanged: Boolean) -> Unit)? = null
 
     init {
         statistics.onSave = { folder, sessions -> handleSessionsChange(folder.syncKey(), sessions) }
@@ -111,12 +111,52 @@ class SyncStorage @Inject constructor(
         saveChanges()
     }
 
+    suspend fun hasData(): Boolean = transaction {
+        bookDirectories().any { root ->
+            if (root.parentFile!!.name == "statistics_archive") statistics.loadSessions(root).values.any { it.value != null }
+            else books.loadMetadata(root)?.epub != null
+        }
+    }
+
+    suspend fun removeDeletionRecords() = transaction {
+        val cleared = mutableListOf<File>()
+        for (root in bookDirectories()) {
+            val archived = root.parentFile!!.name == "statistics_archive"
+            val sessions = statistics.loadSessions(root)
+            val liveSessions = sessions.filterValues { it.value != null }
+            if (archived && liveSessions.isEmpty()) {
+                cleared += root
+                continue
+            }
+            if (liveSessions.size != sessions.size) statistics.applySessions(root, liveSessions)
+            if (archived) continue
+
+            val highlights = sidecars.loadHighlightRecords(root)
+            val liveHighlights = highlights.filterValues { it.value != null }
+            if (liveHighlights.size != highlights.size) sidecars.saveHighlightRecords(root, liveHighlights)
+            val metadata = books.loadMetadata(root)
+            val shelves = metadata?.shelves
+            if (shelves != null && shelves.any { !it.value.value }) {
+                sidecars.saveMetadata(root, metadata.copy(shelves = shelves.filterValues { it.value }))
+            }
+        }
+        val shelves = books.loadShelfList()
+        if (shelves.any { it.value.value == null }) books.saveShelfList(shelves.filterValues { it.value != null })
+        state = state.copy(books = state.books - cleared.map { it.name.syncKey() }.toSet())
+        save()
+        cleared.forEach { it.deleteRecursively() }
+    }
+
     suspend fun prepareLibrary() = transaction {
         val empty = mutableListOf<File>()
-        for (root in bookDirectories()) {
-            val sessions = statistics.loadSessions(root)
+        for (root in bookDirectoryCandidates()) {
+            val archived = root.parentFile!!.name == "statistics_archive"
+            // Existing live records need no preparation; avoid decoding their metadata again.
+            if (!archived && root.name.syncKey() in state.books) continue
+            if (books.loadMetadata(root) == null) continue
             prepareBook(root)
-            if (root.parentFile!!.name == "statistics_archive" && sessions.isEmpty()) empty += root
+            // Live sessions are read/migrated when syncing the book, not during startup.
+            if (archived && statistics.loadSessions(root).isEmpty()) empty += root
         }
         books.loadShelfList()
         save()
@@ -213,17 +253,23 @@ class SyncStorage @Inject constructor(
                 }
                 if (bookmarkChanged || modified != change.modified) sidecars.saveBookmark(root, bookmark!!.copy(lastModified = change.modified.appleDateSeconds()))
             }
-            if (books.loadHighlightRecords(root).mapValues { (_, change) -> change.replacing(change.value?.let(::SyncHighlight)) } != book.highlights) {
+            val storedHighlights = books.loadHighlightRecords(root).mapValues { (_, change) -> change.replacing(change.value?.let(::SyncHighlight)) }
+            val highlightsChanged = (storedHighlights.keys + book.highlights.keys).any { storedHighlights[it]?.value != book.highlights[it]?.value }
+            if (storedHighlights != book.highlights) {
                 sidecars.saveHighlightRecords(root, book.highlights.mapValues { (id, change) -> change.replacing(change.value?.highlight(id)) })
             }
+            var audiobookChanged = false
             book.audiobook?.let { change ->
                 val playback = books.loadSasayakiPlayback(root) ?: SasayakiPlaybackData(0.0)
                 val value = change.value
-                if (playback.modified != change.modified || playback.lastPosition != value.lastPosition || playback.delay != value.delay || playback.rate.toDouble() != value.rate) {
+                // Compare with the persisted snapshot under the storage lock, not the live
+                // player, which may have advanced while this local snapshot was reconciled.
+                audiobookChanged = playback.lastPosition != value.lastPosition || playback.delay != value.delay || playback.rate != value.rate.toFloat()
+                if (playback.modified != change.modified || audiobookChanged) {
                     sidecars.saveSasayakiPlayback(root, playback.copy(lastPosition = value.lastPosition, delay = value.delay, rate = value.rate.toFloat(), modified = change.modified))
                 }
             }
-            applyReaderState?.invoke(key, book, bookmarkChanged)
+            applyReaderState?.invoke(key, book, bookmarkChanged, audiobookChanged, highlightsChanged)
         } else {
             record = record.copy(sources = record.sources - SyncFileType.epub - SyncFileType.sasayaki)
             if (oldRecord?.deleted != true || oldRecord.generation != book.generation) {
@@ -359,9 +405,11 @@ class SyncStorage @Inject constructor(
         updateRecord(key) { it.copy(sources = emptyMap()) }
     }
 
-    suspend fun bookDirectories(): List<File> = transaction {
+    private fun bookDirectoryCandidates(): List<File> =
         listOf(booksDirectory, booksDirectory.resolve("statistics_archive")).flatMap { it.listFiles().orEmpty().toList() }
-            .filter { books.loadMetadata(it) != null }
+
+    suspend fun bookDirectories(): List<File> = transaction {
+        bookDirectoryCandidates().filter { books.loadMetadata(it) != null }
     }
 
     suspend fun bookDirectory(folder: String, archived: Boolean = false): File = withContext(ioDispatcher) {

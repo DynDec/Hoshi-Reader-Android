@@ -45,8 +45,8 @@ class FakeElement {
         this.eventListeners.set(type, listeners);
     }
 
-    dispatchEvent(type) {
-        (this.eventListeners.get(type) ?? []).forEach((listener) => listener());
+    dispatchEvent(type, event = { preventDefault() {}, stopPropagation() {} }) {
+        (this.eventListeners.get(type) ?? []).forEach((listener) => listener(event));
     }
 
     getClientRects() {
@@ -375,6 +375,23 @@ test('iframe render messages forward only non-null source text', () => {
             assert.equal(message.sourceSentenceOffset, 0);
         }
     }
+});
+
+test('unmatched source submissions replace old entries and subsequent source-only content', () => {
+    const scene = popupHost();
+    const original = { ...rootPopupPayload(), entriesCount: 1, initialEntryJson: '{"expression":"猫"}', contentKey: 'original' };
+    scene.host.renderStack({ popups: [original] });
+    const iframe = scene.document.getElementById('hoshi-reader-popup-layer').children[0].querySelector('.hoshi-reader-popup-iframe');
+    const messages = [];
+    iframe.contentWindow.postMessage = message => messages.push(message);
+    iframe.dispatchEvent('load');
+    for (const sourceText of ['──猫がいる。', '──別の文章。']) {
+        scene.host.renderStack({ popups: [{ ...original, entriesCount: 0, initialEntryJson: null, sourceText, contentKey: sourceText }] });
+    }
+    const renders = messages.filter(message => message.type === 'renderPopup');
+    assert.equal(renders.length, 3);
+    assert.deepEqual(renders.slice(1).map(message => message.sourceText), ['──猫がいる。', '──別の文章。']);
+    assert.equal(renders[2].entriesCount, 0);
 });
 
 test('active iframe rerenders when same popup id receives new entry payload', () => {
@@ -1021,4 +1038,56 @@ test('horizontal e-ink sasayaki line follows the ruby-aware height for the whole
     assert.equal(sasayakiHighlights[0].style.top, '42.5px');
     assert.equal(sasayakiHighlights[0].style.width, '32px');
     assert.equal(sasayakiHighlights[0].style.height, '1.5px');
+});
+
+test('TTS popup controls are visible without an audiobook and dispatch only TTS actions', () => {
+    const { host, document, window } = popupHost();
+    const messages = [];
+    window.HoshiReaderPopup = { postMessage: value => messages.push(JSON.parse(value)) };
+    const payload = { ...rootPopupPayload(), sasayakiVisible: false, ttsVisible: true, ttsIsPlaying: false, ttsWasPaused: true };
+    host.renderStack({ popups: [payload] });
+    const bar = document.querySelectorAll('.hoshi-reader-popup-sasayaki-bar')[0];
+    assert.ok(bar);
+    assert.equal(bar.children.length, 3);
+    assert.match(bar.children[1].style['--icon-url'], /pause.svg/);
+    bar.children.forEach(button => button.dispatchEvent('click'));
+    assert.deepEqual(messages.map(m => m.name), ['ttsReplaySentence', 'ttsTogglePlayback', 'ttsPlayForward']);
+    host.renderStack({ popups: [{ ...payload, ttsWasPaused: false }] });
+    assert.match(document.querySelectorAll('.hoshi-reader-popup-sasayaki-bar')[0].children[1].style['--icon-url'], /play_arrow.svg/);
+});
+
+test('continuous reader clips source highlight layers without clipping popup frames', () => {
+    const scene = popupHost();
+    scene.window.innerWidth = 400;
+    scene.window.innerHeight = 800;
+    scene.window.hoshiReader = { contentViewport: () => ({ left: 40, top: 80, right: 360, bottom: 720 }) };
+    scene.document.documentElement.style['--hoshi-reader-eink-mode'] = '1';
+    scene.host.renderStack({
+        popups: [rootPopupPayload()],
+        rootHighlight: { popupId: 'root', pending: false, rects: [{ x: 20, y: 60, width: 360, height: 700 }] },
+    });
+    scene.dispatchMessage({ source: 'hoshi-popup-iframe', name: 'contentReady', popupId: 'root' });
+    scene.host.renderSasayakiHighlight({
+        eInkMode: true, verticalWriting: true, rects: [{ x: 20, y: 60, width: 360, height: 700 }],
+    });
+    const layer = scene.document.getElementById('hoshi-reader-popup-layer');
+    assert.equal(layer.querySelector('.hoshi-reader-selection-highlight-layer').style.clipPath, 'inset(80px 40px 80px 40px)');
+    assert.equal(layer.querySelector('.hoshi-reader-sasayaki-highlight-layer').style.clipPath, 'inset(80px 40px 80px 40px)');
+    assert.equal(layer.querySelector('.hoshi-reader-popup-shell').style.left, '0px');
+    assert.equal(layer.querySelector('.hoshi-reader-popup-shell').style.clipPath, undefined);
+});
+
+test('theme changes reach a retained iframe without replacing results or history', () => {
+    const scene = popupHost();
+    const payload = {...rootPopupPayload(), entriesCount: 1, initialEntryJson: '{"expression":"食べる"}', darkMode: false, eInkMode: false};
+    scene.host.renderStack({popups: [payload]});
+    const iframe = scene.document.getElementById('hoshi-reader-popup-layer').children[0].querySelector('.hoshi-reader-popup-iframe');
+    const messages = [];
+    iframe.contentWindow.postMessage = message => messages.push(message);
+    iframe.dispatchEvent('load');
+    assert.equal(messages[0].type, 'setPopupTheme');
+    messages.length = 0;
+    scene.host.renderStack({popups: [{...payload, darkMode: true, eInkMode: true, backCount: 2}]});
+    assert.deepEqual(JSON.parse(JSON.stringify(messages)), [{type: 'setPopupTheme', darkMode: true, eInkMode: true}]);
+    assert.equal(scene.document.getElementById('hoshi-reader-popup-layer').children[0].querySelector('.hoshi-reader-popup-iframe'), iframe);
 });

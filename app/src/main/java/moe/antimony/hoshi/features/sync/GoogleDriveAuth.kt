@@ -22,6 +22,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 
 private val Context.hoshiDriveAuthDataStore by preferencesDataStore(name = "hoshi-drive-auth")
+private val connectedKey = booleanPreferencesKey("connected")
+
+internal suspend fun DataStore<Preferences>.nativeDriveStatus(): DriveAuthStatus =
+    if (data.first()[connectedKey] == true) DriveAuthStatus.Connected else DriveAuthStatus.NotConnected
+
+internal suspend fun DataStore<Preferences>.nativeDriveAccessToken(authorize: suspend () -> String): String = try {
+    authorize()
+} catch (error: DriveAuthorizationRequiredException) {
+    // User consent is required: expose Connect before reporting the sync failure.
+    edit { it[connectedKey] = false }
+    throw error
+}
 
 @Singleton
 class GoogleDriveAuth internal constructor(
@@ -44,7 +56,6 @@ class GoogleDriveAuth internal constructor(
     )
 
     private val client by lazy { Identity.getAuthorizationClient(context) }
-    private val connectedKey = booleanPreferencesKey("connected")
 
     suspend fun provider(): SyncProvider = currentProvider()
 
@@ -80,11 +91,8 @@ class GoogleDriveAuth internal constructor(
         SyncProvider.Ttu -> ttu.status()
         SyncProvider.Gdrive -> {
             val browserStatus = browser.status()
-            when {
-                browserStatus == DriveAuthStatus.Connected || usesBrowserAuthorization() -> browserStatus
-                dataStore.data.first()[connectedKey] == true -> DriveAuthStatus.Connected
-                else -> DriveAuthStatus.NotConnected
-            }
+            if (browserStatus == DriveAuthStatus.Connected || usesBrowserAuthorization()) browserStatus
+            else dataStore.nativeDriveStatus()
         }
     }
 
@@ -92,9 +100,11 @@ class GoogleDriveAuth internal constructor(
         if (provider() == SyncProvider.Ttu) return ttu.accessToken()
         if (browser.status() == DriveAuthStatus.Connected) return browser.accessToken()
         if (status(SyncProvider.Gdrive) != DriveAuthStatus.Connected) throw DriveAuthorizationRequiredException()
-        val result = authorize()
-        if (result.hasResolution()) throw DriveAuthorizationRequiredException()
-        return result.accessToken!!
+        return dataStore.nativeDriveAccessToken {
+            val result = authorize()
+            if (result.hasResolution()) throw DriveAuthorizationRequiredException()
+            result.accessToken!!
+        }
     }
 
     override suspend fun clearAccessToken(token: String) {

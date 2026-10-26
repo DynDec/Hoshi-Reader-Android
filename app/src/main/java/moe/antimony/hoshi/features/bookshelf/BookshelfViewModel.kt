@@ -13,7 +13,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -27,6 +30,7 @@ import moe.antimony.hoshi.features.sync.StatisticsSyncMode
 import moe.antimony.hoshi.features.sync.SyncDirection
 import moe.antimony.hoshi.features.sync.SyncResult
 import moe.antimony.hoshi.ui.UiText
+import moe.antimony.hoshi.ui.withErrorDetails
 
 internal data class BookImportItem(
     val uri: Uri,
@@ -95,6 +99,8 @@ internal class BookshelfViewModel : ViewModel {
     val uiState: StateFlow<BookshelfUiState> = _uiState
     private var openBookJob: Job? = null
     private var openingBookId: String? = null
+    private var menuDownloads: Job? = null
+    private val downloads = mutableMapOf<String, Deferred<Result<Unit>>>()
     private var reloadGeneration = 0
     private var remoteLoadJob: Job? = null
     private val remoteImportsInFlight = mutableSetOf<String>()
@@ -121,7 +127,7 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     fun changeSort(sortOption: BookSortOption) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.changeSort(sortOption)
             _uiState.update {
                 it.copy(
@@ -138,23 +144,63 @@ internal class BookshelfViewModel : ViewModel {
         openBookJob?.cancel()
         openingBookId = entry.metadata.id
         val cloud = entry.metadata.epub == null
+        val download = if (cloud) download(entry) else null
         openBookJob = workScope.launch {
-            _uiState.update { it.copy(errorMessage = null, remoteImportProgressById = if (cloud) it.remoteImportProgressById + (entry.metadata.id to 0.0) else it.remoteImportProgressById) }
+            _uiState.update { it.copy(errorMessage = null) }
             try {
-                val bookId = repository.openBook(entry) { progress ->
-                    _uiState.update { it.copy(remoteImportProgressById = it.remoteImportProgressById + (entry.metadata.id to progress)) }
-                }
+                download?.await()?.getOrThrow()
+                val bookId = repository.openBook(entry)
                 if (cloud) reloadBookEntriesSync()
                 _uiState.update { it.copy(openReaderBookId = bookId, openReaderSkipSync = cloud) }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                _uiState.update { it.copy(errorMessage = if (cloud) error.syncMessage() else UiText.Resource(R.string.bookshelf_open_failed)) }
+                val message = if (cloud) {
+                    error.syncMessage(UiText.Resource(R.string.sync_download_book_failed_format, entry.metadata.displayTitle))
+                } else {
+                    UiText.Resource(R.string.bookshelf_open_failed).withErrorDetails(error)
+                }
+                _uiState.update { it.copy(errorMessage = message) }
             } finally {
                 if (openingBookId == entry.metadata.id) openingBookId = null
+            }
+        }
+    }
+
+    fun downloadBooks(entries: List<BookEntry>) {
+        val previous = menuDownloads
+        menuDownloads = workScope.launch {
+            previous?.join()
+            val failures = mutableListOf<UiText>()
+            _uiState.update { it.copy(errorMessage = null) }
+            for (entry in entries) {
+                download(entry).await().onFailure { error ->
+                    failures += error.syncMessage(UiText.Resource(R.string.sync_download_book_failed_format, entry.metadata.displayTitle))
+                    _uiState.update { it.copy(errorMessage = UiText.Joined(failures.toList(), "\n\n")) }
+                }
+            }
+            reloadBookEntriesSync()
+        }
+    }
+
+    private fun download(entry: BookEntry): Deferred<Result<Unit>> {
+        downloads[entry.metadata.id]?.let { return it }
+        val download = workScope.async(start = CoroutineStart.LAZY) {
+            _uiState.update { it.copy(remoteImportProgressById = it.remoteImportProgressById + (entry.metadata.id to 0.0)) }
+            try {
+                runCatching {
+                    repository.downloadBook(entry) { progress ->
+                        _uiState.update { it.copy(remoteImportProgressById = it.remoteImportProgressById + (entry.metadata.id to progress)) }
+                    }
+                }
+            } finally {
+                downloads -= entry.metadata.id
                 _uiState.update { it.copy(remoteImportProgressById = it.remoteImportProgressById - entry.metadata.id) }
             }
         }
+        downloads[entry.metadata.id] = download
+        download.start()
+        return download
     }
 
     fun importBook(uri: Uri, displayName: String? = null) {
@@ -185,7 +231,6 @@ internal class BookshelfViewModel : ViewModel {
         }
         runLoading(
             errorPrefix = UiText.Resource(R.string.bookshelf_import_failed),
-            preferErrorPrefix = true,
             onComplete = { importGate.finish(importKey) },
             blockingProgressMessage = displayName
                 ?.takeIf { it.isNotBlank() }
@@ -263,8 +308,7 @@ internal class BookshelfViewModel : ViewModel {
             } catch (error: Throwable) {
                 _uiState.update {
                     it.copy(
-                        errorMessage = error.localizedMessage?.let(UiText::Literal)
-                            ?: UiText.Resource(R.string.bookshelf_import_failed),
+                        errorMessage = UiText.Resource(R.string.bookshelf_import_failed).withErrorDetails(error),
                     )
                 }
             } finally {
@@ -274,7 +318,7 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     private suspend fun importBooksBatch(imports: List<PendingBookImport>, importKey: String) {
-        val failed = mutableListOf<String>()
+        val failed = mutableListOf<UiText>()
         _uiState.update {
             it.copy(
                 isLoading = true,
@@ -295,8 +339,8 @@ internal class BookshelfViewModel : ViewModel {
                 }
                 try {
                     import.importOperation()
-                } catch (_: Throwable) {
-                    failed += import.failureDisplayName()
+                } catch (error: Throwable) {
+                    failed += UiText.Literal(import.failureDisplayName()).withErrorDetails(error)
                 }
             }
             reloadBookEntriesSync()
@@ -305,7 +349,7 @@ internal class BookshelfViewModel : ViewModel {
                     it.copy(
                         errorMessage = UiText.Resource(
                             R.string.bookshelf_import_failed_list_format,
-                            failed.joinToString(separator = "\n"),
+                            UiText.Joined(failed, separator = "\n\n"),
                         ),
                     )
                 }
@@ -313,8 +357,7 @@ internal class BookshelfViewModel : ViewModel {
         } catch (error: Throwable) {
             _uiState.update {
                 it.copy(
-                    errorMessage = error.localizedMessage?.let(UiText::Literal)
-                        ?: UiText.Resource(R.string.bookshelf_import_failed),
+                    errorMessage = UiText.Resource(R.string.bookshelf_import_failed).withErrorDetails(error),
                 )
             }
         } finally {
@@ -324,7 +367,7 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     fun deleteBook(entry: BookEntry) {
-        runLoading(errorPrefix = UiText.Resource(R.string.bookshelf_delete_failed), preferErrorPrefix = true) {
+        runLoading(errorPrefix = UiText.Resource(R.string.bookshelf_delete_failed)) {
             try {
                 repository.deleteBook(entry)
             } finally {
@@ -334,7 +377,7 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     fun deleteLocalBook(entry: BookEntry) {
-        runLoading(errorPrefix = UiText.Resource(R.string.bookshelf_delete_failed), preferErrorPrefix = true) {
+        runLoading(errorPrefix = UiText.Resource(R.string.bookshelf_delete_failed)) {
             try {
                 repository.deleteLocalBook(entry)
             } finally {
@@ -385,7 +428,7 @@ internal class BookshelfViewModel : ViewModel {
             } catch (error: Throwable) {
                 _uiState.update {
                     it.copy(
-                        errorMessage = UiText.Resource(R.string.bookshelf_remote_book_import_failed),
+                        errorMessage = UiText.Resource(R.string.bookshelf_remote_book_import_failed).withErrorDetails(error),
                     )
                 }
             } finally {
@@ -418,7 +461,7 @@ internal class BookshelfViewModel : ViewModel {
             } catch (error: Throwable) {
                 _uiState.update {
                     it.copy(
-                        errorMessage = UiText.Resource(R.string.bookshelf_remote_book_delete_failed),
+                        errorMessage = UiText.Resource(R.string.bookshelf_remote_book_delete_failed).withErrorDetails(error),
                     )
                 }
             } finally {
@@ -431,7 +474,7 @@ internal class BookshelfViewModel : ViewModel {
     fun deleteSelectedBooks() {
         val selectedEntries = _uiState.value.bookEntries.filter { it.metadata.id in _uiState.value.selectedBookIds }
         if (selectedEntries.isEmpty()) return
-        runLoading(errorPrefix = UiText.Resource(R.string.bookshelf_delete_failed), preferErrorPrefix = true) {
+        runLoading(errorPrefix = UiText.Resource(R.string.bookshelf_delete_failed)) {
             try {
                 repository.deleteBooks(selectedEntries)
                 clearSelection()
@@ -442,7 +485,7 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     fun moveBook(entry: BookEntry, shelfName: String?) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.moveBooks(setOf(entry.metadata.id), shelfName)
             reloadBookEntriesSync()
         }
@@ -451,7 +494,7 @@ internal class BookshelfViewModel : ViewModel {
     fun moveSelectedBooks(shelfName: String?) {
         val selectedIds = _uiState.value.selectedBookIds
         if (selectedIds.isEmpty()) return
-        workScope.launch {
+        launchBookshelfOperation {
             repository.moveBooks(selectedIds, shelfName)
             clearSelection()
             reloadBookEntriesSync()
@@ -459,7 +502,7 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     fun createShelf(name: String) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.createShelf(name)
             reloadBookEntriesSync()
         }
@@ -521,7 +564,7 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     fun deleteShelf(name: String) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.deleteShelf(name)
             reloadBookEntriesSync()
         }
@@ -530,42 +573,42 @@ internal class BookshelfViewModel : ViewModel {
     fun renameShelf(oldName: String, newName: String) {
         val trimmedName = newName.trim()
         if (trimmedName.isEmpty()) return
-        workScope.launch {
+        launchBookshelfOperation {
             repository.renameShelf(oldName, trimmedName)
             reloadBookEntriesSync()
         }
     }
 
     fun moveShelf(fromIndex: Int, toIndex: Int) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.moveShelf(fromIndex, toIndex)
             reloadBookEntriesSync()
         }
     }
 
     fun markRead(entry: BookEntry) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.markRead(entry)
             reloadBookEntriesSync()
         }
     }
 
     fun renameBook(entry: BookEntry, title: String) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.renameBook(entry, title.trim().takeIf { it.isNotEmpty() })
             reloadBookEntriesSync()
         }
     }
 
     fun setBookProfile(entry: BookEntry, profileId: String?) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.setBookProfile(entry, profileId)
             reloadBookEntriesSync()
         }
     }
 
     fun changeShowReading(showReading: Boolean) {
-        workScope.launch {
+        launchBookshelfOperation {
             repository.changeShowReading(showReading)
             _uiState.update {
                 it.copy(
@@ -593,14 +636,14 @@ internal class BookshelfViewModel : ViewModel {
 
     fun changeHideCollapsedShelfThumbnails(hide: Boolean) {
         _uiState.update { it.copy(hideCollapsedShelfThumbnails = hide) }
-        workScope.launch {
+        launchBookshelfOperation {
             repository.changeHideCollapsedShelfThumbnails(hide)
         }
     }
 
     fun changeCoverMode(coverMode: BookshelfCoverMode) {
         _uiState.update { it.copy(coverMode = coverMode) }
-        workScope.launch {
+        launchBookshelfOperation {
             repository.changeCoverMode(coverMode)
         }
     }
@@ -632,8 +675,8 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     fun rebuildLookupQuery() {
-        workScope.launch {
-            runCatching { repository.rebuildLookupQuery() }
+        launchBookshelfOperation {
+            repository.rebuildLookupQuery()
         }
     }
 
@@ -654,7 +697,7 @@ internal class BookshelfViewModel : ViewModel {
                 _uiState.update {
                     it.copy(
                         shelfCreationMoveStatus = ShelfCreationMoveStatus.Failed(
-                            UiText.Resource(R.string.bookshelf_create_shelf_failed),
+                            UiText.Resource(R.string.bookshelf_create_shelf_failed).withErrorDetails(error),
                         ),
                     )
                 }
@@ -753,7 +796,7 @@ internal class BookshelfViewModel : ViewModel {
     }
 
     private fun reloadBookEntries(sortOption: BookSortOption) {
-        workScope.launch {
+        launchBookshelfOperation {
             reloadBookEntriesSync(sortOption)
         }
     }
@@ -793,7 +836,6 @@ internal class BookshelfViewModel : ViewModel {
                 hasLoadedBooks = true,
                 isLoading = false,
                 blockingProgressMessage = null,
-                errorMessage = null,
             )
         }
         reloadRemoteBookEntries(result.entries, generation, suppressTransientNetworkErrors = true)
@@ -858,7 +900,7 @@ internal class BookshelfViewModel : ViewModel {
                 if (suppressTransientNetworkErrors && error.isTransientDriveNetworkFailure()) return@launch
                 _uiState.update {
                     it.copy(
-                        errorMessage = UiText.Resource(R.string.bookshelf_remote_books_load_failed),
+                        errorMessage = UiText.Resource(R.string.bookshelf_remote_books_load_failed).withErrorDetails(error),
                     )
                 }
             }
@@ -877,9 +919,23 @@ internal class BookshelfViewModel : ViewModel {
         }
     }
 
+    private fun launchBookshelfOperation(block: suspend () -> Unit) {
+        workScope.launch {
+            try {
+                block()
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                _uiState.update {
+                    it.copy(
+                        errorMessage = UiText.Resource(R.string.bookshelf_update_failed).withErrorDetails(error),
+                    )
+                }
+            }
+        }
+    }
+
     private fun runLoading(
         errorPrefix: UiText,
-        preferErrorPrefix: Boolean = false,
         onComplete: () -> Unit = {},
         blockingProgressMessage: UiText? = null,
         replaceShelfWithLoading: Boolean = true,
@@ -899,11 +955,7 @@ internal class BookshelfViewModel : ViewModel {
             } catch (error: Throwable) {
                 _uiState.update {
                     it.copy(
-                        errorMessage = if (preferErrorPrefix) {
-                            errorPrefix
-                        } else {
-                            error.localizedMessage?.let(UiText::Literal) ?: errorPrefix
-                        },
+                        errorMessage = errorPrefix.withErrorDetails(error),
                     )
                 }
             } finally {

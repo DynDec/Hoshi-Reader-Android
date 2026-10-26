@@ -37,6 +37,7 @@ internal data class LookupPopupItem(
     val state: LookupPopupState,
     val clearSelectionSignal: Int = 0,
     val sasayakiCue: SasayakiMatch? = null,
+    val readerChapterIndex: Int? = null,
 )
 
 internal data class LookupPopupState(

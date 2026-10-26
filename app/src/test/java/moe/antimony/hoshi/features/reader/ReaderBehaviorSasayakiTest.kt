@@ -6,7 +6,7 @@ import org.junit.Test
 
 class ReaderBehaviorSasayakiTest {
     @Test
-    fun behaviorShowsKeepScreenOnBeforeSasayakiVolumeSeek() {
+    fun behaviorShowsSharedAudioNavigationWithOtherVolumeKeyControls() {
         assertEquals(
             listOf(
                 R.string.reader_behavior_volume_keys_turn_pages,
@@ -24,7 +24,7 @@ class ReaderBehaviorSasayakiTest {
     }
 
     @Test
-    fun behaviorAlwaysShowsSasayakiVolumeSeek() {
+    fun behaviorAlwaysShowsSharedAudioVolumeControl() {
         assertEquals(
             listOf(R.string.reader_behavior_volume_keys_seek_sasayaki),
             readerBehaviorSasayakiRows(),

@@ -24,6 +24,8 @@ test('Continuous renders one buffer in both axes and preserves source CSS, cross
     reader = reader.replaceAll('__HOSHI_RESTORE_TOKEN_LITERAL__', '"fixture"')
         .replaceAll('__HOSHI_VERTICAL_PADDING_BLOCK_RATIO__', '0')
         .replaceAll('__HOSHI_VERTICAL_PADDING_GAP_RATIO__', '0')
+        .replaceAll('__HOSHI_CONTINUOUS_HORIZONTAL_PADDING_RATIO__', '0')
+        .replaceAll('__HOSHI_CONTINUOUS_VERTICAL_PADDING_RATIO__', '0')
         .replaceAll('__HOSHI_IMAGE_WIDTH_VIEWPORT_RATIO__', '1')
         .replaceAll('__HOSHI_IMAGE_HEIGHT_VIEWPORT_RATIO__', '1')
         .replaceAll('__HOSHI_IMAGE_WIDTH_REDUCTION_PX__', '0')

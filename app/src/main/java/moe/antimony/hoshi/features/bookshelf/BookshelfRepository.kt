@@ -25,7 +25,6 @@ import moe.antimony.hoshi.epub.EpubBookParser
 import moe.antimony.hoshi.epub.LegacyBookMigrationProgress
 import moe.antimony.hoshi.epub.isUuidString
 import moe.antimony.hoshi.features.sync.GoogleDriveSyncManager
-import moe.antimony.hoshi.features.sync.GoogleDriveSyncException
 import moe.antimony.hoshi.features.sync.syncKey
 import moe.antimony.hoshi.features.sync.StatisticsSyncMode
 import moe.antimony.hoshi.features.sync.DriveAuthStatus
@@ -60,7 +59,8 @@ internal interface BookshelfRepository {
     suspend fun loadBookProgress(entries: List<BookEntry>): Map<String, Double>
     suspend fun syncLibrary()
     suspend fun loadRemoteBooks(localEntries: List<BookEntry>): RemoteBookshelfLoadResult
-    suspend fun openBook(entry: BookEntry, onProgress: (Double) -> Unit = {}): String
+    suspend fun openBook(entry: BookEntry): String
+    suspend fun downloadBook(entry: BookEntry, onProgress: (Double) -> Unit)
     suspend fun importBook(uri: Uri): String
     suspend fun exportBook(entry: BookEntry, uri: Uri)
     suspend fun importRemoteBook(
@@ -119,7 +119,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
         onLegacyBookMigrationProgress: (LegacyBookMigrationProgress) -> Unit,
     ): BookshelfLoadResult = withContext(ioDispatcher) {
         val entries = bookRepository.loadBookEntries(sortOption, onLegacyBookMigrationProgress)
-        val shelves = bookRepository.loadShelves()
+        val shelves = bookRepository.loadShelves(entries)
         BookshelfLoadResult(
             entries = entries,
             progressById = loadBookProgressById(entries, bookRepository),
@@ -138,8 +138,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
 
     override suspend fun syncLibrary() {
         if (syncSettingsRepository.settings.first().provider != SyncProvider.Gdrive) return
-        hoshiSync.sync()
-        hoshiSync.state.value.errorMessage?.let { throw GoogleDriveSyncException(it) }
+        hoshiSync.syncOrThrow()
     }
 
     override suspend fun loadRemoteBooks(localEntries: List<BookEntry>): RemoteBookshelfLoadResult = withContext(ioDispatcher) {
@@ -160,12 +159,13 @@ internal class AndroidBookshelfRepository @Inject constructor(
         )
     }
 
-    override suspend fun openBook(entry: BookEntry, onProgress: (Double) -> Unit): String = withContext(ioDispatcher) {
+    override suspend fun downloadBook(entry: BookEntry, onProgress: (Double) -> Unit) = withContext(ioDispatcher) {
         val current = bookRepository.loadMetadata(entry.root) ?: entry.metadata
-        val metadata = if (current.epub == null) hoshiSync.downloadBook(current, onProgress) else {
-            hoshiSync.cancelDownload()
-            current
-        }
+        if (current.epub == null) hoshiSync.downloadBook(current, onProgress)
+    }
+
+    override suspend fun openBook(entry: BookEntry): String = withContext(ioDispatcher) {
+        val metadata = bookRepository.loadMetadata(entry.root) ?: entry.metadata
         bookRepository.saveMetadata(
             entry.root,
             metadata.copy(lastAccess = bookRepository.currentAppleReferenceDateSeconds()),
@@ -352,19 +352,13 @@ internal class AndroidBookshelfRepository @Inject constructor(
         statsSyncMode: StatisticsSyncMode,
         syncAudioBook: Boolean,
     ): SyncResult = withContext(ioDispatcher) {
-        val syncSettings = syncSettingsRepository.settings.first()
-        if (syncSettings.provider == SyncProvider.Gdrive) {
-            hoshiSync.sync(entry.metadata)
-            hoshiSync.state.value.errorMessage?.let { throw GoogleDriveSyncException(it) }
-            return@withContext SyncResult.Synced(entry.displayTitle)
-        }
         syncManager.syncBook(
             entry = entry,
             direction = direction,
             syncStats = syncStats,
             statsSyncMode = statsSyncMode,
             syncAudioBook = syncAudioBook,
-            syncBookData = syncSettings.uploadBooks,
+            syncBookData = syncSettingsRepository.settings.first().uploadBooks,
         )
     }
 

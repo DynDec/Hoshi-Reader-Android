@@ -14,6 +14,41 @@ import org.junit.Test
 
 class ReaderRouteProfileActivationTest {
     @Test
+    fun readyReaderClearsDictionaryBeforeActivatingItsProfile() = runBlocking {
+        val events = mutableListOf<String>()
+
+        readerReadyState(profileId = "book-ja").activateProfileAndPrepareRender(
+            beforeProfileActivation = { events += "clear-dictionary" },
+            activateForBook = {
+                events += "activate-book-profile"
+                ContentLanguageProfile.Japanese
+            },
+            clearLoadedProfile = {},
+            loadReaderSettings = {
+                events += "load-book-settings"
+                ReaderSettings()
+            },
+        )
+
+        assertEquals(listOf("clear-dictionary", "activate-book-profile", "load-book-settings"), events)
+    }
+
+    @Test
+    fun loadingAndFailedBooksDoNotClearDictionary() = runBlocking {
+        var resetCount = 0
+        listOf(ReaderRouteLoadState.Loading, ReaderRouteLoadState.Error(IllegalStateException("Book unavailable"))).forEach { state ->
+            state.activateProfileAndPrepareRender(
+                beforeProfileActivation = { resetCount++ },
+                activateForBook = { error("Book profile must not be activated") },
+                clearLoadedProfile = {},
+                loadReaderSettings = { error("Book settings must not be read") },
+            )
+        }
+
+        assertEquals(0, resetCount)
+    }
+
+    @Test
     fun readyReaderLoadActivatesBookProfile() {
         var activatedMetadata: BookMetadata? = null
         var clearCount = 0
@@ -35,7 +70,7 @@ class ReaderRouteProfileActivationTest {
         var clearCount = 0
 
         runBlocking {
-            ReaderRouteLoadState.Error.publishProfileActivation(
+            ReaderRouteLoadState.Error(IllegalStateException("Book unavailable")).publishProfileActivation(
                 activateForBook = { metadata -> activatedMetadata = metadata },
                 clearLoadedProfile = { clearCount += 1 },
             )
@@ -50,7 +85,8 @@ class ReaderRouteProfileActivationTest {
         var activationCount = 0
         var clearCount = 0
 
-        val renderState = ReaderRouteLoadState.Error
+        val cause = IllegalStateException("Book unavailable")
+        val renderState = ReaderRouteLoadState.Error(cause)
             .activateProfileAndPrepareRender(
                 activateForBook = {
                     activationCount += 1
@@ -60,7 +96,7 @@ class ReaderRouteProfileActivationTest {
                 loadReaderSettings = { ReaderSettings() },
             )
 
-        assertEquals(ReaderRouteRenderState.Error, renderState)
+        assertEquals(ReaderRouteRenderState.Error(cause), renderState)
         assertEquals(0, activationCount)
         assertEquals(1, clearCount)
     }

@@ -1,18 +1,29 @@
 # Changelog
 
-All notable user-visible changes to Hoshi Reader Android are documented here.
-The format follows a Keep a Changelog style, and release sections use Semantic Versioning.
-Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
+What's new and fixed in Hoshi Reader Android.
+Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 
 ## [Unreleased]
 
 ### Added
 
+- Revisit the last 100 full-text queries from the Dictionary tab and external lookups, with tap-to-search, individual deletion and clearing, without recording in-book lookups or subsequent character and word selections.
+
+- Sync books, reading progress, highlights, shelves, statistics and audiobook playback with Hoshi on iOS through Google Drive, including devices without Google Play Services, keeping Hoshi and TTU logins independent when connecting or switching providers, with less startup delay for large bookshelves and without replaying part of the current audiobook cue or losing newly created highlights when local state is synced.
+- Download cloud books on demand, choose local-only or cloud-wide deletion, resume interrupted uploads across app restarts, keep healthy uploads running while metadata requests recover from network timeouts, stop transfers when Google Drive requires reconnection, and track per-book progress, separate effective upload/download speeds and errors on a dedicated queue page that preserves your position, avoids a dim backdrop on E-ink screens, and shows checking status until transfers are known; upload chunks adapt to the connection, and transfer concurrency is configurable in Sync settings (default 8).
+- Read Japanese books aloud with device, online or self-hosted TTS voices, background playback, adjustable speed, separate narration/dialogue voices, independently replayable Japanese dialogue passages and smoother continuous speech across sentences and chapters with parallel online prefetch and recovery from temporary synthesis failures; skip image holds by turning pages manually without interrupting speech or immediately returning to the narration page, and disable image holds with auto-scroll in the background too.
+- Customize TTS pronunciation with book-specific or global replacements, optional regular expressions and ruby readings, without changing book text.
+- Export audiobook or TTS sentence audio to Anki with the optional `{sentence-audio}` field.
+- Optionally disable a term's Anki button after successful mining until the popup is reopened.
+- View, copy or export recent runtime errors alongside crash history and build information in Diagnostics.
+- Install the latest development preview from About.
+- Add LINE Seed JP to the recommended reader fonts.
 - Add `{book-cover-reuse}` to Anki field placeholders to reuse one uploaded cover
   per book in AnkiDroid across app restarts, reducing duplicate cover files.
   Before uploading, it can discover an existing cover in recent notes of the
   selected note type using the field mapped to `{document-title}`.
   References stay local to this installation; AnkiConnect uses normal cover export.
+  If a cover cannot be uploaded or reused, the card is still added without it.
 
 - Add a Books per row slider at the top of Manage Shelves, defaulting to two
   columns and ranging up to the current collapsed shelf preview capacity.
@@ -34,39 +45,32 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
   Opening an image also enables Reader focus mode, hiding the status bar and
   keeping focus mode enabled after the image closes.
 
-- Add Hoshi Google Drive sync alongside TTU, sharing books, reading position,
-  highlights, shelves, reading sessions and Sasayaki playback with iOS. Cloud
-  books download when opened; choose Delete Local to keep the cloud copy or
-  Delete Everywhere to remove it across devices while retaining reading history.
-  Book deletion actions stack vertically, and cloud icons sit inline on the first
-  title line.
-  Failed Google Drive sign-ins show an error dialog.
-  Connecting through the Google account picker resets pending sync operations so
-  books deleted before sign-in do not delete existing cloud copies.
-  Devices without Google Play Services can connect through their browser.
-  Hoshi and TTU retain their logins independently when connecting or switching
-  providers; signing out disconnects only the selected provider.
-  Android-generated Sasayaki matches include the image-list field required by iOS.
-  Debug builds sync edits after 2 seconds and poll for cloud changes every 5 seconds.
-  Bookshelf and Statistics refreshes are batched during sync and skipped while reading.
-  Full syncs of large libraries are faster, a failed book no longer stops the
-  rest of the sync, and Sync settings show a transfer queue with progress and
-  per-book errors.
-  Books sync eight at a time using far fewer Google Drive requests, and
-  rate-limited or failed requests are retried.
-  Large book uploads stream from disk without loading entire files into memory.
-
 ### Changed
 
+- Make Statistics charts easier to read with a one-hour minimum scale and compact previous/next period buttons alongside swipe navigation, with stable single-line period titles and duration/comparison rows when paging.
+- Label the selected-text menu entry “Hoshi Lookup” (“Hoshi 查词” in Simplified Chinese) to make dictionary lookup easier to identify.
+- Simplify About into compact groups for updates, project links, support and storage cleanup.
+- Edit individual reading sessions in Statistics, with deletions preserved across sync.
+- Replace BIZ UDPGothic with BIZ UDGothic in the recommended fonts.
 - Open Reader Contents on Gallery by default, retaining later tab selections
   and Gallery scroll position within the current reader session. Browse with
   compact Previous/Next image buttons above the list and previews about 20% shorter
   while preserving image proportions.
-- Edit individual reading sessions in Statistics. Session deletions persist across
-  sync, and daily totals follow the selected reset time.
 
 ### Fixed
 
+- Keep word lookups and sentence context within the tapped dictionary list item instead of joining neighboring definitions.
+- Keep the full query visible and tappable in the Dictionary tab even when its beginning has no dictionary match.
+- Start reading statistics reliably when Sasayaki turns pages automatically, including after statistics finish loading or autostart settings change, without treating subpixel adjustments on the same page as page turns.
+- Restore continuous reading without clipped text, furigana or position drift, and keep full-width lookup popups independent of reader padding.
+- Keep the selection menu and handles usable after dragging across paragraphs or ruby, without unexpected page turns or selection flicker.
+- Create, recolor and remove highlights when selections touch ruby annotations.
+- Show saved settings immediately when their controls appear, avoiding a flash of defaults.
+- Keep names containing middle dots intact during lookup and prevent old Dictionary audio from replaying when opening a book.
+- Preserve lookup access to dictionaries excluded from aggregate Anki fields, and handle selected-definition fallbacks correctly.
+- Keep audio-source menus inside scaled lookup popups.
+- Show useful error details when operations fail, and improve update checks when download mirrors return invalid responses.
+- Improve Japanese audiobook transcription with Nakuru on 64-bit and 32-bit ARM, resumable component downloads and live cue updates; remove retired model files while preserving book data.
 - Keep vertical pages free of font/ruby-dependent padding gaps with standard
   WebView line boxes. Retain selection preview and the dictionary JNI bridge.
 
@@ -74,238 +78,132 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
-- Transcribe Japanese audiobooks on-device in Sasayaki. Download the model only when
-  needed; pause/resume, continue with the panel closed or after switching apps, and
-  save progress when leaving Reader. Reuse or clear transcripts, open the matching
-  transcription tab, and choose Lightweight, Balanced (default), or Fast. Match speech
-  to book text while reading without interrupting playback, with better recovery of
-  short replies and recognition errors. Support M4A, show match coverage, import
-  multiline subtitles, export partial or complete matches as SRT, and show localized
-  error messages.
-- Set lookup frequency sorting per profile: Auto, Ascending, Descending, or Disabled.
-  Explicit ordering requires an enabled frequency dictionary.
-- Preserve furigana in Reader highlights and Contents. Select an exact highlighted range
-  to change its color or remove it in paginated, continuous, and VN modes.
-- Optionally hide thumbnails in collapsed shelves; this setting is off by default.
-- Add global Theme settings with system or manual light/dark palettes, separate custom
-  light and dark reading colors, interface accents, and app-wide E-ink optimization.
-- Archive deleted-book reading statistics, restore them on reimport, and edit daily
-  records. Deleting all records requires confirmation.
-- Add calendar and all-time Statistics views with period comparisons, averages, goal
-  history, and best-day summaries.
-- Support Anki tag handlebars such as `{document-title}` and `{expression}`; whitespace
-  in substituted values becomes underscores. New formats use the `hoshi` tag by default.
-- Long-press a lookup result's audio button to choose among named local or remote
-  recordings; use the selected recording for Anki cards too.
-- Show source text above Dictionary and shared lookup results. Tap a character to look it
-  up while retaining the full sentence for Anki. Back/Forward restores the selected
-  occurrence, and source text size is adjustable from 12–48.
-- Add Off, Dimmed, Toggle, and Hidden furigana modes. Toggle reveals adjacent ruby
-  annotations together on the first tap.
-- Add Show, Blur, and Hide bookshelf-cover privacy modes, with title and author artwork
-  when a cover is hidden or unavailable.
-- Warn that AnkiDroid can create cards directly in most setups and that a misconfigured
-  AnkiConnect can prevent loading decks and note types or creating cards.
-- Add term dictionary categories and category-aware Anki mappings, Kanji dictionary
-  import and popup lookup, stroke-order font download, and complete pitch accents with
-  H/L patterns and nasal/devoice markers.
-- Add downloadable Japanese fonts with family, variant, and weight choices.
-- Use volume keys to move between terms in the topmost lookup popup.
-- Add `hoshi://search?text=...` links to open lookup results in a popup; use `mode=app`
-  to open the Dictionary tab.
-- Fix transcription setup for some playable M4B and Ogg Opus audiobooks.
+- Transcribe Japanese audiobooks on-device, with downloadable models, performance presets, pause/resume and subtitle matching while reading.
+- Import multiline subtitles and export partial or complete matches as SRT.
+- Configure lookup frequency sorting per profile.
+- Preserve furigana in highlights; select an exact highlight to recolor or remove it.
+- Choose global light/dark palettes, custom reading colors, interface accents and app-wide E-ink optimization.
+- Archive deleted-book statistics, restore them on reimport and edit daily records.
+- Browse calendar and all-time statistics with comparisons, averages and goal history.
+- Use Anki tag placeholders such as `{document-title}` and `{expression}`.
+- Long-press a lookup audio button to choose a recording for playback and Anki.
+- Tap source text above Dictionary or shared lookup results while retaining sentence context for Anki.
+- Choose Off, Dimmed, Toggle or Hidden furigana display.
+- Show, blur or hide book covers, and optionally hide collapsed-shelf thumbnails.
+- Add dictionary categories, category-aware Anki fields, Kanji lookup, stroke-order fonts and more complete pitch accents.
+- Download Japanese reader fonts with family, variant and weight choices.
+- Navigate popup terms with volume keys and open lookups through `hoshi://search?text=...` links.
+- Explain when AnkiDroid can be used directly without AnkiConnect.
 
 ### Changed
 
-- Translate the Anki selected-glossary fallback label into Simplified Chinese.
-- Use Sasayaki accent colors to highlight the current chapter in Reader Contents outside
-  E-ink mode.
-- Clearing Dictionary search by pull-down or clear button now focuses the field and
-  opens the keyboard while preserving results and navigation history.
-- Set JapanesePod101, LanguagePod101, and Jisho as the default word-audio sources.
-  Sources can be enabled and reordered independently; custom sources remain unchanged.
-  Play the first match immediately and show recordings as each source loads.
-- Always export dictionary images to Anki as media files; remove the “Embed media” switch.
-- Adjust Reader line spacing to match iOS more closely.
-- Use low-memory imports for automatic dictionary updates; manual imports follow the
-  Low Memory Usage Mode setting.
-- Make book search treat spaces and punctuation literally, show full sentence context,
-  and return up to 100 results. Mark a selected result in blue until page navigation.
-- Include surrounding Japanese quotation marks and punctuation in Sasayaki highlights
-  across all Reader modes.
-- Apply Recent/Title sorting to Google Drive books. Recent uses reading or audiobook
-  progress time, then bookdata last access.
-- Keep display settings global across profiles and show the edited profile name in
-  Appearance. Opening books or switching profiles no longer changes colors or E-ink mode.
-- Use theme colors consistently across navigation, cards, settings, and Reader panels;
-  make selections clearer in E-ink mode.
-- Keep Statistics available and move its settings to the Stats tab. Preserve saved goals
-  and sync preferences; keep Book Open and Page Turn autostart independent and off by
-  default. Group settings into Autostart, Reset Time, Sync, and Archive.
-- Simplify Statistics around daily goals and reading time, with a heatmap, period charts,
-  comparisons, averages, and time-ranked books. Weekly totals and trends remain in the chart.
+- Keep display settings global across profiles and use consistent theme colors and clearer E-ink selections throughout the app.
+- Simplify Statistics around daily goals, reading time, heatmaps and period charts; move its settings into the always-visible Stats tab.
+- Clearing Dictionary search now opens the keyboard while preserving results and history.
+- Use JapanesePod101, LanguagePod101 and Jisho as independently configurable default word-audio sources.
+- Always export dictionary images to Anki as media files and translate the selected-glossary fallback label into Chinese.
+- Make book search literal, show full sentence context, return up to 100 results and mark the selected result.
+- Align reader line spacing more closely with iOS and include surrounding Japanese punctuation in Sasayaki highlights.
+- Highlight the current audiobook chapter in Contents and apply Recent/Title sorting to Google Drive books.
+- Use low-memory dictionary imports for automatic updates.
 
 ### Fixed
 
-- Preserve Dictionary results and Back/Forward history when switching tabs, including
-  after following a definition link and swiping back.
-- Recognize existing AnkiDroid cards with equivalent Unicode spellings to prevent
-  duplicate cards.
-- Open matching AnkiDroid cards regardless of its previously selected deck, while
-  honoring the duplicate-search setting.
-- Report failed dictionary imports by filename and reason, then continue the batch.
-- Show a localized Reader message and Close action for missing or unreadable books.
-- Recover Reader after a crash while preserving reading position, highlights, and
-  Sasayaki cues.
-- Avoid transient errors during automatic Google Drive refresh and keep cached books
-  visible. Manual refresh still reports failures.
-- Count Korean consistently in reading progress, search, and Sasayaki matches; ignore
-  furigana fallback text in native counts and search.
-- Confirm before resetting Dictionary custom CSS.
-- Keep text and images visible in books with unusual publisher formatting.
-- Restore book files and covers from iOS backups despite filename variations.
-- Match Sasayaki subtitles immediately after selecting an SRT, including around chapter
-  boundaries and large text gaps, without search tuning or a separate action.
-- Import EPUB and TTU books with long, non-Latin titles without truncation.
-- Render inline Japanese character images at the right size and color, and exclude them
-  from image navigation.
-- Show EPUB fallback text when an inline character image fails to load.
-- Open EPUBs that previously remained on the Reader loading screen.
-- Keep large lookup popups on-screen so their borders and scrollable content remain
-  reachable.
-- Keep the Dictionary `Frequency` label on one line on compact screens.
-- Keep pitch accents aligned and dictionary labels readable when lookup entries wrap.
+- Keep Sasayaki paused while switching between lookup words and preserve Dictionary history across tab switches.
+- Prevent Unicode-equivalent AnkiDroid duplicates and restore duplicate-note search with AnkiDroid 2.25.
+- Continue dictionary import batches after errors and identify each failed file.
+- Show recoverable errors for unreadable books and restore Reader after a renderer crash.
+- Keep cached Google Drive books visible during temporary automatic-refresh failures.
+- Count Korean consistently in progress, search and subtitle matching while excluding furigana fallback text.
+- Confirm before resetting dictionary CSS and keep large lookup popups and compact labels usable.
+- Preserve text and images in unusually formatted EPUBs, including inline character images and their fallback text.
+- Restore iOS backup files despite filename variations and import long, non-Latin book titles.
+- Match subtitles immediately after SRT selection and fix transcription setup for some M4B and Ogg Opus audiobooks.
+- Open EPUBs that previously stayed on the loading screen and keep pitch accents aligned when entries wrap.
 
 ## [v1.3.3] - 2026-08-13
 
 ### Added
 
-- Automatically center the current chapter when opening the Reader Contents or
-  Sasayaki chapter list.
-- Add per-source enable controls for imported local audio databases while
-  preserving each source's configured priority.
-- Add Ogg Opus audiobook import with embedded title, artist, cover, and chapter
-  metadata in Sasayaki, load its artist without the platform-reader delay, and
-  show MP3, M4B, and Opus audiobook duration before playback starts.
-- Add a Reader Appearance swipe-threshold control for paginated and VN modes;
-  setting it to zero disables swipe page turns while preserving hardware page
-  keys.
-- Add up to three named Anki card formats with independent icons, decks, note
-  types, field mappings, tags, and duplicate states.
-- Add confirmation before deleting Anki formats and an edit-screen action that
-  duplicates a format and returns to the format list.
-- Add Anki duplicate-note search buttons that appear only for matching notes,
-  plus grouped per-format mining and search actions placed before audio.
-- Add precise cloze-part handlebars, numeric pitch accent graph handlebars, and
-  advanced glossary mapping options for Anki cards.
+- Center the current chapter when opening Contents or the Sasayaki chapter list.
+- Enable or disable individual local audio sources while preserving their order.
+- Import Ogg Opus audiobooks with metadata and chapters, and show audiobook duration before playback.
+- Adjust the paginated/VN swipe threshold, including disabling swipe page turns.
+- Create up to three Anki formats with independent icons, decks, fields, tags and duplicate states, with copy and confirmed-delete actions.
+- Find existing Anki notes from per-format lookup buttons.
+- Add precise cloze fields, numeric pitch graphs and advanced glossary mapping options.
 
 ### Changed
 
-- Increase the default lookup popup size to 500 × 500 dp and allow its
-  height to be adjusted up to 1000 dp.
-- Align the built-in Lapis, Kiku, and Senren field presets with iOS by no longer
-  setting sentence-card marker fields.
+- Increase the default popup size to 500 × 500 dp and maximum configurable height to 1000 dp.
+- Align Lapis, Kiku and Senren field presets with iOS.
 
 ### Fixed
 
-- Allow importing supported files whose display names contain `#` or `?`,
-  including EPUB volume numbers such as `Book #01.epub`.
-- Base reduced-motion popup scrolling on the portion of the popup that is
-  actually visible when its configured height exceeds the screen.
-- Show Reader Contents, fragment jumps, and chapter labels for EPUBs whose
-  navigation document is stored in a subdirectory.
-- Prevent staggered multi-touch taps in paginated and VN Reader modes from
-  being mistaken for a page-turn swipe.
-- Keep Google Drive sync and TTU backup restore compatible with progress files
-  whose book data IDs exceed Android's 32-bit integer range.
-- Keep dictionary lookup available when tapping Sasayaki-highlighted text in VN
-  Reader mode.
+- Import supported files with `#` or `?` in their names.
+- Keep reduced-motion popup scrolling within the visible screen area.
+- Restore Contents and fragment jumps for EPUBs with nested navigation documents.
+- Prevent staggered multi-touch taps from turning pages.
+- Support large book IDs in Google Drive sync and TTU backups.
+- Keep lookup available on Sasayaki-highlighted VN text.
 
 ## [v1.3.2] - 2026-08-04
 
 ### Added
 
-- Add the option to create a new shelf while moving one or more selected books.
-- Add a Reader image gallery, true table-of-contents chapter ranges, and optional
-  current-chapter progress in Reader chrome and statistics.
-- Add a configurable daily statistics reset time and pause reading statistics
-  while Reader sheets or fullscreen images are open.
-- Add optional current-book cover publishing for the Android lock screen and a
-  fixed PNG file used by compatible E-ink sleep-screen tools, plus direct
-  integration with iReader’s built-in Book Cover screen saver on compatible
-  domestic and Musnap overseas firmware using standard PNG output, with Fit,
-  Fill, and Stretch scaling modes.
+- Create a shelf while moving selected books.
+- Add a reader image gallery and chapter-based progress in Reader and Statistics.
+- Configure the daily statistics reset time and pause tracking while sheets or fullscreen images are open.
+- Publish the current cover to the lock screen, a PNG file or supported iReader screen savers, with Fit, Fill and Stretch modes.
 
 ### Changed
 
-- Expand Sasayaki delay adjustment to -4...4 seconds and playback speed to
-  0.5...3x.
-- Rename the Reader Go to panel to Contents, order its tabs as Chapters,
-  Highlights, Gallery, and Search, and remove overscroll deformation from
-  scrolling surfaces throughout the app.
+- Expand Sasayaki delay to ±4 seconds and playback speed to 0.5–3×.
+- Rename Go to as Contents, order its tabs as Chapters/Highlights/Gallery/Search, and remove overscroll deformation.
 
 ### Fixed
 
-- Keep Reader progress, search, and Sasayaki character offsets stable around
-  numeric HTML entities, and keep lookup sentence expansion and recursive
-  expression-tag scanning within the selected text boundary.
-- Keep manual bookshelf sync from rebuilding the entire shelf, while refreshing
-  imported reading progress in place.
-- Keep large bookshelves smooth during repeated scrolling by reusing
-  size-appropriate persistent cover thumbnails instead of decoding original
-  covers again after they leave memory, while recovering from transient
-  generation failures or damaged thumbnail-cache entries without hiding valid
-  covers.
-- Remember the selected Contents and Sasayaki tabs for the current Reader
-  session, and keep Sasayaki on the current tab after importing an audiobook.
-- Keep VN lookups and mined Anki sentences complete when a word or sentence
-  continues onto a later screen.
-- Keep Anki audio, book covers, Sasayaki clips, and dictionary media from
-  overwriting different exported media by using content-specific filenames.
-- Keep dictionary definitions in the configured dictionary order when an
-  inflected lookup merges multiple deinflection candidates.
-- Keep Sasayaki jumps to cues in the previous chapter from counting the target
-  chapter in the current reading session when image holding is enabled.
+- Preserve progress and lookup offsets around numeric HTML entities.
+- Refresh manual bookshelf sync in place and improve repeated cover scrolling.
+- Remember Contents and Sasayaki tabs during the reader session.
+- Keep VN lookups and Anki sentences complete across screen boundaries.
+- Prevent exported Anki media from overwriting different files.
+- Preserve dictionary order when merging inflected lookup results.
+- Avoid incorrect statistics when Sasayaki jumps to the previous chapter with image holds enabled.
 
 ## [v1.3.1] - 2026-07-11
 
 ### Added
 
-- Add a Reader Appearance setting for top safe area height.
+- Configure Reader's top safe area height.
 
 ### Changed
 
-- Improve dictionary lookup and import behavior by honoring Yomitan term scores
-  and normalizing Japanese iteration marks, full-width numbers, and emphatic
-  sequences.
-- Raise Statistics daily goal limits to 200,000 characters and 12 hours.
+- Improve lookup ranking and normalization of iteration marks, full-width numbers and emphatic text.
+- Raise daily goal limits to 200,000 characters and 12 hours.
 
 ### Fixed
 
-- Keep the Statistics tab visible after enabling it and switching away from Settings.
-- Refresh Statistics by-book covers when changing calendar ranges.
-- Keep Reader lookup highlights from expanding to an entire ruby annotation when
-  selecting a shorter word inside it.
-- Keep VN vertical text from jumping to a new column immediately after a ruby
-  annotation.
-- Keep long-pressed Reader volume keys paging or seeking Sasayaki instead of
-  falling back to system volume changes after the first press.
+- Keep Statistics visible after enabling it and refresh book covers when changing date ranges.
+- Keep lookup highlights within the selected word near ruby.
+- Prevent VN vertical text from jumping columns after ruby.
+- Keep long-pressed volume keys paging or seeking instead of changing system volume.
 
 ## [v1.3.0] - 2026-07-01
 
 ### Added
 
-- Add a full-library Statistics tab with habit summaries, calendar range browsing, per-book distribution, daily and weekly goals, and an Advanced Statistics visibility switch.
+- Add full-library Statistics with habit summaries, calendar ranges, per-book totals, daily/weekly goals and an Advanced visibility switch.
 
 ### Changed
 
-- Open the Reader Go to panel on Chapters by default, order its tabs as Chapters, Highlights, and Search, and focus the search field when Search is selected.
+- Open Go to on Chapters, followed by Highlights and Search, and focus the search field when selected.
 
 ### Fixed
 
-- Prefer exact expression-and-reading local audio matches before falling back to reading-only or expression-only entries.
-- Read Sasayaki M4B title, author, and cover metadata from MP4 atoms when Android's platform metadata reader returns empty.
-- Improve VN reader media screens, first-highlight display, vertical layout, punctuation wrapping, and lookup and Sasayaki highlight alignment.
-- Keep VN and continuous vertical reader content aligned to the configured vertical padding instead of the bottom overlap area.
-- Prevent reader lookups from crashing on words that begin with supplementary-plane kanji such as 𠮟.
-- Keep Sasayaki image hold active while viewing fullscreen Reader images, and avoid repeated holds once the continuous Reader target image is already visible.
+- Prefer exact expression-and-reading local audio matches.
+- Read M4B metadata when Android's metadata reader returns empty.
+- Improve VN media, highlights, vertical layout, punctuation and lookup alignment.
+- Respect vertical padding in VN and continuous modes.
+- Prevent lookup crashes on supplementary-plane kanji such as 𠮟.
+- Preserve Sasayaki image holds during fullscreen viewing and avoid repeated holds in continuous mode.

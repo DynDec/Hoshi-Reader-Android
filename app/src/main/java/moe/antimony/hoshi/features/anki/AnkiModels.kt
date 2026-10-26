@@ -104,6 +104,7 @@ data class AnkiSettings(
     val fieldMappings: Map<String, String> = emptyMap(),
     val tags: String = "",
     val allowDupes: Boolean = false,
+    val preventAccidentalDuplicates: Boolean = false,
     val checkDuplicatesAcrossAllModels: Boolean = false,
     val duplicateScope: AnkiDuplicateScope = AnkiDuplicateScope.Collection,
     val compactGlossaries: Boolean = false,
@@ -228,9 +229,12 @@ data class AnkiPopupSettings(
     val useAnkiConnect: Boolean = false,
     val needsAudio: Boolean = false,
     val needsSasayakiAudio: Boolean = false,
+    val needsSentenceAudio: Boolean = false,
     val allowDupes: Boolean = false,
+    val preventAccidentalDuplicates: Boolean = false,
     val compactGlossaries: Boolean = false,
     val disableShowNotes: Boolean = false,
+    val excludedDictionaries: List<String> = emptyList(),
 )
 
 internal fun Map<String, String>.referencesAnkiHandlebar(handlebar: String): Boolean =
@@ -312,6 +316,8 @@ data class AnkiMiningContext(
     val documentTitle: String? = null,
     val coverPath: String? = null,
     val sasayakiAudioPath: String? = null,
+    val sentenceAudioPath: String? = null,
+    val sentenceAudioSuppressed: Boolean = false,
     val sentenceOffset: Int? = null,
     val bookId: String? = null,
     val reusedCoverReference: String? = null,
@@ -471,6 +477,7 @@ internal object AnkiHandlebarRenderer {
             "{book-cover}" -> context.coverPath.orEmpty()
             "{book-cover-reuse}" -> context.reusedCoverReference.orEmpty()
             "{sasayaki-audio}" -> context.sasayakiAudioPath.orEmpty()
+            "{sentence-audio}" -> context.sentenceAudioPath.orEmpty()
             else -> ""
         }
     }
@@ -498,8 +505,7 @@ internal object AnkiHandlebarRenderer {
         selectedGlossaryFallback: String,
         termDictionaries: List<AnkiTermDictionary>,
     ): String {
-        val selected = singleGlossaryForDictionary(selectedDictionary)
-        if (selected.isNotBlank()) return selected
+        singleGlossaryForDictionaryOrNull(selectedDictionary)?.let { return it }
         if (selectedGlossaryFallback in SelectedGlossaryHandlebars) return ""
         return handlebarToValue(
             handlebar = selectedGlossaryFallback,

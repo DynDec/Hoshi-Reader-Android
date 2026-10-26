@@ -104,6 +104,9 @@ class MainShellSceneDecoratorTest {
                     AppRoute.MainRoute -> Text("Main content")
                     is AppRoute.ReaderRoute -> Text("Reader content")
                     is AppRoute.SettingsDetailRoute -> Text("Settings detail content")
+                    is AppRoute.DiagnosticsRecordsRoute -> Text("Diagnostics records content")
+                    AppRoute.SyncSettingsRoute, AppRoute.SyncQueueRoute -> Text("Sync content")
+                    AppRoute.TtsSettingsRoute, AppRoute.TtsVoiceSettingsRoute, AppRoute.TtsReplacementsSettingsRoute, AppRoute.TtsReadingSettingsRoute -> Text("TTS settings content")
                     AppRoute.AnkiAdvancedRoute -> Text("Anki advanced content")
                     is AppRoute.AnkiCardFormatRoute -> Text("Anki format content")
                 }

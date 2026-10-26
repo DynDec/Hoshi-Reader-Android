@@ -25,6 +25,7 @@ import moe.antimony.hoshi.features.reader.ReaderSelectionData
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.di.IoDispatcher
 import moe.antimony.hoshi.ui.UiText
+import moe.antimony.hoshi.ui.withErrorDetails
 
 internal interface DictionarySearchRepository {
     val dictionarySettings: Flow<DictionarySettings>
@@ -61,6 +62,7 @@ internal class AndroidDictionarySearchRepository @Inject constructor(
 @HiltViewModel
 internal class DictionarySearchViewModel : ViewModel {
     private val repository: DictionarySearchRepository
+    private val history: DictionaryLookupHistory
     private val ioDispatcher: CoroutineDispatcher
     private val injectedScope: CoroutineScope?
     private val scope: CoroutineScope
@@ -69,9 +71,11 @@ internal class DictionarySearchViewModel : ViewModel {
     @Inject
     constructor(
         repository: DictionarySearchRepository,
+        history: DictionaryLookupHistory,
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
     ) : this(
         repository = repository,
+        history = history,
         coroutineScope = null,
         ioDispatcher = ioDispatcher,
         marker = Unit,
@@ -79,10 +83,12 @@ internal class DictionarySearchViewModel : ViewModel {
 
     internal constructor(
         repository: DictionarySearchRepository,
+        history: DictionaryLookupHistory,
         coroutineScope: CoroutineScope,
         ioDispatcher: CoroutineDispatcher,
     ) : this(
         repository = repository,
+        history = history,
         coroutineScope = coroutineScope,
         ioDispatcher = ioDispatcher,
         marker = Unit,
@@ -90,11 +96,13 @@ internal class DictionarySearchViewModel : ViewModel {
 
     private constructor(
         repository: DictionarySearchRepository,
+        history: DictionaryLookupHistory,
         coroutineScope: CoroutineScope?,
         ioDispatcher: CoroutineDispatcher,
         @Suppress("UNUSED_PARAMETER") marker: Unit,
     ) : super() {
         this.repository = repository
+        this.history = history
         this.ioDispatcher = ioDispatcher
         injectedScope = coroutineScope
         collectInitialState()
@@ -104,8 +112,14 @@ internal class DictionarySearchViewModel : ViewModel {
 
     val uiState: StateFlow<DictionarySearchUiState> = _uiState.asStateFlow()
 
+    val historyState: StateFlow<DictionaryLookupHistoryState> get() = history.state
+    fun deleteHistory(text: String) = history.delete(text)
+    fun clearHistory() = history.clear()
+    fun retryHistoryLoad() = history.retryLoad()
+    fun dismissHistoryError() = history.dismissOperationError()
+
     private var observedEffectiveProfileId: String? = null
-    private var profileChangeVersion: Int = 0
+    private var lookupVersion: Int = 0
 
     private fun collectInitialState() {
         scope.launch {
@@ -130,6 +144,7 @@ internal class DictionarySearchViewModel : ViewModel {
     }
 
     fun resetSearch() {
+        lookupVersion += 1
         _uiState.update { current ->
             DictionarySearchUiState(
                 dictionarySettings = current.dictionarySettings,
@@ -153,7 +168,7 @@ internal class DictionarySearchViewModel : ViewModel {
         observedEffectiveProfileId = profileId
         if (previousProfileId == null) return
 
-        profileChangeVersion += 1
+        lookupVersion += 1
         _uiState.update { current ->
             current.copy(
                 lastQuery = "",
@@ -180,9 +195,11 @@ internal class DictionarySearchViewModel : ViewModel {
 
     fun runLookup() {
         val query = _uiState.value.query
+        history.record(query)
         val dictionarySettings = _uiState.value.dictionarySettings.normalized()
-        val lookupProfileVersion = profileChangeVersion
+        val requestVersion = ++lookupVersion
         scope.launch {
+            if (requestVersion != lookupVersion) return@launch
             _uiState.update { it.copy(isSearching = true, errorMessage = null, sentenceOffset = null) }
             runCatching {
                 withContext(ioDispatcher) {
@@ -203,7 +220,7 @@ internal class DictionarySearchViewModel : ViewModel {
                     }
                 }
             }.onSuccess { state ->
-                if (lookupProfileVersion == profileChangeVersion) {
+                if (requestVersion == lookupVersion) {
                     _uiState.update {
                         it.copy(
                             lastQuery = state.lastQuery,
@@ -223,7 +240,8 @@ internal class DictionarySearchViewModel : ViewModel {
                     }
                 }
             }.onFailure { error ->
-                if (lookupProfileVersion == profileChangeVersion) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                if (requestVersion == lookupVersion) {
                     _uiState.update {
                         it.copy(
                             lastQuery = query.trim(),
@@ -231,8 +249,7 @@ internal class DictionarySearchViewModel : ViewModel {
                             results = emptyList(),
                             hasSearched = true,
                             isSearching = false,
-                            errorMessage = error.localizedMessage?.let(UiText::Literal)
-                                ?: UiText.Resource(R.string.dictionary_lookup_failed),
+                            errorMessage = UiText.Resource(R.string.dictionary_lookup_failed).withErrorDetails(error),
                             dictionaryStyles = emptyMap(),
                             popups = emptyList(),
                             resultClearSelectionSignal = 0,

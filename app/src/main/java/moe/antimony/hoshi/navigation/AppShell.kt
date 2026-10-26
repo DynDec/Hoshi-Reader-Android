@@ -42,6 +42,7 @@ import moe.antimony.hoshi.features.bookshelf.MainTab
 import moe.antimony.hoshi.features.bookshelf.SettingsDestination
 import moe.antimony.hoshi.features.bookshelf.SettingsTab
 import moe.antimony.hoshi.features.diagnostics.DiagnosticsView
+import moe.antimony.hoshi.features.diagnostics.DiagnosticsRecordKind
 import moe.antimony.hoshi.features.dictionary.DictionarySearchSession
 import moe.antimony.hoshi.features.dictionary.rememberDictionarySearchSession
 import moe.antimony.hoshi.features.dictionary.DictionarySearchView
@@ -53,11 +54,15 @@ import moe.antimony.hoshi.features.reader.ReaderBehaviorScreen
 import moe.antimony.hoshi.features.reader.ReaderFontManager
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.profiles.ProfilesView
+import moe.antimony.hoshi.features.settings.SettingsLoadState
+import moe.antimony.hoshi.features.settings.rememberSettingsLoader
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import moe.antimony.hoshi.features.settings.AdvancedSettingsView
 import moe.antimony.hoshi.features.statistics.StatisticsView
 import moe.antimony.hoshi.features.statistics.StatisticsSettingsView
 import moe.antimony.hoshi.features.statistics.StatisticsBookView
+import moe.antimony.hoshi.features.update.AboutAcknowledgementsScreen
+import moe.antimony.hoshi.features.update.AboutDependenciesScreen
 import moe.antimony.hoshi.features.update.AboutScreen
 import kotlinx.coroutines.launch
 
@@ -81,6 +86,8 @@ fun AppShell(
     pendingDictionaryLookupRequest: PendingDictionaryLookupRequest? = null,
     onPendingDictionaryLookupConsumed: () -> Unit = {},
     readerSettings: ReaderSettings,
+    readerSettingsLoadState: SettingsLoadState<ReaderSettings>,
+    onRetryReaderSettings: () -> Unit,
     onReaderSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
     onReaderKeyEventHandlerChange: (((KeyEvent) -> Boolean)?) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -106,6 +113,8 @@ fun AppShell(
     val sasayakiSettingsRepository = appContainer.sasayakiSettingsRepository
     val scope = rememberCoroutineScope()
     val currentReaderSettings by rememberUpdatedState(readerSettings)
+    val currentReaderSettingsLoadState by rememberUpdatedState(readerSettingsLoadState)
+    val currentOnRetryReaderSettings by rememberUpdatedState(onRetryReaderSettings)
     val currentOnPendingImportConsumed by rememberUpdatedState(onPendingImportConsumed)
     val currentOnPendingSasayakiReaderConsumed by rememberUpdatedState(onPendingSasayakiReaderConsumed)
     val currentOnPendingDictionaryLookupConsumed by rememberUpdatedState(onPendingDictionaryLookupConsumed)
@@ -117,19 +126,13 @@ fun AppShell(
     val readerBookmarkRefreshState = remember { ReaderBookmarkRefreshState() }
     var bookshelfRefreshKey by remember { mutableIntStateOf(0) }
     var dictionaryFocusRequestKey by rememberSaveable { mutableIntStateOf(0) }
-    var sasayakiSettings by remember { mutableStateOf(SasayakiSettings()) }
+    val sasayakiSettingsLoader = sasayakiSettingsRepository.settings.rememberSettingsLoader()
+    val currentSasayakiSettingsLoader by rememberUpdatedState(sasayakiSettingsLoader)
     val visibleMainTabs = MainTab.entries
 
-    LaunchedEffect(sasayakiSettingsRepository) {
-        sasayakiSettingsRepository.settings.collect { settings ->
-            sasayakiSettings = settings
-        }
-    }
-
-    fun updateSasayakiSettings(settings: SasayakiSettings) {
-        sasayakiSettings = settings
+    fun updateSasayakiSettings(update: (SasayakiSettings) -> SasayakiSettings) {
         scope.launch {
-            sasayakiSettingsRepository.update { settings }
+            sasayakiSettingsRepository.update(update)
         }
     }
 
@@ -330,9 +333,11 @@ fun AppShell(
                 is AppRoute.SettingsDetailRoute -> SettingsDetailDestination(
                     route = route,
                     effectiveProfileName = profileState.effectiveProfile.name,
-                    readerSettings = currentReaderSettings,
+                    readerSettings = currentReaderSettingsLoadState,
+                    onRetryReaderSettings = currentOnRetryReaderSettings,
                     onReaderSettingsChange = currentOnReaderSettingsChange,
-                    sasayakiSettings = sasayakiSettings,
+                    sasayakiSettings = currentSasayakiSettingsLoader.state,
+                    onRetrySasayakiSettings = currentSasayakiSettingsLoader.retry,
                     onSasayakiSettingsChange = ::updateSasayakiSettings,
                     readerFontManager = readerFontManager,
                     onClose = ::popRoute,
@@ -340,6 +345,22 @@ fun AppShell(
                     onSelectedTabChange = ::selectMainTab,
                     onOpenAnkiFormat = ::openAnkiFormat,
                     onOpenAnkiAdvanced = ::openAnkiAdvanced,
+                    onOpenAcknowledgements = { settingsBackStack.add(AppRoute.SettingsDetailRoute(SettingsDetailSection.Acknowledgements)) },
+                    onOpenDependencies = { settingsBackStack.add(AppRoute.SettingsDetailRoute(SettingsDetailSection.Dependencies)) },
+                    onOpenTts = { settingsBackStack.add(AppRoute.TtsSettingsRoute) },
+                    onOpenSync = { settingsBackStack.add(AppRoute.SyncSettingsRoute) },
+                    onOpenDiagnosticsRecords = { kind -> settingsBackStack.add(AppRoute.DiagnosticsRecordsRoute(kind)) },
+                )
+                AppRoute.SyncSettingsRoute -> moe.antimony.hoshi.features.sync.SyncSettingsView(
+                    onClose = ::popRoute,
+                    onOpenQueue = { settingsBackStack.add(AppRoute.SyncQueueRoute) },
+                )
+                AppRoute.SyncQueueRoute -> moe.antimony.hoshi.features.sync.SyncQueueView(onClose = ::popRoute)
+                is AppRoute.DiagnosticsRecordsRoute -> DiagnosticsView(
+                    onClose = ::popRoute,
+                    records = route.kind,
+                    onOpenRecords = { kind -> settingsBackStack.add(AppRoute.DiagnosticsRecordsRoute(kind)) },
+                    modifier = Modifier.fillMaxSize(),
                 )
                 is AppRoute.AnkiCardFormatRoute -> AnkiCardFormatView(
                     formatId = route.formatId,
@@ -347,6 +368,15 @@ fun AppShell(
                     onDuplicated = ::returnFromDuplicatedAnkiFormat,
                     modifier = Modifier.fillMaxSize(),
                 )
+                AppRoute.TtsSettingsRoute -> moe.antimony.hoshi.features.tts.TtsSettingsView(onClose = ::popRoute,
+                    onOpenSection = { section -> settingsBackStack.add(when (section) {
+                        moe.antimony.hoshi.features.tts.TtsSettingsSection.Voice -> AppRoute.TtsVoiceSettingsRoute
+                        moe.antimony.hoshi.features.tts.TtsSettingsSection.Replacements -> AppRoute.TtsReplacementsSettingsRoute
+                        moe.antimony.hoshi.features.tts.TtsSettingsSection.Reading -> AppRoute.TtsReadingSettingsRoute
+                    }) })
+                AppRoute.TtsVoiceSettingsRoute -> moe.antimony.hoshi.features.tts.TtsSettingsSectionView(moe.antimony.hoshi.features.tts.TtsSettingsSection.Voice, ::popRoute)
+                AppRoute.TtsReplacementsSettingsRoute -> moe.antimony.hoshi.features.tts.TtsSettingsSectionView(moe.antimony.hoshi.features.tts.TtsSettingsSection.Replacements, ::popRoute)
+                AppRoute.TtsReadingSettingsRoute -> moe.antimony.hoshi.features.tts.TtsSettingsSectionView(moe.antimony.hoshi.features.tts.TtsSettingsSection.Reading, ::popRoute)
                 AppRoute.AnkiAdvancedRoute -> AnkiAdvancedView(
                     onClose = ::popRoute,
                     modifier = Modifier.fillMaxSize(),
@@ -360,6 +390,7 @@ fun AppShell(
                         onReaderSettingsChange = currentOnReaderSettingsChange,
                         onReaderKeyEventHandlerChange = currentOnReaderKeyEventHandlerChange,
                         onBookmarkSaved = readerBookmarkRefreshState::markDirty,
+                        onBookLoaded = dictionarySession::clearForReader,
                         onClose = ::closeReaderRoute,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -511,16 +542,23 @@ private fun TopLevelRouteContent(
 private fun SettingsDetailDestination(
     route: AppRoute.SettingsDetailRoute,
     effectiveProfileName: String,
-    readerSettings: ReaderSettings,
+    readerSettings: SettingsLoadState<ReaderSettings>,
+    onRetryReaderSettings: () -> Unit,
     onReaderSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
-    sasayakiSettings: SasayakiSettings,
-    onSasayakiSettingsChange: (SasayakiSettings) -> Unit,
+    sasayakiSettings: SettingsLoadState<SasayakiSettings>,
+    onRetrySasayakiSettings: () -> Unit,
+    onSasayakiSettingsChange: ((SasayakiSettings) -> SasayakiSettings) -> Unit,
     readerFontManager: ReaderFontManager,
     onClose: () -> Unit,
     onBooksRestored: () -> Unit,
     onSelectedTabChange: (MainTab) -> Unit,
     onOpenAnkiFormat: (String) -> Unit,
     onOpenAnkiAdvanced: () -> Unit,
+    onOpenTts: () -> Unit,
+    onOpenSync: () -> Unit,
+    onOpenDependencies: () -> Unit,
+    onOpenAcknowledgements: () -> Unit,
+    onOpenDiagnosticsRecords: (DiagnosticsRecordKind) -> Unit,
 ) {
     when (route.section) {
         SettingsDetailSection.Dictionaries -> DictionaryView(
@@ -543,9 +581,11 @@ private fun SettingsDetailDestination(
         )
         SettingsDetailSection.Appearance -> ReaderAppearanceScreen(
             settings = readerSettings,
+            onRetrySettings = onRetryReaderSettings,
             profileName = effectiveProfileName,
             onSettingsChange = onReaderSettingsChange,
             sasayakiSettings = sasayakiSettings,
+            onRetrySasayakiSettings = onRetrySasayakiSettings,
             onSasayakiSettingsChange = onSasayakiSettingsChange,
             fontManager = readerFontManager,
             onClose = onClose,
@@ -553,22 +593,28 @@ private fun SettingsDetailDestination(
         )
         SettingsDetailSection.Behavior -> ReaderBehaviorScreen(
             settings = readerSettings,
+            onRetrySettings = onRetryReaderSettings,
             onSettingsChange = onReaderSettingsChange,
             onClose = onClose,
             modifier = Modifier.fillMaxSize(),
         )
         SettingsDetailSection.Advanced -> AdvancedSettingsView(
-            readerSettings = readerSettings,
-            onReaderSettingsChange = onReaderSettingsChange,
+            onOpenTts = onOpenTts,
+            onOpenSync = onOpenSync,
             onClose = onClose,
             onBooksRestored = onBooksRestored,
             modifier = Modifier.fillMaxSize(),
         )
         SettingsDetailSection.Diagnostics -> DiagnosticsView(
             onClose = onClose,
+            onOpenRecords = onOpenDiagnosticsRecords,
             modifier = Modifier.fillMaxSize(),
         )
+        SettingsDetailSection.Acknowledgements -> AboutAcknowledgementsScreen(onClose = onClose)
+        SettingsDetailSection.Dependencies -> AboutDependenciesScreen(onClose = onClose)
         SettingsDetailSection.About -> AboutScreen(
+            onOpenDependencies = onOpenDependencies,
+            onOpenAcknowledgements = onOpenAcknowledgements,
             onClose = onClose,
             modifier = Modifier.fillMaxSize(),
         )
@@ -599,8 +645,9 @@ private fun AppRoute.toMainTab(): MainTab = when (this) {
     AppRoute.StatisticsRoute, AppRoute.StatisticsSettingsRoute, is AppRoute.StatisticsBookRoute -> MainTab.Statistics
     AppRoute.SettingsRoute -> MainTab.Settings
     is AppRoute.ReaderRoute -> MainTab.Books
-    is AppRoute.SettingsDetailRoute -> MainTab.Settings
-    is AppRoute.AnkiCardFormatRoute, AppRoute.AnkiAdvancedRoute -> MainTab.Settings
+    is AppRoute.SettingsDetailRoute, is AppRoute.DiagnosticsRecordsRoute,
+    AppRoute.SyncSettingsRoute, AppRoute.SyncQueueRoute -> MainTab.Settings
+    is AppRoute.AnkiCardFormatRoute, AppRoute.AnkiAdvancedRoute, AppRoute.TtsSettingsRoute, AppRoute.TtsVoiceSettingsRoute, AppRoute.TtsReplacementsSettingsRoute, AppRoute.TtsReadingSettingsRoute -> MainTab.Settings
 }
 
 private fun SettingsDestination.toSection(): SettingsDetailSection = when (this) {

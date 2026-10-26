@@ -39,7 +39,12 @@ data class SyncSettings(
     val autoSyncEnabled: Boolean = false,
     val authProvider: SyncAuthProvider = SyncAuthProvider.DeviceCode,
     val uploadBooks: Boolean = true,
-)
+    val transferConcurrency: Int = DefaultTransferConcurrency,
+) {
+    companion object {
+        const val DefaultTransferConcurrency = 8
+    }
+}
 
 sealed interface DriveAuthStatus {
     data object Connected : DriveAuthStatus
@@ -56,9 +61,9 @@ sealed interface DriveAuthorizationResult {
     data class Failed(val message: String) : DriveAuthorizationResult
 }
 
-open class DriveAuthException(message: String) : Exception(message)
+open class DriveAuthException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-class DriveAuthorizationRequiredException : DriveAuthException("Connect Google Drive before syncing.")
+class DriveAuthorizationRequiredException(cause: Throwable? = null) : DriveAuthException("Connect Google Drive before syncing.", cause)
 
 sealed interface SyncResult {
     data class Synced(val title: String) : SyncResult
@@ -111,15 +116,25 @@ data class ResolvedBookPosition(
 class GoogleDriveApiException(
     message: String,
     val statusCode: Int? = null,
+    val reasons: Set<String> = emptySet(),
 ) : Exception(message) {
     val isStaleCacheError: Boolean get() = statusCode == 404
+    val isRateLimited: Boolean get() = statusCode == 429 ||
+        (statusCode == 403 && reasons.any { it == "userRateLimitExceeded" || it == "rateLimitExceeded" })
+
+    override fun getLocalizedMessage(): String = listOfNotNull(
+        super.getLocalizedMessage(), statusCode?.let { "HTTP $it" },
+    ).plus(reasons).distinct().joinToString("\n")
 
     companion object {
         const val NoInternetConnectionMessage = "No internet connection."
     }
 }
 
-class GoogleDriveUnavailableException(override val cause: Throwable) : Exception(cause.message, cause)
+open class GoogleDriveUnavailableException(override val cause: Throwable) : Exception(cause.message, cause)
+
+/** A Hoshi metadata HTTP exchange failed; it does not invalidate unrelated payload transfers. */
+internal class GoogleDriveMetadataNetworkException(cause: java.io.IOException) : GoogleDriveUnavailableException(cause)
 
 internal fun shouldAttemptDriveRequest(
     hasActiveNetwork: Boolean,

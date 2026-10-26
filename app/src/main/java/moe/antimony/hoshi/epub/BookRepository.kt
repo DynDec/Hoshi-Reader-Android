@@ -194,13 +194,20 @@ class BookRepository private constructor(
     suspend fun saveShelfList(shelves: Map<String, Timestamped<Int?>>) =
         sidecarDataSource.saveShelfList(fileDataSource.booksDirectory, shelves)
 
+    /** Reuse the snapshot from [loadBookEntries], which has already migrated legacy shelves. */
+    suspend fun loadShelves(entries: List<BookEntry>): List<BookShelf> =
+        resolveShelves(loadShelfList(), entries.map { it.metadata })
+
     suspend fun loadShelves(): List<BookShelf> {
         val list = loadShelfList()
         val books = loadAllBooks().mapNotNull { loadMetadata(it) }
-        return list.entries.filter { it.value.value != null }
+        return resolveShelves(list, books)
+    }
+
+    private fun resolveShelves(list: Map<String, Timestamped<Int?>>, books: List<BookMetadata>): List<BookShelf> =
+        list.entries.filter { it.value.value != null }
             .sortedWith(compareBy({ it.value.value }, { it.key }))
             .map { (name, _) -> BookShelf(name, books.filter { it.shelves?.get(name)?.value == true }.map { it.id }) }
-    }
 
     suspend fun saveShelves(shelves: List<BookShelf>) = storageLock.withLock {
         val old = loadShelfList()
@@ -209,12 +216,10 @@ class BookRepository private constructor(
         val normalized = shelves.map { it.copy(name = it.name.syncKey()) }
         val names = normalized.map { it.name }.toSet()
         val oldNames = old.entries.filter { it.value.value != null }.sortedWith(compareBy({ it.value.value }, { it.key })).map { it.key }
-        val reordered = oldNames.toSet() == names && oldNames != normalized.map { it.name }
+        val orderChanged = oldNames != normalized.map { it.name }
         old.filterValues { it.value != null }.keys.filterNot { it in names }.forEach { list[it] = Timestamped(now, null) }
-        var position = old.values.mapNotNull { it.value }.maxOrNull() ?: -1
         normalized.forEachIndexed { index, shelf ->
-            if (reordered) list[shelf.name] = Timestamped(now, index)
-            else if (old[shelf.name]?.value == null) list[shelf.name] = Timestamped(now, ++position)
+            if (orderChanged && old[shelf.name]?.value != index) list[shelf.name] = Timestamped(now, index)
         }
         for (root in loadAllBooks()) {
             val metadata = loadMetadata(root) ?: continue
