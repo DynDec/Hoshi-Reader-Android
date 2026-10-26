@@ -135,7 +135,7 @@ internal class ReaderSwipeGestureTracker(
 }
 
 /**
- * Returns the lookup start shift for a swipe along the text line: down in
+ * Returns the lookup start shift for a swipe along the text line: up in
  * vertical writing and right in horizontal writing move forward.
  */
 internal fun readerLookupShiftDelta(
@@ -147,5 +147,6 @@ internal fun readerLookupShiftDelta(
     val along = if (verticalWriting) dy else dx
     val across = if (verticalWriting) dx else dy
     if (abs(along) < minDistance || abs(along) <= abs(across)) return null
-    return if (along > 0f) 1 else -1
+    val forward = if (verticalWriting) along < 0f else along > 0f
+    return if (forward) 1 else -1
 }

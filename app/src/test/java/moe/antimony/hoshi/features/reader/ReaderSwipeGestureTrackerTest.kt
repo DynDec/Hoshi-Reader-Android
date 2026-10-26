@@ -187,8 +187,8 @@ class ReaderSwipeGestureTrackerTest {
 
     @Test
     fun lookupShiftFollowsTheTextLine() {
-        assertEquals(1, readerLookupShiftDelta(dx = 10f, dy = 120f, verticalWriting = true, minDistance = 80f))
-        assertEquals(-1, readerLookupShiftDelta(dx = 10f, dy = -120f, verticalWriting = true, minDistance = 80f))
+        assertEquals(-1, readerLookupShiftDelta(dx = 10f, dy = 120f, verticalWriting = true, minDistance = 80f))
+        assertEquals(1, readerLookupShiftDelta(dx = 10f, dy = -120f, verticalWriting = true, minDistance = 80f))
         assertEquals(1, readerLookupShiftDelta(dx = 120f, dy = -10f, verticalWriting = false, minDistance = 80f))
         assertEquals(-1, readerLookupShiftDelta(dx = -120f, dy = 10f, verticalWriting = false, minDistance = 80f))
     }
