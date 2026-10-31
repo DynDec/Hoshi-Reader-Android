@@ -3,7 +3,7 @@
 Remaining architecture gaps, ordered by priority. Current contracts and owners
 live in [ARCHITECTURE.md](ARCHITECTURE.md); checks are in
 [VALIDATION.md](VALIDATION.md). Document maintenance follows
-[AGENTS.md](../AGENTS.md#文档维护规则).
+[AGENTS.md](../AGENTS.md#document-maintenance-rules).
 
 Kotlin paths below are relative to `app/src/main/java/moe/antimony/hoshi/`.
 Each slice preserves current behavior except for changes required by the task.

@@ -329,4 +329,4 @@ upstream. Keep them in this section to limit upstream merge conflicts.
 
 ## Maintaining this map
 
-Document ownership and update rules live in [AGENTS.md](../AGENTS.md#文档维护规则).
+Document ownership and update rules live in [AGENTS.md](../AGENTS.md#document-maintenance-rules).
