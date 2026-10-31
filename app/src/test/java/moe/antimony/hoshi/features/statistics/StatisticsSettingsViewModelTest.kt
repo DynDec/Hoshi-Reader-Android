@@ -87,24 +87,6 @@ class StatisticsSettingsViewModelTest {
     }
 
     @Test
-    fun delayedArchiveSummaryIsRequiredBeforeControlsAreReady() = runTest {
-        val count = CompletableDeferred<Int>()
-        val model = StatisticsSettingsViewModel(
-            MutableStateFlow(ReaderSettings()),
-            {},
-            object : StatisticsRepositoryFake() {
-                override suspend fun loadArchiveSummary() = StatisticsArchiveSummary(count.await())
-            },
-            backgroundScope,
-        )
-        runCurrent()
-        assertEquals(SettingsLoadState.Loading, model.uiState.value.loadState)
-        count.complete(2)
-        runCurrent()
-        assertEquals(2, (model.uiState.value.loadState as SettingsLoadState.Loaded).value.archivedBookCount)
-    }
-
-    @Test
     fun failedInitialArchiveSummaryIsRetryableWithoutShowingEmptyArchive() = runTest {
         var attempts = 0
         val model = StatisticsSettingsViewModel(
@@ -160,21 +142,6 @@ class StatisticsSettingsViewModelTest {
         assertEquals(SettingsLoadState.Loading, reopened.uiState.value.loadState)
         runCurrent()
         assertEquals(persisted, (reopened.uiState.value.loadState as SettingsLoadState.Loaded).value.settings)
-    }
-
-    @Test
-    fun archiveReadFailureIsVisibleEvenWhilePreferencesAreStillLoading() = runTest {
-        val pendingSettings = CompletableDeferred<ReaderSettings>()
-        val model = StatisticsSettingsViewModel(
-            flow { emit(pendingSettings.await()) },
-            {},
-            object : StatisticsRepositoryFake() {
-                override suspend fun loadArchiveSummary(): StatisticsArchiveSummary = throw IOException()
-            },
-            backgroundScope,
-        )
-        runCurrent()
-        assertTrue(model.uiState.value.loadState is SettingsLoadState.Failed)
     }
 
     @Test

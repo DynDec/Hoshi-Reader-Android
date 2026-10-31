@@ -26,24 +26,18 @@ class AnkiConnectBackendTest {
     }
 
     @Test
-    fun terminalActionsPropagateCancellation() {
-        for ((action, invoke) in terminalActions()) {
+    fun everyActionPropagatesCancellation() {
+        val automaticChecks = listOf<Pair<String, (AnkiConnectBackend) -> Any?>>(
+            "version" to { it.isAvailable() },
+            "findNotes" to { it.isDuplicate(AnkiDeck(1L, "Mining"), AnkiNoteType(2L, "Basic", listOf("Front")), "猫", AnkiDuplicateScope.Collection, false) },
+            "deckNames" to { it.fetchDecks() },
+        )
+        for ((action, invoke) in terminalActions() + automaticChecks) {
             val cancelled = kotlinx.coroutines.CancellationException("cancelled")
             val backend = AnkiConnectBackend("https://anki.example.com", AnkiConnectTransport { _, _, _ -> throw cancelled })
 
             org.junit.Assert.assertSame("$action must propagate cancellation", cancelled, runCatching { invoke(backend) }.exceptionOrNull())
         }
-    }
-
-    @Test
-    fun automaticChecksPropagateCancellation() {
-        val cancelled = kotlinx.coroutines.CancellationException("cancelled")
-        val backend = AnkiConnectBackend("https://anki.example.com", AnkiConnectTransport { _, _, _ -> throw cancelled })
-
-        org.junit.Assert.assertSame(cancelled, runCatching { backend.isAvailable() }.exceptionOrNull())
-        org.junit.Assert.assertSame(cancelled, runCatching {
-            backend.isDuplicate(AnkiDeck(1L, "Mining"), AnkiNoteType(2L, "Basic", listOf("Front")), "猫", AnkiDuplicateScope.Collection, false)
-        }.exceptionOrNull())
     }
 
     private fun terminalActions(): List<Pair<String, (AnkiConnectBackend) -> Any?>> {
@@ -55,14 +49,6 @@ class AnkiConnectBackendTest {
             "sync" to { backend: AnkiConnectBackend -> backend.sync() },
             "guiBrowse" to { backend: AnkiConnectBackend -> backend.openNotes(deck, noteType, "猫", AnkiDuplicateScope.Collection, false) },
         )
-    }
-
-    @Test
-    fun cancellationIsNotReclassifiedAsAProviderFailure() {
-        val cancelled = kotlinx.coroutines.CancellationException("cancelled")
-        val backend = AnkiConnectBackend("https://anki.example.com", AnkiConnectTransport { _, _, _ -> throw cancelled })
-
-        org.junit.Assert.assertSame(cancelled, runCatching { backend.fetchDecks() }.exceptionOrNull())
     }
 
     @Test

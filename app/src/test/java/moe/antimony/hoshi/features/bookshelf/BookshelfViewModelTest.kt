@@ -525,47 +525,22 @@ class BookshelfViewModelTest {
     }
 
     @Test
-    fun remoteLoadFailureKeepsGoogleDriveContextAndDiagnostic() {
-        val repository = FakeBookshelfRepository(
-            entries = listOf(bookEntry("local-book")),
-            remoteLoadError = RuntimeException("drive failed"),
-        )
-        val viewModel = BookshelfViewModel(repository, testScope())
-
-        viewModel.reloadBookEntries()
-
-        assertEquals(
-            "Failed to fetch books from Google Drive.\ndrive failed",
-            viewModel.uiState.value.errorMessage.testString(),
-        )
-    }
-
-    @Test
-    fun remoteImportFailureKeepsGoogleDriveContextAndDiagnostic() {
+    fun remoteFailuresKeepGoogleDriveContextAndDiagnostic() {
         val remote = remoteEntry("drive-folder", "Remote Book")
-        val repository = FakeBookshelfRepository(remoteImportError = RuntimeException("drive import failed"))
-        val viewModel = BookshelfViewModel(repository, testScope())
-
-        viewModel.importRemoteBook(remote, syncStats = true, syncAudioBook = true)
-
-        assertEquals(
-            "Failed to import book from Google Drive.\ndrive import failed",
-            viewModel.uiState.value.errorMessage.testString(),
+        val load = BookshelfViewModel(
+            FakeBookshelfRepository(entries = listOf(bookEntry("local-book")), remoteLoadError = RuntimeException("drive failed")),
+            testScope(),
         )
-    }
+        val import = BookshelfViewModel(FakeBookshelfRepository(remoteImportError = RuntimeException("drive import failed")), testScope())
+        val delete = BookshelfViewModel(FakeBookshelfRepository(remoteDeleteError = RuntimeException("drive delete failed")), testScope())
 
-    @Test
-    fun remoteDeleteFailureKeepsGoogleDriveContextAndDiagnostic() {
-        val remote = remoteEntry("drive-folder", "Remote Book")
-        val repository = FakeBookshelfRepository(remoteDeleteError = RuntimeException("drive delete failed"))
-        val viewModel = BookshelfViewModel(repository, testScope())
+        load.reloadBookEntries()
+        import.importRemoteBook(remote, syncStats = true, syncAudioBook = true)
+        delete.deleteRemoteBook(remote)
 
-        viewModel.deleteRemoteBook(remote)
-
-        assertEquals(
-            "Failed to delete book from Google Drive.\ndrive delete failed",
-            viewModel.uiState.value.errorMessage.testString(),
-        )
+        assertEquals("Failed to fetch books from Google Drive.\ndrive failed", load.uiState.value.errorMessage.testString())
+        assertEquals("Failed to import book from Google Drive.\ndrive import failed", import.uiState.value.errorMessage.testString())
+        assertEquals("Failed to delete book from Google Drive.\ndrive delete failed", delete.uiState.value.errorMessage.testString())
     }
 
     @Test
@@ -768,17 +743,6 @@ class BookshelfViewModelTest {
             "Failed to import EPUB.\nFailed to read package document\nmsg=ill-formed document: expected </meta>",
             viewModel.uiState.value.errorMessage.testString(),
         )
-    }
-
-    @Test
-    fun importWithoutExceptionMessageStillShowsDiagnosticType() {
-        val viewModel = BookshelfViewModel(FakeBookshelfRepository(), testScope())
-
-        viewModel.importBook("content://books/broken.epub", "broken.epub") {
-            throw java.io.IOException()
-        }
-
-        assertEquals("Failed to import EPUB.\nIOException", viewModel.uiState.value.errorMessage.testString())
     }
 
     @Test

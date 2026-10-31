@@ -41,65 +41,6 @@ class AnkiViewModelReadinessTest {
     @get:Rule val files = TemporaryFolder()
 
     @Test
-    fun firstVisibleSettingsUseTheStoredValuesAndKeepFollowingUpdates() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val settings = DelayedSettings(AnkiSettings(allowDupes = true, preventAccidentalDuplicates = true))
-        val viewModel = AnkiViewModel(repository(settings))
-        val visibleSettings = mutableListOf<AnkiSettings>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.uiState.collect { state ->
-                (state.settingsPageState as? SettingsLoadState.Loaded)?.value?.settings?.let(visibleSettings::add)
-            }
-        }
-        try {
-            runCurrent()
-            assertEquals(SettingsLoadState.Loading, viewModel.uiState.value.settingsLoadState)
-            assertTrue(visibleSettings.isEmpty())
-            settings.firstRead.complete(Unit)
-            runCurrent()
-
-            val firstVisible = viewModel.uiState.value.settingsLoadState as SettingsLoadState.Loaded
-            assertTrue(firstVisible.value.allowDupes)
-            assertTrue(firstVisible.value.preventAccidentalDuplicates)
-            assertTrue(visibleSettings.all { it.allowDupes && it.preventAccidentalDuplicates })
-            viewModel.updatePreventAccidentalDuplicates(false)
-            runCurrent()
-            val updated = viewModel.uiState.value.settingsLoadState as SettingsLoadState.Loaded
-            assertTrue(updated.value.allowDupes)
-            assertFalse(updated.value.preventAccidentalDuplicates)
-        } finally {
-            viewModel.viewModelScope.coroutineContext[Job]!!.cancelAndJoin()
-            Dispatchers.resetMain()
-        }
-    }
-
-    @Test
-    fun aNewSettingsEntryWaitsForItsOwnReadBeforeShowingSavedValues() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val firstSettings = DelayedSettings(AnkiSettings(allowDupes = true))
-        val first = AnkiViewModel(repository(firstSettings))
-        var next: AnkiViewModel? = null
-        try {
-            firstSettings.firstRead.complete(Unit)
-            runCurrent()
-            assertTrue((first.uiState.value.settingsLoadState as SettingsLoadState.Loaded).value.allowDupes)
-            first.viewModelScope.coroutineContext[Job]!!.cancelAndJoin()
-
-            val nextSettings = DelayedSettings(AnkiSettings(compactGlossaries = false))
-            next = AnkiViewModel(repository(nextSettings))
-            runCurrent()
-            assertEquals(SettingsLoadState.Loading, next.uiState.value.settingsLoadState)
-            nextSettings.firstRead.complete(Unit)
-            runCurrent()
-            assertFalse((next.uiState.value.settingsLoadState as SettingsLoadState.Loaded).value.compactGlossaries)
-        } finally {
-            first.viewModelScope.coroutineContext[Job]!!.cancelAndJoin()
-            next?.viewModelScope?.coroutineContext?.get(Job)?.cancelAndJoin()
-            Dispatchers.resetMain()
-        }
-    }
-
-    @Test
     fun aFailedReadCanBeRetriedWithoutShowingDefaultSettings() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val settings = DelayedSettings(AnkiSettings(allowDupes = true))

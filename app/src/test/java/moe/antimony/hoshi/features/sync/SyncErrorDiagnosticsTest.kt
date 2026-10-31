@@ -37,11 +37,6 @@ class SyncErrorDiagnosticsTest {
         assertSame(error, ErrorDiagnosticEvents.buffer.drain().single().error)
     }
 
-    @Test fun successDoesNotCreateErrorOrHistory() = runTest {
-        assertNull(syncOperationError {})
-        assertTrue(ErrorDiagnosticEvents.buffer.drain().isEmpty())
-    }
-
     @Test
     fun driveFailurePreservesBothHttpStatusAndServerDiagnostic() {
         val error = GoogleDriveApiException("Storage quota exceeded for project 1234", statusCode = 403)

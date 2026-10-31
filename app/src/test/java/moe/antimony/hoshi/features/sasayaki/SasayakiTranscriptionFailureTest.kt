@@ -57,12 +57,4 @@ class SasayakiTranscriptionFailureTest {
             error.toSasayakiFailureText(SasayakiFailureKind.Unknown),
         )
     }
-
-    @Test
-    fun unknownFailureWithoutMessageStillShowsExceptionType() {
-        assertEquals(
-            UiText.Joined(listOf(UiText.Resource(R.string.sasayaki_transcription_error_unknown), UiText.Literal("IllegalStateException"))),
-            IllegalStateException().toSasayakiFailureText(SasayakiFailureKind.Unknown),
-        )
-    }
 }

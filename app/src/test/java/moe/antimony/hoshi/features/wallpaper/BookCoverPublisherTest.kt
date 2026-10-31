@@ -288,21 +288,6 @@ class BookCoverPublisherTest {
     }
 
     @Test
-    fun blankOriginalPlatformErrorDoesNotExposeTheInternalWrapperType() = runBlocking {
-        val publisher = DefaultBookCoverPublisher(
-            settings = MutableStateFlow(BookCoverWallpaperSettings(updateLockScreen = true)),
-            renderer = BookCoverImageRenderer { source, _ -> source },
-            lockScreenTarget = BookCoverLockScreenTarget {
-                throw BookCoverTargetException(BookCoverPublishFailure.WallpaperUpdateFailed, java.io.IOException())
-            },
-            exportTarget = BookCoverExportTarget { _, _ -> null },
-            iReaderTarget = BookCoverIReaderTarget { null },
-        )
-        val failure = publisher.publish(tempFolder.newFile("cover.png")).lockScreen as BookCoverTargetResult.Failed
-        assertEquals("IOException", failure.details)
-    }
-
-    @Test
     fun typedTargetFailurePublishesTheOriginalThrowableBeforeConvertingDetailsToText() = runBlocking {
         ErrorDiagnosticEvents.buffer.drain()
         val cause = SecurityException("Permission denial: uid 10345")

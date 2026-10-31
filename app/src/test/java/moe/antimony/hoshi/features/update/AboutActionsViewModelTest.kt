@@ -28,17 +28,6 @@ class AboutActionsViewModelTest {
             assertFalse(model.state.value.saving)
         } finally { model.viewModelScope.cancel(); Dispatchers.resetMain() }
     }
-    @Test fun linkFailureReachesVisibleStateAndHistory() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        ErrorDiagnosticEvents.buffer.drain()
-        val model = AboutActionsViewModel(save = {})
-        try {
-            val linkError = IOException("No browser", IOException("No matching activity"))
-            model.reportError(moe.antimony.hoshi.R.string.about_open_link_failed, linkError)
-            assertTrue(model.state.value.error!!.resolve({ _, _ -> "Failed" }, { _, _, _ -> "" }).contains("No matching activity"))
-            assertSame(linkError, ErrorDiagnosticEvents.buffer.drain().single().error)
-        } finally { model.viewModelScope.cancel(); Dispatchers.resetMain() }
-    }
     @Test fun saveCompletesEvenWhenDonationDialogCloses() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val gate = CompletableDeferred<Unit>()

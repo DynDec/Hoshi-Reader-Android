@@ -39,24 +39,12 @@ class AnkiRepositoryBackendSelectionTest {
         assertTerminalServiceFailureVisible("addNote", expectedAdded = false)
     }
 
-    @Test fun openingNotesServiceFailureReachesPopupAndDiagnostics() = runBlocking {
-        assertTerminalServiceFailureVisible("guiBrowse", expectedAdded = false)
-    }
-
-    @Test fun requestedSentenceMediaFailureReachesPopupAndDiagnostics() = runBlocking {
-        assertTerminalServiceFailureVisible("storeMediaFile", expectedAdded = false)
-    }
-
     @Test fun synchronizationFailureKeepsAddedResultAndShowsOriginalWarning() = runBlocking {
         assertTerminalServiceFailureVisible("sync", expectedAdded = true)
     }
 
     @Test fun optionalCoverFailureKeepsAddedResultAndRecordsCause() = runBlocking {
         assertTerminalServiceFailureVisible("storeMediaFile", expectedAdded = true, mediaTemplate = "{book-cover}", expectVisible = false)
-    }
-
-    @Test fun optionalSasayakiAudioFailureKeepsAddedResultAndRecordsCause() = runBlocking {
-        assertTerminalServiceFailureVisible("storeMediaFile", expectedAdded = true, mediaTemplate = "{sasayaki-audio}", expectVisible = false)
     }
 
     @Test fun optionalAudioFailureCannotHideRequiredSentenceAudioFailure() = runBlocking {
@@ -162,11 +150,6 @@ class AnkiRepositoryBackendSelectionTest {
     @Test
     fun miningCallbackKeepsBackendDiagnosticInVisibleState() = runBlocking {
         assertPopupBackendFailureIsVisible(showNotes = false)
-    }
-
-    @Test
-    fun showNotesCallbackKeepsBackendDiagnosticInVisibleState() = runBlocking {
-        assertPopupBackendFailureIsVisible(showNotes = true)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

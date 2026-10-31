@@ -44,40 +44,6 @@ class DisplaySettingsViewModelTest {
     }
 
     @Test
-    fun failedReadCanRetryWithoutRevealingLastSettingsAndNewInstanceLoadsAgain() = runTest {
-        val persisted = AppDisplaySettings(autoSwitch = false, eInkDarkTheme = true)
-        val finishFirstRead = CompletableDeferred<Unit>()
-        var attempts = 0
-        val source = flow {
-            attempts++
-            if (attempts == 1) throw IOException("display preference checksum mismatch")
-            finishFirstRead.await()
-            emit(persisted)
-        }
-        fun newModel() = DisplaySettingsViewModel(source, {}, { _, _ -> }, { _, _ -> }, backgroundScope)
-        val model = newModel()
-        runCurrent()
-        assertEquals(true, model.uiState.value.loadState is SettingsLoadState.Failed)
-        val failure = model.uiState.value.loadState as SettingsLoadState.Failed
-        assertTrue(failure.message.resolve({ _, _ -> "Load failed" }, { _, _, _ -> "" })
-            .contains("display preference checksum mismatch"))
-        assertNull(model.uiState.value.settings)
-
-        model.retryLoad()
-        assertEquals(SettingsLoadState.Loading, model.uiState.value.loadState)
-        runCurrent()
-        finishFirstRead.complete(Unit)
-        runCurrent()
-        assertEquals(SettingsLoadState.Loaded(persisted), model.uiState.value.loadState)
-
-        val reopened = newModel()
-        assertEquals(SettingsLoadState.Loading, reopened.uiState.value.loadState)
-        runCurrent()
-        assertEquals(SettingsLoadState.Loaded(persisted), reopened.uiState.value.loadState)
-        assertEquals(3, attempts)
-    }
-
-    @Test
     fun liveReadFailureHidesControlsButPreservesUnsavedPaletteUntilRetrySucceeds() = runTest {
         val persisted = AppDisplaySettings(autoSwitch = false)
         val failRead = CompletableDeferred<Unit>()

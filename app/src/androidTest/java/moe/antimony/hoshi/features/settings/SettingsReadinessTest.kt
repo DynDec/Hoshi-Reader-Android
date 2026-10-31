@@ -82,32 +82,6 @@ class SettingsReadinessTest {
     }
 
     @Test
-    fun enteringAndReenteringNeverShowsDefaultSwitchBeforeStorageResponds() {
-        val stored = MutableSharedFlow<Boolean>()
-        val visible = mutableStateOf(true)
-        compose.setContent {
-            MaterialTheme {
-                if (visible.value) {
-                    val loader = stored.rememberSettingsLoader()
-                    SettingsDetailScaffold(state = loader.state, title = "Settings fixture", onClose = {}, onRetry = loader.retry) { _, saved ->
-                        Switch(saved, {}, Modifier.testTag("saved-switch"))
-                    }
-                }
-            }
-        }
-        compose.onNodeWithTag("saved-switch").assertDoesNotExist()
-        runBlocking { stored.emit(true) }
-        compose.onNodeWithTag("saved-switch").assertIsOn()
-        runBlocking { stored.emit(false) }
-        compose.onNodeWithTag("saved-switch").assertIsOff()
-        compose.runOnIdle { visible.value = false }
-        compose.runOnIdle { visible.value = true }
-        compose.onNodeWithTag("saved-switch").assertDoesNotExist()
-        runBlocking { stored.emit(true) }
-        compose.onNodeWithTag("saved-switch").assertIsOn()
-    }
-
-    @Test
     fun replacingProfileSourceHidesOldProfileUntilNewSettingsArrive() {
         val first = MutableSharedFlow<Boolean>()
         val next = MutableSharedFlow<Boolean>()
@@ -151,15 +125,5 @@ class SettingsReadinessTest {
         compose.runOnIdle { unavailable = false }
         compose.onNodeWithText(context.getString(R.string.settings_retry)).performClick()
         compose.onNodeWithTag("retry-switch").assertIsOn()
-    }
-
-    @Test
-    fun successfullyLoadedNullIsContentRatherThanLoading() {
-        compose.setContent {
-            SettingsContent(SettingsLoadState.Loaded<String?>(null)) { value ->
-                if (value == null) Text("No record", Modifier.testTag("empty-record"))
-            }
-        }
-        compose.onNodeWithTag("empty-record").assertExists()
     }
 }

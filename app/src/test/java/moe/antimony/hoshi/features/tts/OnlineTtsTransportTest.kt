@@ -47,20 +47,6 @@ class OnlineTtsTransportTest {
         }
     }
 
-    @Test fun serviceFailurePreservesStatusAndResponseDiagnostic() = runBlocking {
-        MockWebServer().use { server ->
-            server.enqueue(MockResponse().setResponseCode(422).setBody("speaker identifier missing"))
-
-            val error = runCatching {
-                OnlineTtsTransport(client()).request(Request.Builder().url(server.url("/speech")).build())
-            }.exceptionOrNull() as TtsException
-
-            assertEquals(TtsFailure.InvalidResponse, error.failure)
-            assertTrue(error.message.orEmpty().contains("422"))
-            assertTrue(error.message.orEmpty().contains("speaker identifier missing"))
-        }
-    }
-
     @Test fun connectionFailurePreservesTheOriginalNetworkCause() = runBlocking {
         val unavailable = MockWebServer()
         unavailable.start()

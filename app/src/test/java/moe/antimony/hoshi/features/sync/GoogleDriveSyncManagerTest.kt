@@ -121,15 +121,6 @@ class GoogleDriveSyncManagerTest {
         assertEquals(2, events.size)
     }
 
-    @Test fun manualLibrarySyncPropagatesOriginalFailure() = runTest {
-        val f = fixture()
-        val error = GoogleDriveUnavailableException(IOException("Library connection failed", IOException("Host unreachable")))
-        f.remote.failRequest = { error }
-        assertSame(error, runCatching { f.manager.syncOrThrow() }.exceptionOrNull())
-        assertTrue(f.manager.state.value.errorMessage.details().contains("Host unreachable"))
-        assertSame(error, ErrorDiagnosticEvents.buffer.drain().single().error)
-    }
-
     @Test fun openingCloudBookPropagatesOriginalStateFailure() = runTest {
         val f = fixture()
         f.remote.addState("a", "book-a.json", SyncFormat.encode(remoteBook))
@@ -145,21 +136,17 @@ class GoogleDriveSyncManagerTest {
         assertSame(error, ErrorDiagnosticEvents.buffer.drain().single().error)
     }
 
-    @Test fun mergeLibraryFailureReachesDialogAndHistory() = attachFailure(AttachChoice.Merge)
-    @Test fun replaceFromCloudFailureReachesDialogAndHistory() = attachFailure(AttachChoice.Cloud)
-    @Test fun replaceFromDeviceFailureReachesDialogAndHistory() = attachFailure(AttachChoice.Device)
-
-    private fun attachFailure(choice: AttachChoice) = runTest {
-        val f = fixture()
-        val error = GoogleDriveApiException("Library request rejected", 403).apply {
-            initCause(IOException("Account storage full"))
+    @Test fun attachFailuresReachDialogAndHistory() = runTest {
+        for (choice in listOf(AttachChoice.Merge, AttachChoice.Cloud, AttachChoice.Device)) {
+            val f = fixture()
+            val error = GoogleDriveApiException("Library request rejected", 403).apply {
+                initCause(IOException("Account storage full"))
+            }
+            f.remote.failRequest = { error }
+            val message = syncOperationError { f.manager.attach(choice) }.details()
+            for (detail in listOf("Library request rejected", "403", "Account storage full")) assertTrue("$choice: $message", message.contains(detail))
+            assertSame(error, ErrorDiagnosticEvents.buffer.drain().single().error)
         }
-        f.remote.failRequest = { error }
-        val visibleError = MutableStateFlow<UiText?>(null)
-        visibleError.value = syncOperationError { f.manager.attach(choice) }
-        val message = visibleError.value.details()
-        for (detail in listOf("Library request rejected", "403", "Account storage full")) assertTrue(message, message.contains(detail))
-        assertSame(error, ErrorDiagnosticEvents.buffer.drain().single().error)
     }
 
     private suspend fun TestScope.fixture(

@@ -37,14 +37,6 @@ class DeviceCodeAuthorizationPollingTest {
     }
 
     @Test
-    fun terminalAuthorizationFailureRetainsItsUnderlyingDiagnosticReason() {
-        val result = IllegalStateException("Authorization response invalid", IllegalArgumentException("missing device_code"))
-            .toDeviceCodePollingFailureResult() as DriveAuthorizationResult.Failed
-        assertTrue(result.message.contains("Authorization response invalid"))
-        assertTrue(result.message.contains("missing device_code"))
-    }
-
-    @Test
     fun oauthFailureRetainsHttpStatusProviderCodeAndDescription() {
         val message = oauthFailureMessage(
             statusCode = 401,

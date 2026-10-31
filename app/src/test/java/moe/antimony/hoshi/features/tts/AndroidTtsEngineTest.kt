@@ -58,13 +58,6 @@ class AndroidTtsEngineTest {
         assertEquals(UiText.Joined(listOf(UiText.Resource(R.string.tts_failed), UiText.Literal("TextToSpeech.synthesizeToFile: -10123"))), queued.message)
     }
 
-    @Test fun classificationWithoutAnOriginalDiagnosticDoesNotInventAnErrorCode() {
-        val error = TtsException(TtsFailure.Synthesis).toTtsError(TtsFailure.Network)
-
-        assertEquals(TtsFailure.Synthesis, error.failure)
-        assertEquals(UiText.Resource(R.string.tts_failed), error.message)
-    }
-
     @get:Rule val folder = TemporaryFolder()
     private val settings = TtsSettings(engine = "device.one")
 

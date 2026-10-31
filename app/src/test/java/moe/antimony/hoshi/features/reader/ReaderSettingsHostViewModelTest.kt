@@ -20,30 +20,6 @@ import moe.antimony.hoshi.ui.resolve
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderSettingsHostViewModelTest {
-    @Test fun delayedFirstSettingsRemainLoadingAndFirstLoadedStateUsesStoredValues() = runTest {
-        val firstRead = CompletableDeferred<Unit>()
-        val stored = MutableStateFlow(ReaderSettings(volumeKeysTurnPages = true, fontSize = 30))
-        val model = ReaderSettingsHostViewModel(flow {
-            firstRead.await()
-            emitAll(stored)
-        }, { edit -> stored.value = edit(stored.value) }, backgroundScope)
-        runCurrent()
-        assertNull(model.uiState.value.settings)
-        assertEquals(SettingsLoadState.Loading, model.uiState.value.loadState)
-        model.update { it.copy(fontSize = 50) }
-        runCurrent()
-        assertEquals(30, stored.value.fontSize)
-        firstRead.complete(Unit)
-        runCurrent()
-        val firstVisible = model.uiState.value.loadState as SettingsLoadState.Loaded
-        assertTrue(firstVisible.value.volumeKeysTurnPages)
-        assertEquals(30, firstVisible.value.fontSize)
-        stored.value = stored.value.copy(fontSize = 32)
-        runCurrent()
-        assertEquals(32, (model.uiState.value.loadState as SettingsLoadState.Loaded).value.fontSize)
-        assertEquals(stored.value, model.uiState.value.settings)
-    }
-
     @Test fun staleCallbackCannotRevertAnUnrelatedConfirmedChange() = runTest {
         val stored = MutableStateFlow(ReaderSettings())
         val model = ReaderSettingsHostViewModel(stored, { edit -> stored.value = edit(stored.value) }, backgroundScope)

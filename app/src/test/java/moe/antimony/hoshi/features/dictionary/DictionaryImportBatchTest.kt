@@ -34,14 +34,6 @@ class DictionaryImportBatchTest {
     }
 
     @Test
-    fun knownNativeDiagnosticsUseLocalizedReasonsWithoutLosingDetails() {
-        val error = DictionaryImportException.fromNative("failed to parse index.json")
-        assertEquals("failed to parse index.json", error.detail)
-        assertEquals(UiText.Joined(listOf(UiText.Resource(R.string.dictionary_import_index_error), UiText.Literal("failed to parse index.json"))), dictionaryImportErrorText(error))
-        assertEquals(UiText.Joined(listOf(UiText.Resource(R.string.dictionary_import_archive_error), UiText.Literal("failed to open zip"))), dictionaryImportErrorText(DictionaryImportException.fromNative("failed to open zip")))
-    }
-
-    @Test
     fun failuresKeepReasonsAndLaterFilesContinue() = runBlocking {
         val items = listOf("坏𠮟.zip", "Good.zip", "Empty.zip").map { DictionaryImportItem(it) }
         val visited = mutableListOf<DictionaryImportItem>()

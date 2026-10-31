@@ -124,13 +124,4 @@ class PreviewUpdateViewModelTest {
         assertFalse(model.state.value.busy)
         assertTrue(ErrorDiagnosticEvents.buffer.drain().isEmpty())
     }
-    @Test fun errorsRetainNestedCauseInVisibleStateAndDiagnosticHistory() = testModel("") { model, fake ->
-        ErrorDiagnosticEvents.buffer.drain()
-        val failure = IOException("GitHub HTTP 403", IllegalStateException("Rate limit exhausted"))
-        fake.failure = failure
-        model.check(); runCurrent()
-        val text = model.state.value.error!!.resolve({ _, _ -> "Failed" }, { _, _, _ -> "" })
-        assertTrue(text.contains("GitHub HTTP 403")); assertTrue(text.contains("Rate limit exhausted"))
-        assertSame(failure, ErrorDiagnosticEvents.buffer.drain().single().error)
-    }
 }

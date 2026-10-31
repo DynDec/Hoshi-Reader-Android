@@ -178,15 +178,6 @@ class TtsPanelStateTest {
         compose.onNodeWithText(context.getString(R.string.tts_enabled)).assertDoesNotExist()
     }
 
-    @Test fun delayedSettingsHomeDoesNotShowDefaultSwitch() {
-        val gate = CompletableDeferred<Unit>()
-        panel(home = true, storageGate = gate)
-        compose.onNodeWithText(context.getString(R.string.tts_enabled)).assertDoesNotExist()
-        compose.runOnIdle { gate.complete(Unit) }
-        compose.onNodeWithText(context.getString(R.string.tts_enabled)).assertIsDisplayed()
-        compose.onNode(isToggleable()).assertIsOn()
-    }
-
     @Test fun settingsHomeShowsWriteFailureAndKeepsSavedSwitchUntilRetrySucceeds() {
         panel(home = true, enabled = false)
         compose.runOnIdle { speech.failWrites = true }

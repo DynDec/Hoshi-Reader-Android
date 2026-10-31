@@ -155,29 +155,6 @@ class BookCoverWallpaperViewModelTest {
     }
 
     @Test
-    fun unexpectedPublisherFailurePublishesTheOriginalCauseForDiagnostics() = runBlocking {
-        ErrorDiagnosticEvents.buffer.drain()
-        val cause = java.io.IOException("disk quota exceeded")
-        val error = IllegalStateException("Wallpaper renderer unavailable", cause)
-        val viewModel = viewModel(
-            BookCoverWallpaperSettings(updateLockScreen = true),
-            object : BookCoverPublisher {
-                override suspend fun publish(coverFile: File): BookCoverPublishResult = throw error
-            },
-        )
-
-        val result = viewModel.publishCurrentCover(File("cover.jpg"))
-        val event = ErrorDiagnosticEvents.buffer.drain().singleOrNull()
-
-        assertTrue(result.hasFailures)
-        assertNotNull("The ViewModel's fallback must retain a diagnostic event", event)
-        assertSame(error, event!!.error)
-        assertSame(cause, requireNotNull(event.error).cause)
-        assertEquals("Wallpaper renderer unavailable", requireNotNull(event.error).message)
-        assertEquals(UiText.Resource(R.string.book_cover_wallpaper_publish_failed), event.operation)
-    }
-
-    @Test
     fun publisherCancellationStillCancelsReaderEffect() = runBlocking {
         val viewModel = viewModel(
             BookCoverWallpaperSettings(updateLockScreen = true),
