@@ -1,425 +1,89 @@
-# Agent Validation and Automation
+# Agent Validation
 
-Reusable commands, measurement methods and verified pitfalls for agent sessions.
-Read the sections relevant to the change; test code holds individual cases.
+Completion checks, the bar for adding tests, and device-safety rules.
+All commands run from the repository root.
 
-## Choose and run checks
+## Completion checks
 
-Run focused behavior tests while working, then the applicable completion checks.
-All commands below run from the repository root.
-
-| Change | Completion checks |
+| Change | Checks |
 | --- | --- |
-| Documentation only | `git diff --check`; verify referenced paths/anchors and commands against their owners; preserve release headings and issue links when editing changelog |
-| App code, data or architecture implementation | `./gradlew test` and `./gradlew assembleDebug` |
-| Reader/popup/selection web assets | Also `node --test app/src/test/js/*.test.mjs`; use real WebView evidence for painting, geometry or native gestures |
-| Resources, manifest, UI wiring, packaging, framework integration | Also `./gradlew lint` |
+| Documentation only | `git diff --check`; verify referenced paths and anchors |
+| App code or data | `./gradlew test` and `./gradlew assembleDebug` |
+| Reader/popup/selection web assets | Also `node --test app/src/test/js/*.test.mjs` |
+| Resources, manifest, packaging | Also `./gradlew lint` |
 | Visible strings | Also `./gradlew :app:testDebugUnitTest --tests moe.antimony.hoshi.LocalizationResourceTest` |
-| SDK/ABI/signing/native packaging or release behavior | Also `./gradlew :app:assembleRelease`; inspect affected APK libraries, version, signature and build commit |
-| Release workflows or publisher tools | `actionlint`; `python3 -m pip install -r tools/tests/requirements.txt`; `python3 -m unittest discover -s tools/tests -p 'test_*.py'` |
-| Transcription runtime packaging | `python3 tools/build-transcription-audio.py --check`; component build/publication procedure below |
+| SDK/ABI/signing/release behavior | Also `./gradlew :app:assembleRelease` |
+| Release workflows or `tools/` scripts | `actionlint`; `python3 -m pip install -r tools/tests/requirements.txt`; `python3 -m unittest discover -s tools/tests -p 'test_*.py'` |
 
-JVM filtering uses the variant task, not the `test` aggregate:
+Filter JVM tests through the variant task:
+`./gradlew :app:testDebugUnitTest --tests <fully.qualified.Class>`.
+Rendering, gesture and latency claims need evidence from a real device or WebView.
 
-```bash
-./gradlew :app:testDebugUnitTest --tests moe.antimony.hoshi.features.reader.ReaderPaginationScriptsTest
-```
+## When to add a test
 
-Locate relevant tests with:
+A test must earn its maintenance cost. Add one only when it protects behavior
+that is likely to break, costly when broken, and not already covered:
 
-```bash
-rg --files app/src/test/java app/src/test/js app/src/androidTest/java tools/tests
-rg -n 'restoreProgress|selection|Sasayaki' app/src/test/js
-```
+- a bug that actually happened (regression test for the fixed root cause);
+- non-trivial logic: parsing, offsets/coordinate conversion, sync/merge rules,
+  state machines, concurrency or persistence;
+- a cross-module contract from [ARCHITECTURE.md](ARCHITECTURE.md) that a caller
+  could silently violate.
 
-Kotlin tests generally mirror production packages under `app/src/test/java`;
-real Android/WebView tests live under `app/src/androidTest/java`. JS tests execute
-the actual reader assets with generated DOM fixtures. CI configuration and build
-prerequisites are in `.github/workflows/android-ci.yml` and `app/build.gradle.kts`.
-Rendering and latency claims require device evidence.
+Do not add tests that:
 
-## Test and fixture pitfalls
+- pin constants, dp/sp sizes, colors, icons, exact copy or other UI styling;
+- restate the implementation (delegation, "calls X", injected dispatcher,
+  class hierarchy, DI wiring, a public-surface listing);
+- count operations or allocations, or assert timing;
+- repeat an existing case with different inputs. Extend the existing test,
+  preferably as a table of cases, instead;
+- re-check the generic error, loading-state or cancellation path on every
+  caller once a shared helper or one representative test covers it;
+- cover theoretical edge cases no user is likely to hit;
+- depend on live network services, real accounts or local-only files.
 
-- Test code through API, behavior, state-flow and operation-count assertions;
-  test manifest/resources/Gradle/provider declarations through parsed structure.
-- CI fixtures are constructed by tests or use tracked assets. Ignored `testdata/`
-  may contain optional local EPUB, dictionary, font, SRT, M4B and Opus samples;
-  inspect availability first.
+Before adding a test, search for existing coverage and prefer extending it.
+Fewer, behavior-level tests beat many narrow ones; delete tests that stop
+meeting this bar when you touch them.
+
+## Test pitfalls
+
 - JVM tests replacing `Dispatchers.Main` must cancel **and join** the ViewModel
-  scope before `resetMain()`, or late callbacks can fail unrelated tests.
+  scope before `resetMain()`, or late callbacks fail unrelated tests.
 - MockWebServer WebSocket fixtures must answer `onClosing` with
-  `webSocket.close(code, reason)`; otherwise shutdown can hang or fail teardown.
-- Duplicate English strings with intentionally different contexts need matching
-  `comment` attributes on every duplicate in both language resource files.
-- Settings state tests use delayed first emissions, read failure/retry and stale
-  profile responses, asserting that controls appear after confirmed loading.
-- For [error-path contracts](ARCHITECTURE.md#errors-and-diagnostics), inject
-  test-owned failures with specific messages and nested causes, and observe both
-  visible state and diagnostic events. Assert that cancellation and form validation
-  leave runtime history unchanged. Adapter/store examples are `ui/ErrorDetailsTest`
-  and `features/diagnostics/NonfatalDiagnosticsTest` in the JVM test tree.
+  `webSocket.close(code, reason)`, or teardown can hang.
+- Duplicate English strings with different contexts need matching `comment`
+  attributes on every duplicate in both language resource files.
+- Ignored `testdata/` may hold optional local samples; CI fixtures must be
+  generated by the test or tracked.
 
 ## Device execution without data loss
 
-- Select the intended serial/package explicitly. Preserve installed app data;
-  never uninstall, clear data, reset preferences or alter user files for a test.
-  A disposable-device exception requires explicit user authorization.
-- Do not use `connectedDebugAndroidTest`, `connectedAndroidTest`,
-  `installDebugAndroidTest` or other tasks that may reinstall/clear/uninstall app
-  data on an existing device. Build APKs separately, install with `adb install -r`,
-  then run only a reviewed class/method whose fixtures are isolated.
-- Read the chosen test's setup/teardown first. Use scratch stores/media and
-  explicitly supplied test endpoints and credentials.
-- Unlock the device and keep the screen on for UI/focus tests. Resolve labels
-  from resources in the user's current language.
-- SAF imports go through DocumentsUI or an authorized `content://` URI. Samples
-  may be pushed to Downloads, then selected through DocumentsUI to obtain a grant.
-
-Example for the generated-content-only viewport test; replace the serial after
-checking `adb devices -l`. Installation must use the same application ID/signing
-identity as the existing debug app; stop on a mismatch instead of uninstalling.
+- Preserve installed app data: never uninstall, clear data, reset preferences or
+  touch user files. Never run `connectedAndroidTest`, `connectedDebugAndroidTest`,
+  `installDebugAndroidTest` or similar tasks.
+- Build the APKs, install with `adb install -r`, and run one reviewed class whose
+  fixtures are isolated. Read its setup/teardown first.
+- `am instrument` can exit 0 on failure; require `OK (N tests)` and check for
+  `FAILURES` / `INSTRUMENTATION_FAILED`.
+- This fork's packages are `moe.requited.hoshi.debug` and
+  `moe.requited.hoshi.debug.test`.
 
 ```bash
 ./gradlew assembleDebug assembleDebugAndroidTest
-hoshi_serial='REPLACE_WITH_DEVICE_SERIAL'
-adb -s "$hoshi_serial" install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s "$hoshi_serial" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb -s "$hoshi_serial" shell am instrument -w -r \
-  -e class moe.antimony.hoshi.features.reader.ReaderViewportWebViewTest \
-  moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
+adb -s "$serial" install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s "$serial" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb -s "$serial" shell am instrument -w -r -e class <fully.qualified.Class> \
+  moe.requited.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-`am instrument` may return shell status 0 on test failure. Require the final
-`OK (N tests)` and inspect `FAILURES`, `INSTRUMENTATION_FAILED` and stack traces.
-Report tested API/WebView versions, commands, results, artifact paths and any
-unexecuted checks in the current task.
+Opt-in device tests read their arguments and host fixtures from their own
+source; read it before running. Drive fixtures live in `tools/drive-*-fixture.py`.
 
-## Drive metadata timeout isolation
+## Performance work
 
-Run `python3 tools/drive-metadata-isolation-fixture.py` on the host and
-`adb -s "$hoshi_serial" reverse tcp:18766 tcp:18766`, then explicitly run
-`moe.antimony.hoshi.features.sync.DriveMetadataIsolationDeviceTest` with
-`-e driveIsolationUrl http://127.0.0.1:18766`. Build/install debug and test APKs
-using the data-preserving procedure above. Restart the fixture server for each run.
-The opt-in test owns scratch stores/settings and generated files (one 60 MiB,
-seven 24 MiB); no production credentials or library files are used. It waits for
-all eight server sessions to receive payload bytes before arming a real 60-second
-metadata read timeout, then drops subsequent metadata responses to exhaust retries.
-Assertions require all eight payloads to advance and remain active after failure,
-then finish and publish references after recovery. Expect roughly two minutes.
-Stop the fixture and remove only this reverse mapping after testing.
-
-## WebView and UI automation pitfalls
-
-- Material 3 `ModalBottomSheet` applies its caller modifier before the internal
-  sheet offset; an outer `border` can remain on the scrim at the unshifted height.
-  Check short and shrinking E-ink sheets, not only full-height lists.
-  `SyncQueueViewTest` captures the real dialog window and checks for stray lines
-  above the sheet while its queue shrinks.
-
-- Cold launch normally lands on Bookshelf; open a book before testing Reader.
-  Single-tap text opens lookup; long press tests native selection/highlights.
-- Standalone reader fixtures must inject measured
-  `readerViewportCssLayout(...).cssVariables()` and wait for `HoshiReaderRestore`.
-  Shell injection alone can leave VN with a zero-height viewport.
-- Use screenshots/recordings for painting, menu visibility and handle movement.
-  CSS Custom Highlights can clip vertical glyph edges despite a correct DOM Range.
-- Native-handle fixtures need real long-press/drag events with both
-  `SOURCE_TOUCHSCREEN` and `TOOL_TYPE_FINGER`. Recovery presses need tap timeout plus
-  long-press timeout and a release margin; observe after that deadline.
-- Geometry polling and JDWP method tracing can mask or stall gesture bugs.
-  Record endpoints/text in memory without layout reads, collect after the gesture,
-  and retain an uninstrumented recording as the control.
-- Remove fixture WebViews from their parent before destroying them. Count retained
-  DevTools targets across repeated entry/exit before attributing slowdown to parsing.
-- Browser OAuth activity tests use the debug caller fixture and require window
-  focus. External-process browser fixtures use framework-only Java to run without
-  the target App's dependencies. Test tokens/stores remain isolated from login.
-
-## Performance baseline and diagnosis
-
-Measure before changing code. Keep the same device/build, book/chapter/position,
-profile, mode, writing direction, theme, playback state and cold/warm condition.
-Record explicit start/end markers, repeated run count, outliers and artifacts in
-a run-specific temp directory. User-reported device latency needs evidence on
-that device class; debug/emulator results describe only their tested conditions.
-
-For Reader opening, separate `tap -> WebView target -> restore/ready -> visible
-paint`. The first interval covers native routing, EPUB work and WebView creation;
-the second covers web setup/layout/restore. A ready flag does not prove paint.
-Compare relevant controls, such as first/repeated entry, short/long chapters,
-Sasayaki on/off and VN cue merging on/off.
-
-For a debuggable process, locate its WebView through CDP:
-
-```bash
-hoshi_serial='REPLACE_WITH_DEVICE_SERIAL'
-hoshi_package=moe.antimony.hoshi.debug
-hoshi_pid="$(adb -s "$hoshi_serial" shell pidof "$hoshi_package" | tr -d '\r')"
-adb -s "$hoshi_serial" forward tcp:9222 "localabstract:webview_devtools_remote_$hoshi_pid"
-curl --fail http://127.0.0.1:9222/json
-```
-
-Select the intended `appassets.androidplatform.net` target. VN readiness is
-`window.hoshiReader.ensureReady()`; paginated/continuous expose `didInitialize`.
-Check `calculateProgress()` after restore and pair it with screenshots for blank
-or incorrect content. Collect `Performance.getMetrics` and a focused CDP CPU
-profile; identify app-owned callers and self/inclusive time.
-
-| Signal | Next measurement |
-| --- | --- |
-| Late WebView target, low JS CPU | Kotlin/repository log markers; Perfetto for scheduler, binder, locks and main/render-thread waits |
-| CPU-heavy Kotlin/native path | Simpleperf sampling; distinguish app callers from framework frames |
-| Jank | `dumpsys gfxinfo` for repeated identical swipes; Perfetto separately for diagnosis so profiling overhead does not contaminate frame comparisons |
-| Worse after repeated entry | Live WebView targets, process CPU, heap retention and pending callbacks before/after each cycle |
-| Reader JS scales badly | Look for nested block×text/cue×screen scans and layout reads after DOM writes; protect improvements with operation-count tests |
-| Bookshelf cover jank | Separate original `HoshiCoverPipeline: source_decode` from cached thumbnail decode; a second unchanged warm round trip should not decode originals |
-| Blank bookshelf at startup | Compare the same signed release and library over repeated force-stop launches; use recording frame timestamps for shelf chrome → first books → covers. `am start -W` measures Activity display, not bookshelf data readiness. Measure repository stages and concurrent sync preparation separately on an isolated sidecar copy; do not compare debug/JIT timings directly with release latency. |
-| Statistics scrolling | Keep period/book expansion/heatmap/font state fixed; distinguish viewport drawing from repeated offscreen card recomposition |
-| Transcription slowness | Same compressed input and resume position; measure decoding, model load, inference and saving/alignment, plus thermal state, RSS/PSS and CPU/wall time |
-
-Transcription stages can overlap; do not sum them or call total-minus-inference
-time “decoder time.” Predecoded PCM benchmarks omit real pipeline costs. Extra
-threads need full-pipeline evidence plus token/timestamp parity and bounded
-read-ahead. Low sampled CPU alone does not locate a waiting bottleneck.
-
-After a change, rerun the same baseline/control and relevant behavior tests.
-Report before/after measurements and scope of the claim. Remove temporary adb
-forwards (`adb -s "$hoshi_serial" forward --remove tcp:9222`) and restore only
-task-owned device changes; keep logs/recordings outside the repository.
-
-## Specialized build and service setup
-
-### Google Drive browser authentication
-
-Copy `secrets.properties.example` to ignored `secrets.properties`; set
-`HOSHI_GOOGLE_CLIENT_ID_DEBUG` / `HOSHI_GOOGLE_CLIENT_ID_RELEASE`. Environment
-values override the file. Android clients use package/signing registration in
-the same Google Cloud project as iOS, with Custom URI scheme enabled; no client
-secret is used. Release CI requires its release ID; ordinary unit/lint CI does
-not. Auth changes must check generated BuildConfig and merged redirect schemes,
-including empty environment values. Protocol and activity tests live under
-`features/sync` in the JVM/device test trees.
-
-### Drive payload transfer fixtures
-
-`DriveFileTransferTest` covers resumable protocol recovery and persistence with
-MockWebServer. `BookTransferSchedulerTest` and `SyncTransferTrackerTest` cover
-concurrency and monotonic-clock effective speed measurement without real network timing.
-`SyncQueueViewTest` renders isolated upload/download rows and checks that active
-row reordering/completion preserves the queue head or the user's manually scrolled
-position without accessing the book repository or account; its screenshot is in target cache
-`sync-queue-fixture.png`.
-
-For device restart recovery, build/install the debug and androidTest APKs under
-the signature/data-protection rules above. Start
-`python3 tools/drive-transfer-fixture.py`, then use
-`adb -s "$hoshi_serial" reverse tcp:18765 tcp:18765`. Run these methods separately
-with `am instrument -w -r -e class <class>#<method> -e driveFixtureUrl
-http://127.0.0.1:18765 moe.antimony.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner`:
-
-1. `moe.antimony.hoshi.features.sync.DriveTransferDeviceTest#prepareInterruptedUpload`
-   waits for a confirmed chunk and a deliberately dropped subsequent connection.
-2. Call `curl -X POST http://127.0.0.1:18765/allow-resume`, then run
-   `DriveTransferDeviceTest#resumeAfterProcessRestartAndDownload` with the same
-   full class package. It checks a different PID, resumes the saved session,
-   compares downloaded SHA-256, and removes only its generated cache fixture.
-
-The loopback server throttles payload reads/writes and exposes `/stats` to verify
-that the new process queried the saved session and resumed at the acknowledged
-byte instead of creating another upload. Require `OK (1 test)` for each method;
-Android instrumentation's final code alone does not distinguish assertion
-failures. Remove the task-owned reverse with
-`adb -s "$hoshi_serial" reverse --remove tcp:18765` and stop the server afterward.
-For a controlled before/after comparison, start the fixture with
-`--benchmark --response-delay 4` and run
-`DriveTransferDeviceTest#measureUploadThroughputAndConfirmationSpeed` on the old
-and new debug APKs with the same test APK and loopback argument. The method
-reports elapsed seconds and zero-speed samples while awaiting acknowledgement;
-`-e expectEffectiveSpeed true` asserts no such zero samples for the new build.
-It uploads the same generated 12 MiB file each time; `/stats` reports payload
-request counts and ranges. Compare total duration, not the UI's estimated speed.
-
-These tests do not establish real Google account throughput or proxy behavior.
-
-### Transcription components and benchmarks
-
-- `tools/build-transcription-audio.py --help` owns build options. After decoder or
-  CMake changes, build supported ABIs using the pinned NDK/CMake from CI and commit
-  `app/src/main/assets/transcription-audio-runtime.json` with the source change.
-- `tools/publish-transcription-components.py --help` owns publication options.
-  Publish binaries, license notice and generated source archive to an immutable
-  component prerelease before shipping its catalog; use `--remote-check` to verify
-  deployed hashes. Existing component releases are immutable.
-- Nakuru device tests require already verified resources; they do not download
-  them. `NakuruDeviceTest` takes `nakuruClip` (app-readable 16 kHz PCM16 mono WAV).
-  `TranscriptionBenchmarkDeviceTest#benchmarkExcerpt` takes `clip` (at most 300 s)
-  and `preset` (1/2/3). Read their assertions/output handling before running;
-  timing and valid tokens do not establish recognition accuracy.
-- Runtime download/permission failure injection uses scratch resources.
-
-### TTS playback continuity
-
-`TtsQueuePlaybackDeviceTest` uses generated PCM, isolated Media3 players and
-in-memory preferences. Run it with the data-preserving instrumentation procedure
-above. It compares the former per-unit reset sequence with the production queue,
-including quote/chapter boundaries, multiple audio fragments and deliberately slow
-Reader presentation. Require complete ordered units, one initial prepare and no
-intermediate idle/buffering events for the ready queue. Logs use `HoshiTtsQueue`.
-Elapsed duration is secondary evidence; repeat on the same device and subtract
-the known PCM duration only as aggregate overhead, not a measured acoustic gap.
-`onAudioPositionAdvancing` supplies a wall-clock timestamp; translate it to the
-monotonic clock before comparing elapsed time. This fixture isolates app transport
-cost and does not measure provider silence, synthesis/network stalls or every codec.
-Pair it with `TtsImageHoldDeviceTest`, `TtsLookupPauseDeviceTest` and real WebView
-highlight tests when changing presentation or cancellation boundaries.
-
-`TtsConcurrencyBenchmarkDeviceTest#compareMicrosoftTranslatorConcurrency` is an
-opt-in live provider comparison: add `-e ttsConcurrencyBenchmark true` to the
-explicit instrumentation command. It uses eight public Japanese fragments by default; add
-`-e ttsBenchmarkProfile mixed` for 24 short/medium/long fragments. Both use shared
-warm authorization/catalogs, isolated engines and a unique temporary cache directory. The 1/2/3/4 then 4/3/2/1 order helps expose time/order variation;
-`HoshiTtsConcurrency` reports batch time, individual request time, audio duration
-and failures. `estimatedWait2xMs` models ordered playback from the first ready item
-at 2× speed; it excludes decoder/Reader costs and is not an acoustic measurement.
-It stops on failure rather than amplifying service errors with benchmark retries.
-This measures provider throughput, not acoustic gaps or the production scheduler;
-pair it with `TtsContinuousPlaybackDeviceTest#microsoftTranslatorPlaybackCompletesWithTwentyPrefetchedUnits`
-for real playback, and deterministic controller/repository tests for concurrency
-limits, ordered publication, cancellation and injected failures. Do not infer a
-universal optimum or service rate limit from one device/network session.
-
-### External TTS and release automation
-
-- `CustomTtsDeviceTest` opts into supplied `vitsUrl` or `openAiUrl`/`openAiModel`
-  endpoints using public samples and test-owned stores. Read required arguments
-  in the test. VITS expects exactly
-  `Content-Type: application/json`, without a charset suffix.
-- Mocked protocols cover repeatable provider failures; live network tests need
-  explicit endpoints/credentials and cannot be treated as deterministic CI.
-- Publisher fixtures in `tools/tests` cover stale commits, draft/corrupt uploads
-  and owned-preview cleanup. `.github/actionlint.yaml` documents the narrow
-  actionlint exception for GitHub's `queue: max`; structured tests still cover it.
-
-## Fork-specific checks
-
-This fork's debug package is `moe.requited.hoshi.debug`; use it (and
-`moe.requited.hoshi.debug.test`) in place of upstream's package names in `adb`
-commands. Keep fork-only checks in this section.
-
-- Sync logins: run `GoogleDriveAuthTest` with the explicit instrumentation runner and require
-  `OK (5 tests)`. It uses in-memory credentials to check independent Hoshi/TTU
-  logins, provider token routing, cancellation, and provider-scoped sign-out for
-  both account-picker and browser connections without touching saved accounts.
-  For real sign-in, connect TTU then Hoshi, and Hoshi then TTU; switch providers
-  and confirm both retain their connection. Sign out of each provider and confirm
-  the other remains connected. Cover both Play Services and browser authorization.
-- Continuous chapter grouping: `ContinuousReadingGroupsTest` generates EPUBs and
-  covers text-image-text, consecutive/first/last images, front matter before the
-  first named TOC target, one-sided/nested/fragment TOC boundaries, duplicate
-  labels, absent navigation, captions, SVGs and cached chapter shells. Run the
-  profile, state-holder and scroll scheduler tests for
-  profile persistence, source positions, mode changes and incoming sync updates.
-  `reader-continuous-group.test.mjs` covers source-local offsets, cross-file
-  highlight splitting, zero-text positions and source-scoped Sasayaki media stops.
-  The optional `reader-continuous-browser.test.mjs` uses an isolated headless
-  Chromium profile for real CSSOM/layout, publisher fonts/animations, cross-file
-  selections and a 15em buffer in both writing directions. Set
-  `HOSHI_TEST_CHROMIUM` to a Chromium executable on hosts without the default
-  Windows Chrome/Edge paths; missing Chromium is reported as a skipped test.
-  `ContinuousReaderBrowserTest` runs the Kotlin-composed document, generated CSS
-  and setup after actual browser navigation, including XHTML and decoded SVG
-  image resources. Set `HOSHI_TEST_EPUB_PATH` to optionally check a local EPUB.
-  On Android, open a book and switch chapters/modes while composition is pending;
-  confirm the source map, buffer and illustrations initialize together.
-  On a data-preserving device, verify the localized toggle defaults off and is
-  visible only in Continuous, then enable it and check restart restoration,
-  bookmarks/search/highlights/lookup/Sasayaki, incoming synced source positions,
-  previous/next beyond the entire group, and unchanged Paginated/VN behavior.
-  Include consecutive opening image files omitted from the TOC, followed by a
-  text contents page: they should merge as front matter, while the first named
-  chapter remains a separate group. Disabling merging must separate each file.
-  Check one reader-font 15em buffer below horizontal or left of vertical text,
-  including a text group ending in images; image-only displays have none. The
-  buffer must add scroll extent without adding characters or progress. Check
-  a reader-font 1.0em gap after each merged image-only source that is
-  immediately followed by another image-only source or a text source starting
-  with an image, in both writing directions, and no added space before it or
-  before text;
-  ordinary images within text sources and unmerged chapters must retain their
-  original spacing. The existing chapter-swipe threshold must
-  trigger only at the far edge.
-- Gallery: Previous/Next moves exactly one image without wrapping, including rapid
-  taps and after manual scrolling. Buttons stay above the image viewport; portrait
-  and wide previews retain their full proportions at 80% of the former size.
-  Contents dismissal, tab changes, and fullscreen viewing preserve Gallery's
-  image and pixel offset; leaving Reader and opening a new book session resets it.
-  `ReaderGalleryTest` uses generated in-memory images without opening user books
-  or modifying preferences. Build its APK separately and run the explicit class
-  with `adb install -r` and `am instrument`, preserving device data.
-- Manage Shelves: “Books per row” defaults to 2 and persists. Its maximum equals
-  the collapsed preview capacity for the Library content width, even with empty
-  shelves or hidden thumbnails. Check local, Reading, Unshelved, and Google Drive
-  expanded grids at both endpoints, including dense-card title/progress/selection
-  layouts. Choose 6 on a wide window, narrow to a four-preview layout, then widen:
-  the grid and slider show 4 while narrow and restore 6 afterward. An explicit
-  lower selection replaces the saved value. Collapsed previews and shelf
-  expansion state must remain unchanged.
-- Anki `{book-cover-reuse}` appears immediately after `{book-cover}` in both
-  normal and Show All Handlebars lists. With AnkiDroid, mine two different words
-  from one book, then restart Hoshi and mine another: all exported image `src`
-  values must be identical, with only one new cover file. Repeat in a child
-  dictionary popup and another card format; a different book must get its own
-  reference. With both cover placeholders mapped, the first export shares one
-  upload; later `{book-cover}` exports new files while reuse retains the first
-  reference. With AnkiConnect, reuse behaves like normal cover export. Preserve
-  existing app and collection data; do not delete media or switch collections
-  to test invalidation, because this placeholder intentionally does not detect
-  cover changes or stale references. The saved references must be absent from
-  Hoshi backups and sync exports.
-  `AnkiBookCoverReuseDeviceTest` provides an opt-in live API check using generated
-  cover data, an isolated local DataStore, and in-memory Anki settings. Each
-  phase deletes only its own uniquely marked notes; one uploaded image can
-  remain unused in Anki media. Build both debug APKs and install them with `adb
-  install -r`. Use the same fresh alphanumeric run ID for both phases:
-
-  ```bash
-  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiBookCoverReuseDeviceTest -e ankiCoverReuseSmoke true -e ankiCoverReuseRunId UNIQUE_RUN_ID -e ankiCoverReusePhase first moe.requited.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
-  adb shell am force-stop moe.requited.hoshi.debug
-  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiBookCoverReuseDeviceTest -e ankiCoverReuseSmoke true -e ankiCoverReuseRunId UNIQUE_RUN_ID -e ankiCoverReusePhase restart moe.requited.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
-  ```
-
-  Require `OK (1 test)` from each phase. The first phase verifies two saved notes
-  use the same image reference and only one upload; the restart phase verifies
-  the saved reference with no cover source and zero uploads.
-- Anki cover discovery: with an empty test-owned cover cache and a selected
-  format mapping a field to `{document-title}` (including a custom HTML wrapper),
-  export from a book already represented in the newest 100 notes of that note
-  type. Verify the existing image reference is copied, no cover is uploaded,
-  and subsequent exports skip discovery. Other note types, older notes, missing
-  title mappings, or an unavailable query fall back to normal cover upload.
-  Do not hardcode `MiscInfo`, limit discovery to a deck, inspect source-cover
-  bytes, or read image files. A rejected note must retain a discovered reference;
-  a cache read or persistence failure must still add the note, without a cover.
-  `AnkiBookCoverDiscoveryDeviceTest` is an opt-in benchmark and live export check.
-  It creates 500 uniquely marked notes with generated 5 KB field content in an
-  existing note type and deck, uses isolated DataStore files and in-memory
-  settings, and deletes only its own 502 notes and fixture files in `finally`.
-  One small uploaded cover can remain unused in Anki media. Install both APKs
-  using `adb install -r`, then run:
-
-  ```bash
-  adb shell am instrument -w -e class moe.antimony.hoshi.features.anki.AnkiBookCoverDiscoveryDeviceTest -e ankiCoverDiscoveryBenchmark true moe.requited.hoshi.debug.test/androidx.test.runner.AndroidJUnitRunner
-  ```
-
-  Require `OK (1 test)` and `cleaned_test_notes=502`. Record the `COVER_DISCOVERY`
-  median/p95/max outputs for N=25/50/100/200/500 misses and newest matches,
-  N=100 boundary matches, single-note provider access, cached reuse, and first
-  discovery plus persistence against a persistence-only baseline.
-  Discovery timings include query, field transfer, title comparison, and image
-  extraction; they exclude note creation and cover upload. Report initial
-  provider access separately from warm timings, and preserve existing user data.
-
-## What belongs here
-
-Document ownership and update rules live in [AGENTS.md](../AGENTS.md#文档维护规则).
+Measure before and after on the same device, build, book position and settings,
+with repeated runs. Debug or emulator results describe only those conditions.
+A WebView ready flag does not prove paint. Use Perfetto/simpleperf for native
+time and CDP profiles (`webview_devtools_remote_<pid>`) for reader JS.

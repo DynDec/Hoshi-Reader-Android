@@ -20,7 +20,7 @@ Hoshi Reader Android 是使用 Kotlin 和 Jetpack Compose 开发的原生 Androi
 | [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md) | 人类的项目介绍、安装与使用入口 | 用户开始使用项目所需的信息变化 |
 | [CHANGELOG.md](docs/CHANGELOG.md) / [CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md) | 人类可快速浏览的版本变化；archive 保存历史 | 用户可感知的 App 行为变化或正式发布 |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Agent 的当前代码地图、职责和实现契约，包括错误处理、状态/并发、存储、生命周期与安全边界 | owner、跨层约束、数据/API 契约或检索入口变化 |
-| [VALIDATION.md](docs/VALIDATION.md) | Agent 可复用的测试、自动化、性能测量方法，以及已验证的避坑信息 | 验证方法、fixture/设备限制、证据判定或通用自动化陷阱变化 |
+| [VALIDATION.md](docs/VALIDATION.md) | 完成检查、新增测试的门槛、设备数据保护和通用测试陷阱 | 检查命令、测试门槛或跨任务通用的陷阱变化；不写单个功能的验收清单、测试清单或测量记录 |
 | [ARCHITECTURE_REFACTORING.md](docs/ARCHITECTURE_REFACTORING.md) | 尚未解决的架构债务与未来方向 | 确认新缺口，或已有目标完成/缩小 |
 | [IOS_UPSTREAM_SYNC_QUEUE.md](docs/IOS_UPSTREAM_SYNC_QUEUE.md) | 当前 iOS upstream 对齐队列 | upstream 评估或切片状态变化 |
 | [TRANSLATING.md](docs/TRANSLATING.md) | 本地化贡献操作说明 | 翻译流程变化 |
@@ -43,4 +43,5 @@ Hoshi Reader Android 是使用 Kotlin 和 Jetpack Compose 开发的原生 Androi
 - 默认在当前工作区操作；Git worktree 仅在用户明确要求时使用。小型低风险修复可在 `main` 完成；较大功能、跨模块重构或高风险变更使用 `codex/` 分支。
 - 计划默认保留在对话或内置计划状态中；用户明确要求时才创建或提交计划文档。
 - 声明完成前按 `docs/VALIDATION.md` 执行匹配的检查与设备数据保护要求，并报告结果及未验证项。设备/UI 验证由 agent 使用可用工具执行。
+- 测试不是完成任务的必需产出。只有在新测试能实质性保护易坏且代价高的行为、且现有测试未覆盖时才添加（见 [新增测试的门槛](docs/VALIDATION.md#when-to-add-a-test)）；优先扩展已有测试，不为每个改动、错误路径或 UI 细节单独补测试。
 - 完成开发并通过必要验证后，自行提交本次任务相关改动；用户要求不提交或保留未提交改动时除外。Commit message 使用 Conventional Commits；实现或修复 GitHub issue 时使用 closing keyword。
