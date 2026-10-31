@@ -152,14 +152,14 @@ class ContinuousReadingGroupsTest {
         assertEquals(2, dom.select("style[data-hoshi-source-style]").size)
         assertTrue(dom.selectFirst("style")!!.data().contains("https://appassets.androidplatform.net/epub/OPS/images/picture.png"))
         assertEquals(listOf(true, false, true), document.sources.map { it.hasText })
-        assertEquals(listOf("hoshi-source-1"), dom.select("[data-hoshi-merged-image]").map { it.id() })
+        assertTrue(dom.select("[data-hoshi-merged-image-gap]").isEmpty())
     }
 
-    @Test fun imageSpacingMarkersRequireAnActualMergeAndExcludeImagesInTextSources() {
-        val fixture = book(listOf("<p>Alpha</p>$image", image, image, "<p>Beta</p>$image"))
+    @Test fun imageGapMarkersOnlyFollowImageOnlySourcesBeforeAnotherImageOnlySource() {
+        val fixture = book(listOf("<p>Alpha</p>$image", image, image, image, "<p>Beta</p>$image"))
         val merged = ContinuousGroupDocument.compose(fixture, ContinuousReadingGroups.build(fixture, true).single())
         assertEquals(listOf("hoshi-source-1", "hoshi-source-2"),
-            Jsoup.parse(merged.html!!).select("[data-hoshi-merged-image]").map { it.id() })
+            Jsoup.parse(merged.html!!).select("[data-hoshi-merged-image-gap]").map { it.id() })
         for (merge in listOf(false, true)) {
             val separate = book(listOf("Alpha", image), listOf("0.xhtml", "1.xhtml"))
             ContinuousReadingGroups.build(separate, merge).forEach { group ->

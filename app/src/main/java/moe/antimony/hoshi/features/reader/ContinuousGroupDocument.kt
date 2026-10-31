@@ -34,12 +34,13 @@ internal data class ContinuousGroupDocument(val html: String?, val sources: List
             val sources = mutableListOf<ContinuousSource>()
             val document = Jsoup.parse("<html><head></head><body></body></html>")
             document.outputSettings().prettyPrint(false)
+            val parsed = html.map { Jsoup.parse(it).apply { outputSettings().prettyPrint(false) } }
+            // Classify before the sources are rewritten below.
+            val contents = group.contents ?: parsed.map { ReaderChapterContent.classify(it) }
             chapters.forEachIndexed { at, chapter ->
                 val index = group.indices[at]
-                val source = Jsoup.parse(html[at])
-                source.outputSettings().prettyPrint(false)
-                // Classify before the source is rewritten below.
-                val content = group.contents?.get(at) ?: ReaderChapterContent.classify(source)
+                val source = parsed[at]
+                val content = contents[at]
                 sources += ContinuousSource(index, group.counts[at], content.hasText)
                 val scope = "hoshi-source-$index"
                 val base = URI("https", "appassets.androidplatform.net", "/epub/${chapter.href}", null).toASCIIString()
@@ -109,8 +110,9 @@ internal data class ContinuousGroupDocument(val html: String?, val sources: List
                 }
                 val wrapper = document.body().appendElement("section").attr("id", scope)
                     .attr("data-hoshi-source-index", index.toString())
-                if (content.imageOnly) {
-                    wrapper.attr("data-hoshi-merged-image", "")
+                // Separate consecutive image-only sources so their images are not stitched together.
+                if (content.imageOnly && contents.getOrNull(at + 1)?.imageOnly == true) {
+                    wrapper.attr("data-hoshi-merged-image-gap", "")
                 }
                 source.selectFirst("html")?.attributes()?.forEach { attribute ->
                     if (attribute.key in CopiedRootAttributes) {

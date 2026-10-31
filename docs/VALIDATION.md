@@ -342,9 +342,11 @@ commands. Keep fork-only checks in this section.
   Check one reader-font 15em buffer below horizontal or left of vertical text,
   including a text group ending in images; image-only displays have none. The
   buffer must add scroll extent without adding characters or progress. Check
-  reader-font 1.0em before and after each merged image-only source in both writing
-  directions; ordinary images within text sources and unmerged chapters must
-  retain their original spacing. The existing chapter-swipe threshold must
+  a reader-font 1.0em gap after each merged image-only source that is
+  immediately followed by another image-only source, in both writing
+  directions, and no added space before it or after the last image in a run;
+  ordinary images within text sources and unmerged chapters must retain their
+  original spacing. The existing chapter-swipe threshold must
   trigger only at the far edge.
 - Gallery: Previous/Next moves exactly one image without wrapping, including rapid
   taps and after manual scrolling. Buttons stay above the image viewport; portrait

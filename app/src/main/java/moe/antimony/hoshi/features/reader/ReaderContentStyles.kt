@@ -258,9 +258,9 @@ internal object ReaderContentStyles {
                     background: transparent !important;
                     writing-mode: inherit !important;
                 }
-                [data-hoshi-source-index][data-hoshi-merged-image] {
+                [data-hoshi-source-index][data-hoshi-merged-image-gap] {
                     font-size: ${settings.fontSize}px !important;
-                    padding-block: 1.0em !important;
+                    padding-block-end: 1.0em !important;
                 }
                 [data-hoshi-source-body] {
                     $bodyFontFamilyCss
