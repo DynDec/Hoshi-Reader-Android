@@ -14,7 +14,24 @@ class EpubCoverCandidatesTest {
         EpubBookParser(temp.newFolder("cache")) { file -> ImageIO.read(file)?.let { it.width to it.height } }
     }
 
+    @Test fun emptyOrMissingSvgFallsBackToExplicitMetadataCoverIncludingCachedOpening() {
+        for (contents in listOf("", null)) {
+            val root = fixture()
+            if (contents != null) root.resolve("OPS/preferred.svg").writeText(contents)
+            val book = parser.parse(root)
+            assertEquals("OPS/images/alternate.jpg", book.coverHref)
+            assertArrayEquals(root.resolve("OPS/images/alternate.jpg").readBytes(), book.readResource(book.coverHref!!))
+            val cached = parser.parse(root, cachedBookInfo = book.bookInfo)
+            assertEquals(book.coverHref, cached.coverHref)
+            assertSame(book.bookInfo, cached.bookInfo)
+        }
+    }
 
+    @Test fun brokenBitmapFallsBackToAnotherDeclaredCover() {
+        val root = fixture(preferredName = "broken.jpg", preferredType = "image/jpeg")
+        root.resolve("OPS/broken.jpg").writeText("not an image")
+        assertEquals("OPS/images/alternate.jpg", parser.parse(root).coverHref)
+    }
 
     @Test fun validPreferredBitmapAndSimpleSvgKeepPriorityOverMetadataCover() {
         val bitmap = fixture(preferredName = "preferred.jpg", preferredType = "image/jpeg")
@@ -26,6 +43,15 @@ class EpubCoverCandidatesTest {
         assertEquals("OPS/images/wrapped.jpg", parser.parse(svg).coverHref)
     }
 
+    @Test fun triesRemainingCoverImageDeclarationsBeforeLegacyMetadata() {
+        val root = fixture()
+        root.resolve("OPS/preferred.svg").writeText("")
+        writeRaster(root.resolve("OPS/images/second.jpg"))
+        root.resolve("OPS/package.opf").apply {
+            writeText(readText().replace("</manifest>", """<item id="second" href="images/second.jpg" media-type="image/jpeg" properties="cover-image"/></manifest>"""))
+        }
+        assertEquals("OPS/images/second.jpg", parser.parse(root).coverHref)
+    }
 
     @Test fun keepsDecodablePreferredCoversWithOtherRasterMimeTypes() {
         for ((extension, type) in listOf("jpg" to "image/jpg", "bmp" to "image/bmp")) {

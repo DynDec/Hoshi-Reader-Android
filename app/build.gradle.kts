@@ -119,6 +119,8 @@ val hostLibExtension = when {
     System.getProperty("os.name").lowercase().contains("win") -> "dll"
     else -> "so"
 }
+// Cargo omits the "lib" prefix for Windows DLLs.
+val hostLibFileName = if (isWindows) "hoshiepub.dll" else "libhoshiepub.$hostLibExtension"
 
 android {
     namespace = "moe.antimony.hoshi"
@@ -279,7 +281,7 @@ val buildRustHost by tasks.registering(Exec::class) {
         rustProjectDir.resolve("uniffi.toml"),
     )
     inputs.dir(rustProjectDir.resolve("src"))
-    outputs.file(rustProjectDir.resolve("target/debug/libhoshiepub.$hostLibExtension"))
+    outputs.file(rustProjectDir.resolve("target/debug/$hostLibFileName"))
 
     commandLine(cargo, "build", "--lib")
 }
@@ -288,7 +290,7 @@ val generateUniffiKotlin by tasks.registering(Exec::class) {
     dependsOn(buildRustHost)
     workingDir = rustProjectDir
 
-    val hostLibPath = rustProjectDir.resolve("target/debug/libhoshiepub.$hostLibExtension")
+    val hostLibPath = rustProjectDir.resolve("target/debug/$hostLibFileName")
 
     inputs.file(hostLibPath)
     inputs.file(rustProjectDir.resolve("uniffi.toml"))

@@ -138,12 +138,14 @@ Test guidance is in [VALIDATION.md](VALIDATION.md#when-to-add-a-test).
   SAF supplies imports. `BookRepository` owns import/extraction/I/O; parsing
   extracts only into controlled cache/temp locations. Metadata keeps the full
   title independently of its byte-bounded physical filename.
-- `EpubBookParser` reads HTML spine items only; this fork's native library does
-  not expose manifest fallbacks (see [Fork-specific contracts](#fork-specific-contracts)).
-  Rebuilt reader facts restore bookmarks from character counts. Rust exposes the
-  declared cover; Kotlin validates its local resource and bitmap dimensions. The
-  existing cover-ID heuristic applies only without a declared cover; body
-  illustrations are never promoted to covers.
+- `EpubBookParser` resolves unsupported spine items through cycle-checked manifest
+  fallbacks to HTML. Chapter resources, reader facts and media use the resolved
+  href; the original href remains a navigation alias. Rebuilt reader facts restore
+  bookmarks from character counts. Rust exposes explicit cover candidates in
+  EPUB 3 `cover-image` then EPUB 2 `meta name="cover"` order; Kotlin validates
+  local resources and bitmap dimensions, trying later declarations when a
+  preferred cover is unusable. The existing cover-ID heuristic applies only
+  without explicit candidates; body illustrations are never promoted to covers.
   Parsing unwraps only lossless single-raster SVG covers and preserves complex
   SVGs when no declared bitmap is usable.
   On opening, `BookRepository.restoreCoverIfNeeded` reuses the parsed EPUB
@@ -331,14 +333,6 @@ dynamic configuration and bridge calls.
 This fork (application ID `moe.requited.hoshi`) keeps these behaviors on top of
 upstream. Keep them in this section to limit upstream merge conflicts.
 
-- Native EPUB library: the fork keeps `hoshiepub`'s Rust sources and Cargo files
-  (uniffi 0.28, rbook 0.7.10) unchanged, since the Windows host library can't be
-  rebuilt without the MSVC linker. Upstream's
-  `cover_hrefs()` and manifest `fallback_id` are not merged, so the parser uses
-  the single `cover_href()` and skips non-HTML spine items. Re-merge upstream's
-  `lib.rs`/`Cargo.toml`, the `EpubBookParser` cover-candidate and fallback logic,
-  and `EpubFallbackTest`/`EpubCoverCandidatesTest` once the host library can be
-  rebuilt.
 - Reader borderless layout: `ReaderBorderlessLayout.kt` owns the inset policy.
   `ReaderSettings.effectiveVerticalPadding` and effective safe areas never
   overwrite persisted padding, so disabling border removal restores the normal

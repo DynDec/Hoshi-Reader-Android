@@ -138,7 +138,7 @@ class EpubBookParser internal constructor(
 
     private fun NativeEpubBook.toReaderBook(root: File, fallbackTitle: String?, cachedBookInfo: BookInfo?): EpubBook {
         val manifest = manifest().associateBy { it.id }
-        val coverCandidates = listOfNotNull(coverHref()).ifEmpty {
+        val coverCandidates = coverHrefs().distinct().ifEmpty {
             listOfNotNull(manifest.values.firstOrNull { item ->
                 item.id.contains("cover", ignoreCase = true) && item.mediaType.isCoverFallbackImageType()
             }?.href)
@@ -148,7 +148,7 @@ class EpubBookParser internal constructor(
         val guideTocHrefs = root.readGuideTocHrefs()
         val chapterShells = spine().mapIndexedNotNull { index, spineItem ->
             val originalItem = manifest[spineItem.idref] ?: return@mapIndexedNotNull null
-            val manifestItem = originalItem.readerFallback() ?: return@mapIndexedNotNull null
+            val manifestItem = originalItem.readerFallback(manifest) ?: return@mapIndexedNotNull null
             val href = contentDirectoryPrefix.resolveManifestHref(manifestItem.href)
             val originalHref = contentDirectoryPrefix.resolveManifestHref(originalItem.href)
             EpubChapter(
@@ -226,10 +226,15 @@ class EpubBookParser internal constructor(
     }
 }
 
-// The fork's native library does not expose manifest fallback IDs, so only
-// HTML spine items are readable.
-private fun ManifestItem.readerFallback(): ManifestItem? =
-    takeIf { it.mediaType.isHtmlMediaType() }
+private fun ManifestItem.readerFallback(manifest: Map<String, ManifestItem>): ManifestItem? {
+    var item = this
+    val visited = mutableSetOf<String>()
+    while (visited.add(item.id)) {
+        if (item.mediaType.isHtmlMediaType()) return item
+        item = manifest[item.fallbackId] ?: return null
+    }
+    return null
+}
 
 private fun String.isCoverFallbackImageType(): Boolean =
     lowercase() in setOf("image/jpeg", "image/png", "image/gif", "image/svg+xml")
