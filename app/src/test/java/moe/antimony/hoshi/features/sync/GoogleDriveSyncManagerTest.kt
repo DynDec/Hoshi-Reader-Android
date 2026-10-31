@@ -13,6 +13,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -47,10 +50,20 @@ import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.ReadingStatistics
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
+import moe.antimony.hoshi.epub.EpubBookParser
+import moe.antimony.hoshi.epub.writeMinimalExtractedEpub
+import moe.antimony.hoshi.features.sasayaki.AndroidSasayakiTranscriptionRepository
+import moe.antimony.hoshi.features.sasayaki.SasayakiToken
+import moe.antimony.hoshi.features.sasayaki.SasayakiTranscriptStore
+import moe.antimony.hoshi.features.sasayaki.SasayakiTranscriptionClock
+import moe.antimony.hoshi.features.sasayaki.SasayakiTranscriptionCoordinator
+import moe.antimony.hoshi.features.sasayaki.transcription.SasayakiTranscriptionBackend
+import moe.antimony.hoshi.features.sasayaki.transcription.SasayakiTranscriptionBatch
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import kotlin.coroutines.CoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GoogleDriveSyncManagerTest {
@@ -152,10 +165,11 @@ class GoogleDriveSyncManagerTest {
     private suspend fun TestScope.fixture(
         dispatcher: TestDispatcher = UnconfinedTestDispatcher(testScheduler),
         transferFactory: (GoogleDriveClient) -> DriveFileTransfer = { TestDriveFileTransfer(it) },
+        booksDispatcher: CoroutineDispatcher = dispatcher,
         beforeRequest: suspend () -> Unit = {},
     ): Fixture {
         val remote = DriveService()
-        val books = BookRepository(temporary.root, dispatcher)
+        val books = BookRepository(temporary.root, booksDispatcher)
         val store = SyncStorage(temporary.root, books, dispatcher)
         val settings = SyncSettingsRepository(MemoryPreferences(), NoTtu, dispatcher)
         settings.update { it.copy(enabled = true) }
@@ -518,6 +532,73 @@ class GoogleDriveSyncManagerTest {
         assertEquals(reference.modified, f.store.state.books.getValue("book-a").sources[SyncFileType.epub])
     }
 
+    @Test fun liveTranscriptionUploadsOnlyTheMatchSavedOnPause() = transcriptionUploadsFinalMatch(false)
+
+    @Test fun completedTranscriptionWhileSyncIsDisabledUploadsOnceAfterEnabling() = transcriptionUploadsFinalMatch(true)
+
+    private fun transcriptionUploadsFinalMatch(disabled: Boolean) = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val uploadedMatches = mutableListOf<String>()
+        val f = fixture(dispatcher, transferFactory = { client -> object : TestDriveFileTransfer(client) {
+            override suspend fun upload(file: java.io.File, request: DriveUploadRequest, progress: (DriveTransferUpdate) -> Unit): GoogleDriveFile {
+                if (request.type == SyncFileType.sasayaki) uploadedMatches += file.readText()
+                return super.upload(file, request, progress)
+            }
+        } })
+        val root = f.books.createBookDirectory("book-a")
+        writeMinimalExtractedEpub(root, firstChapterHtml = "<body><p>今日は、いい天気です。明日も晴れるでしょう。</p></body>")
+        val metadata = BookMetadata("ID", "Local", folder = "book-a", lastAccess = 0.0)
+        f.books.saveMetadata(root, metadata)
+        f.store.handleBookImport(metadata, root)
+        f.manager.sync(); runCurrent()
+        if (disabled) { f.settings.update { it.copy(enabled = false) }; runCurrent() }
+        val repository = AndroidSasayakiTranscriptionRepository(SasayakiTranscriptStore(dispatcher), f.books,
+            EpubBookParser(temporary.newFolder()), dispatcher, dispatcher)
+        val batches = Channel<SasayakiTranscriptionBatch>(Channel.UNLIMITED)
+        val backend = object : SasayakiTranscriptionBackend {
+            override suspend fun duration(source: String) = 30.0
+            override suspend fun transcribe(source: String, from: Double, onDownloadRequired: suspend (Long) -> Unit,
+                onDownload: suspend (Double) -> Unit, onBatch: suspend (SasayakiTranscriptionBatch) -> Unit, parallelism: Int,
+            ) { for (batch in batches) onBatch(batch) }
+        }
+        val coordinator = SasayakiTranscriptionCoordinator(backend, repository, f.books.workRegistry, backgroundScope,
+            dispatcher, SasayakiTranscriptionClock { testScheduler.currentTime * 1_000_000 })
+        coordinator.start(root, "audio")
+        val words = listOf(
+            listOf(SasayakiToken("今日は", 1.0, 2.0), SasayakiToken("いい天気です", 2.0, 4.0)),
+            listOf(SasayakiToken("明日も晴れるでしょう", 5.0, 8.0)),
+        )
+        for ((index, tokens) in words.withIndex()) {
+            batches.send(SasayakiTranscriptionBatch(tokens, tokens.last().end + 1.0))
+            runCurrent(); advanceTimeBy(15_000); runCurrent()
+            f.manager.sync(); runCurrent()
+            assertEquals(index + 2, coordinator.state.value.match!!.matches.size)
+            assertNull(f.books.loadSasayakiMatch(root))
+            assertNull(f.store.state.books.getValue("book-a").sources[SyncFileType.sasayaki])
+            assertTrue(uploadedMatches.isEmpty())
+        }
+        if (disabled) batches.close() else coordinator.pause(root)
+        runCurrent()
+        assertFalse(coordinator.state.value.running)
+        assertEquals(3, f.books.loadSasayakiMatch(root)!!.matches.size)
+        assertNotNull(f.store.state.books.getValue("book-a").sources[SyncFileType.sasayaki])
+        if (disabled) {
+            f.manager.sync(); runCurrent()
+            assertTrue(uploadedMatches.isEmpty())
+            f.store.reload()
+            f.settings.update { it.copy(enabled = true) }
+        }
+        f.manager.sync(); runCurrent()
+        assertNull(f.manager.state.value.errorMessage)
+        assertEquals(listOf(root.resolve("sasayaki_match.json").readText()), uploadedMatches)
+        val reference = f.store.state.books.getValue("book-a").files[SyncFileType.sasayaki]
+        batches.close()
+        coordinator.start(root, "audio"); runCurrent()
+        repeat(2) { f.manager.sync(); runCurrent() }
+        assertEquals(1, uploadedMatches.size)
+        assertEquals(reference, f.store.state.books.getValue("book-a").files[SyncFileType.sasayaki])
+    }
+
     @Test fun downloadAllAndTappedDownloadFetchEveryMissingEpub() = runTest {
         val f = fixture()
         val folders = listOf("book-a", "book-b", "book-c")
@@ -680,6 +761,138 @@ class GoogleDriveSyncManagerTest {
         assertTrue(stopped)
         assertFalse(root.exists())
         assertTrue(f.store.state.books.getValue("book-a").deleted)
+    }
+
+    @Test fun shelfReloadDoesNotRecreateBookDeletedAfterDirectoryEnumeration() = runTest {
+        assertDeletionDuringBookLoad(bookCount = 1, pauseAt = 3)
+    }
+
+    @Test fun batchDeletionDoesNotRecreateBooksFromPartiallyReadShelfSnapshot() = runTest {
+        assertDeletionDuringBookLoad(bookCount = 3, pauseAt = 4)
+    }
+
+    @Test fun bookLookupDoesNotRecreateBookDeletedAfterDirectoryEnumeration() = runTest {
+        assertDeletionDuringBookLoad(bookCount = 1, pauseAt = 3, lookup = true)
+    }
+
+    @Test fun migrationWaitingForDeletionLockRechecksDirectoryBeforeWriting() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val gate = BookLoadGate(dispatcher, pauseAt = 4)
+        val f = fixture(dispatcher = dispatcher, booksDispatcher = gate)
+        f.remote.addState("a", "book-a.json", SyncFormat.encode(remoteBook))
+        f.manager.sync()
+        runCurrent()
+        val root = f.store.bookDirectory("book-a")
+        val loading = async(CoroutineName("paused-book-load")) { f.books.loadBookEntries() }
+        runCurrent()
+        assertTrue(gate.isPaused)
+        try {
+            f.store.transaction {
+                // Resume migration while deletion owns the lock. An unlocked existence
+                // check would see this directory, then block only on its metadata read.
+                gate.release()
+                runCurrent()
+                assertFalse(loading.isCompleted)
+                f.store.applyBook("book-a", remoteBook.delete())
+            }
+        } finally {
+            if (gate.isPaused) gate.release()
+        }
+
+        assertTrue("Migration must discard the snapshot after waiting for deletion", loading.await().isEmpty())
+        assertFalse("Migration must not write a replacement metadata file", root.exists())
+    }
+
+    private suspend fun TestScope.assertDeletionDuringBookLoad(bookCount: Int, pauseAt: Int, lookup: Boolean = false) {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val gate = BookLoadGate(dispatcher, pauseAt)
+        val f = fixture(dispatcher = dispatcher, booksDispatcher = gate)
+        val roots = (0 until bookCount).map { index ->
+            val key = "book-$index"
+            val root = f.books.createBookDirectory(key)
+            f.books.saveMetadata(root, BookMetadata(
+                java.util.UUID.randomUUID().toString(), "Book $index", folder = key,
+                epub = "$key.epub", cover = "cover.jpg", lastAccess = 0.0,
+                shelves = mapOf("Shelf" to Timestamped(100, true)),
+            ))
+            root.resolve("$key.epub").writeText("epub-content")
+            root.resolve("cover.jpg").writeText("cover-content")
+            f.store.handleBookImport(f.books.loadMetadata(root)!!, root)
+            root
+        }
+        f.manager.sync()
+        runCurrent()
+        f.manager.sync()
+        runCurrent()
+        assertNull(f.manager.state.value.errorMessage)
+        val bookId = f.books.loadMetadata(roots.first())!!.id
+        roots.forEachIndexed { index, root -> assertTrue(root.setLastModified(1_000_000L - index * 1000)) }
+
+        // Dispatches 1/2 read shelves and enumerate directories. Pause before either
+        // the first metadata read (3), or a later read after a snapshot was retained (4).
+        val loading = async(CoroutineName("paused-book-load")) {
+            if (lookup) listOfNotNull(f.books.loadBookEntry(bookId)) else f.books.loadBookEntries()
+        }
+        runCurrent()
+        assertTrue("The loader must pause after directory enumeration", gate.isPaused)
+        try {
+            for (entry in f.remote.entries.values.filter { it.file.name.startsWith("book-") && it.file.name.endsWith(".json") }) {
+                entry.file = entry.file.copy(md5Checksum = "900")
+                entry.data = SyncFormat.encode(SyncFormat.decode<SyncBook>(entry.data).delete())
+            }
+            f.manager.sync()
+            runCurrent()
+            assertTrue(roots.none { it.exists() })
+            assertTrue(f.store.state.books.values.all { it.deleted })
+        } finally {
+            gate.release()
+        }
+        assertTrue("The in-flight load must omit deleted books", loading.await().isEmpty())
+        assertTrue("Loading must not recreate deleted directories", roots.none { it.exists() })
+        f.manager.sync()
+        runCurrent()
+        assertTrue(f.books.loadBookEntries().isEmpty())
+    }
+
+    @Test fun startupReconcilesLeftoverDirectoryEvenWhenRemoteDeletionVersionIsCached() = runTest {
+        val f = fixture()
+        f.remote.addState("a", "book-a.json", SyncFormat.encode(remoteBook.delete()))
+        f.manager.sync()
+        runCurrent()
+        val root = f.store.bookDirectory("book-a")
+        assertFalse(root.exists())
+        assertFalse(f.store.state.books.getValue("book-a").pending)
+        val cachedVersion = f.manager.cache.bookVersions["book-a"]
+        // Reproduce the empty sidecar that older shelf loaders could write after deletion.
+        f.books.saveMetadata(root, BookMetadata(java.util.UUID.randomUUID().toString(), folder = "book-a", lastAccess = 0.0))
+        f.store.prepareLibrary()
+        assertEquals(cachedVersion, f.manager.cache.bookVersions["book-a"])
+
+        f.manager.sync()
+        runCurrent()
+
+        assertFalse("A normal sync must remove the leftover without opening the book", root.exists())
+        assertTrue(f.store.state.books.getValue("book-a").deleted)
+        assertFalse(f.store.state.books.getValue("book-a").pending)
+        assertTrue(f.books.loadBookEntries().isEmpty())
+    }
+
+    private class BookLoadGate(private val delegate: CoroutineDispatcher, private val pauseAt: Int) : CoroutineDispatcher() {
+        private var held: Pair<CoroutineContext, Runnable>? = null
+        private var bookLoadDispatches = 0
+        val isPaused get() = held != null
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            if (context[CoroutineName]?.name == "paused-book-load" && ++bookLoadDispatches == pauseAt) {
+                held = context to block
+            } else delegate.dispatch(context, block)
+        }
+
+        fun release() {
+            val (context, block) = checkNotNull(held)
+            held = null
+            delegate.dispatch(context, block)
+        }
     }
 
     @Test fun bookFailureContinuesRunAndKeepsCursor() = runTest {

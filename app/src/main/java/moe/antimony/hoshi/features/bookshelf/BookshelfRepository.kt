@@ -19,6 +19,7 @@ import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.BookShelf
 import moe.antimony.hoshi.epub.BookSortOption
+import moe.antimony.hoshi.epub.BookReadingState
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubBookParser
@@ -56,7 +57,7 @@ internal interface BookshelfRepository {
         sortOption: BookSortOption,
         onLegacyBookMigrationProgress: (LegacyBookMigrationProgress) -> Unit = {},
     ): BookshelfLoadResult
-    suspend fun loadBookProgress(entries: List<BookEntry>): Map<String, Double>
+    suspend fun loadBookReadingStates(entries: List<BookEntry>): Map<String, BookReadingState>
     suspend fun syncLibrary()
     suspend fun loadRemoteBooks(localEntries: List<BookEntry>): RemoteBookshelfLoadResult
     suspend fun openBook(entry: BookEntry): String
@@ -80,6 +81,7 @@ internal interface BookshelfRepository {
     suspend fun renameShelf(oldName: String, newName: String)
     suspend fun moveShelf(fromIndex: Int, toIndex: Int)
     suspend fun markRead(entry: BookEntry)
+    suspend fun markUnread(entry: BookEntry)
     suspend fun renameBook(entry: BookEntry, title: String?)
     suspend fun setBookProfile(entry: BookEntry, profileId: String?)
     suspend fun changeSort(sortOption: BookSortOption)
@@ -120,9 +122,11 @@ internal class AndroidBookshelfRepository @Inject constructor(
     ): BookshelfLoadResult = withContext(ioDispatcher) {
         val entries = bookRepository.loadBookEntries(sortOption, onLegacyBookMigrationProgress)
         val shelves = bookRepository.loadShelves(entries)
+        val readingStates = loadBookReadingStatesById(entries, bookRepository)
         BookshelfLoadResult(
             entries = entries,
-            progressById = loadBookProgressById(entries, bookRepository),
+            progressById = readingStates.mapValues { it.value.progress },
+            readingStateById = readingStates,
             coverSourcesById = loadBookCoverSourcesById(entries, bookRepository),
             shelves = shelves,
             settings = settingsRepository.settings.first(),
@@ -132,8 +136,8 @@ internal class AndroidBookshelfRepository @Inject constructor(
         )
     }
 
-    override suspend fun loadBookProgress(entries: List<BookEntry>): Map<String, Double> = withContext(ioDispatcher) {
-        loadBookProgressById(entries, bookRepository)
+    override suspend fun loadBookReadingStates(entries: List<BookEntry>): Map<String, BookReadingState> = withContext(ioDispatcher) {
+        loadBookReadingStatesById(entries, bookRepository)
     }
 
     override suspend fun syncLibrary() {
@@ -238,10 +242,11 @@ internal class AndroidBookshelfRepository @Inject constructor(
     }
 
     override suspend fun moveBooks(bookIds: Set<String>, shelfName: String?) = withContext(ioDispatcher) {
+        val targetName = shelfName?.syncKey()
         val shelves = bookRepository.loadShelves()
             .map { shelf -> shelf.copy(bookIds = shelf.bookIds.filterNot { it in bookIds }) }
             .map { shelf ->
-                if (shelf.name == shelfName) {
+                if (shelf.name.syncKey() == targetName) {
                     shelf.copy(bookIds = (shelf.bookIds + bookIds).distinct())
                 } else {
                     shelf
@@ -251,10 +256,10 @@ internal class AndroidBookshelfRepository @Inject constructor(
     }
 
     override suspend fun createShelf(name: String) = withContext(ioDispatcher) {
-        val trimmed = name.trim()
+        val trimmed = name.trim().syncKey()
         if (trimmed.isEmpty()) return@withContext
         val shelves = bookRepository.loadShelves()
-        if (shelves.none { it.name == trimmed }) {
+        if (shelves.none { it.name.syncKey() == trimmed }) {
             bookRepository.saveShelves(shelves + BookShelf(trimmed, emptyList()))
         }
     }
@@ -273,7 +278,8 @@ internal class AndroidBookshelfRepository @Inject constructor(
     }
 
     override suspend fun deleteShelf(name: String) = withContext(ioDispatcher) {
-        bookRepository.saveShelves(bookRepository.loadShelves().filterNot { it.name == name })
+        val targetName = name.syncKey()
+        bookRepository.saveShelves(bookRepository.loadShelves().filterNot { it.name.syncKey() == targetName })
     }
 
     override suspend fun renameShelf(oldName: String, newName: String) = withContext(ioDispatcher) {
@@ -294,22 +300,9 @@ internal class AndroidBookshelfRepository @Inject constructor(
         bookRepository.saveShelves(shelves)
     }
 
-    override suspend fun markRead(entry: BookEntry) = withContext(ioDispatcher) {
-        val bookInfo = bookRepository.loadBookInfo(entry.root) ?: return@withContext
-        val lastChapter = bookInfo.chapterInfo.values
-            .mapNotNull { it.spineIndex }
-            .maxOrNull()
-            ?: 0
-        bookRepository.saveBookmark(
-            entry.root,
-            Bookmark(
-                chapterIndex = lastChapter,
-                progress = 1.0,
-                characterCount = bookInfo.characterCount,
-                lastModified = bookRepository.currentAppleReferenceDateSeconds(),
-            ),
-        )
-    }
+    override suspend fun markRead(entry: BookEntry) = bookRepository.markRead(entry.root)
+
+    override suspend fun markUnread(entry: BookEntry) = bookRepository.markUnread(entry.root)
 
     override suspend fun renameBook(entry: BookEntry, title: String?) = withContext(ioDispatcher) {
         val metadata = bookRepository.loadMetadata(entry.root) ?: entry.metadata
@@ -462,18 +455,19 @@ internal fun renameShelfList(
     oldName: String,
     newName: String,
 ): List<BookShelf> {
-    val trimmedName = newName.trim()
-    if (trimmedName.isEmpty() || trimmedName == oldName) {
+    val trimmedName = newName.trim().syncKey()
+    val currentName = oldName.syncKey()
+    if (trimmedName.isEmpty() || trimmedName == currentName) {
         return shelves
     }
-    if (shelves.none { it.name == oldName }) {
+    if (shelves.none { it.name.syncKey() == currentName }) {
         return shelves
     }
-    if (shelves.any { it.name == trimmedName }) {
+    if (shelves.any { it.name.syncKey() == trimmedName }) {
         return shelves
     }
     return shelves.map { shelf ->
-        if (shelf.name == oldName) {
+        if (shelf.name.syncKey() == currentName) {
             shelf.copy(name = trimmedName)
         } else {
             shelf
@@ -486,8 +480,8 @@ internal fun createShelfAndMoveBooksList(
     name: String,
     bookIds: Set<String>,
 ): List<BookShelf>? {
-    val trimmedName = name.trim()
-    if (trimmedName.isEmpty() || bookIds.isEmpty() || shelves.any { it.name == trimmedName }) {
+    val trimmedName = name.trim().syncKey()
+    if (trimmedName.isEmpty() || bookIds.isEmpty() || shelves.any { it.name.syncKey() == trimmedName }) {
         return null
     }
     val updatedShelves = shelves.map { shelf ->
@@ -638,3 +632,10 @@ internal fun File.toBookCoverSource(): BookCoverSource =
         path = absolutePath,
         cacheKey = "$absolutePath:${lastModified()}:${length()}",
     )
+
+internal suspend fun loadBookReadingStatesById(
+    entries: List<BookEntry>,
+    bookRepository: BookRepository,
+): Map<String, BookReadingState> = entries.associate { entry ->
+    entry.metadata.id to bookRepository.loadReadingState(entry.root)
+}

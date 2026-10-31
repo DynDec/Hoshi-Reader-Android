@@ -142,6 +142,7 @@ class ReaderSettingsTest {
         assertEquals(30, settings.popupSwipeThreshold)
         assertFalse(settings.openLastReadBookOnLaunch)
         assertFalse(settings.hideBookshelfProgress)
+        assertFalse(settings.exitReaderOnFirstBack)
     }
 
     @Test
@@ -739,6 +740,18 @@ class ReaderSettingsTest {
         assertTrue(css.contains("ruby > rt, ruby > rp"))
         assertTrue(css.contains("-webkit-user-select: none;"))
         assertTrue(css.contains("user-select: none;"))
+    }
+
+    @Test
+    fun readerRootSizeLimitsAreClearedInEveryMode() {
+        for (mode in ReaderViewMode.entries) for (vertical in listOf(true, false)) {
+            val css = ReaderContentStyles.styleTag(ReaderSettings(viewMode = mode, verticalWriting = vertical))
+            for (selector in listOf("html", "body")) {
+                val declarations = cssDeclarationsForSelector(css, selector)
+                assertEquals("$mode vertical=$vertical $selector max-width", "none !important", declarations["max-width"])
+                assertEquals("$mode vertical=$vertical $selector max-height", "none !important", declarations["max-height"])
+            }
+        }
     }
 
     @Test

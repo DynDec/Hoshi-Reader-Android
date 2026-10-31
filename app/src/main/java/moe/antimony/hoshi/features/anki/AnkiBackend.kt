@@ -1,7 +1,6 @@
 package moe.antimony.hoshi.features.anki
 
 import androidx.annotation.StringRes
-import javax.inject.Inject
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.ui.diagnosticMessage
 
@@ -94,8 +93,9 @@ interface AnkiContentApi {
     fun isAvailable(): Boolean = true
 }
 
-class AnkiDroidBackendAdapter @Inject constructor(
+class AnkiDroidBackendAdapter(
     private val api: AnkiContentApi,
+    private val clientName: String = AnkiDroidClient.AnkiDroid.displayName,
 ) : AnkiBackend {
     override fun isAvailable(): Boolean = api.isAvailable()
 
@@ -127,9 +127,9 @@ class AnkiDroidBackendAdapter @Inject constructor(
         }
         if (unreadableModels.isNotEmpty()) {
             val message = if (unreadableModels.size == 1) {
-                "Unable to read fields for AnkiDroid note type: ${unreadableModels.single()}."
+                "Unable to read fields for $clientName note type: ${unreadableModels.single()}."
             } else {
-                "Unable to read fields for AnkiDroid note types: ${unreadableModels.joinToString()}."
+                "Unable to read fields for $clientName note types: ${unreadableModels.joinToString()}."
             }
             val cause = unreadableCauses.takeIf { it.isNotEmpty() }?.let { causes ->
                 IllegalStateException(causes.joinToString("\n") { it.diagnosticMessage() }).apply {

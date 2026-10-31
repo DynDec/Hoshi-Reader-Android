@@ -8,14 +8,18 @@ Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 ### Added
 
 - Swipe along the text line while a Japanese lookup popup is open to move the lookup start one character forward or back, skipping punctuation, dots, small kana and characters without dictionary matches, and stopping at the paragraph or screen edge; page-turn swipes pause while the popup is open, and the gesture can be turned off in Behavior settings.
+- Use the bookshelf’s Mark menu to reset books to unread, including their reading position and statistics, or mark cloud books as read when cached book information is available.
+- Choose AnkiDroid or kuma3 Anki as the card-making client, including deck and note-type fetching, media export, duplicate checks, note browsing and synchronization.
 
+- Optionally show a sentence replay button beside the reader’s bottom playback controls to restart the current Sasayaki or TTS sentence and continue playback.
+- Optionally exit the reader with a single Back action without first revealing its controls, using a new Behavior setting that is off by default.
 - Revisit the last 100 full-text queries from the Dictionary tab and external lookups, with tap-to-search, individual deletion and clearing, without recording in-book lookups or subsequent character and word selections.
 
-- Sync books, reading progress, highlights, shelves, statistics and audiobook playback with Hoshi on iOS through Google Drive, including devices without Google Play Services, keeping Hoshi and TTU logins independent when connecting or switching providers, with less startup delay for large bookshelves and without replaying part of the current audiobook cue or losing newly created highlights when local state is synced.
+- Sync books, reading progress, highlights, shelves, statistics and audiobook playback with Hoshi on iOS through Google Drive, including devices without Google Play Services, keeping Hoshi and TTU logins independent when connecting or switching providers, with less startup delay for large bookshelves and without replaying part of the current audiobook cue, losing newly created highlights when local state is synced, leaving deleted books as blank cloud entries or interrupting the bookshelf and progress display during batch imports; upload transcription matches when transcription finishes or stops, while keeping live subtitle updates without repeatedly uploading temporary versions.
 - Download cloud books on demand, choose local-only or cloud-wide deletion, resume interrupted uploads across app restarts, keep healthy uploads running while metadata requests recover from network timeouts, stop transfers when Google Drive requires reconnection, and track per-book progress, separate effective upload/download speeds and errors on a dedicated queue page that preserves your position, avoids a dim backdrop on E-ink screens, and shows checking status until transfers are known; upload chunks adapt to the connection, and transfer concurrency is configurable in Sync settings (default 8).
-- Read Japanese books aloud with device, online or self-hosted TTS voices, background playback, adjustable speed, separate narration/dialogue voices, independently replayable Japanese dialogue passages and smoother continuous speech across sentences and chapters with parallel online prefetch and recovery from temporary synthesis failures; skip image holds by turning pages manually without interrupting speech or immediately returning to the narration page, and disable image holds with auto-scroll in the background too.
+- Read Japanese books aloud with device, online or self-hosted TTS voices (with Edge TTS access restored after Microsoft's service update), background playback, adjustable speed, separate narration/dialogue voices, independently replayable Japanese dialogue passages and smoother continuous speech across sentences and chapters with parallel online prefetch and recovery from temporary synthesis failures; skip empty audio from successful HTTP synthesis responses without interrupting reading or blocking preview and Anki audio export; skip image holds by turning pages manually without interrupting speech or immediately returning to the narration page, and disable image holds with auto-scroll in the background too.
 - Customize TTS pronunciation with book-specific or global replacements, optional regular expressions and ruby readings, without changing book text.
-- Export audiobook or TTS sentence audio to Anki with the optional `{sentence-audio}` field.
+- Export audiobook or TTS sentence audio to AnkiDroid and AnkiConnect with the optional `{sentence-audio}` field.
 - Optionally disable a term's Anki button after successful mining until the popup is reopened.
 - View, copy or export recent runtime errors alongside crash history and build information in Diagnostics.
 - Install the latest development preview from About.
@@ -50,10 +54,12 @@ Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 
 ### Changed
 
+- Skip Sasayaki and TTS image holds for images referenced three or more times in a book’s main text, while retaining holds for images used once or twice.
+
 - Make Statistics charts easier to read with a one-hour minimum scale and compact previous/next period buttons alongside swipe navigation, with stable single-line period titles and duration/comparison rows when paging.
 - Label the selected-text menu entry “Hoshi Lookup” (“Hoshi 查词” in Simplified Chinese) to make dictionary lookup easier to identify.
 - Simplify About into compact groups for updates, project links, support and storage cleanup.
-- Edit individual reading sessions in Statistics, with deletions preserved across sync.
+- Edit individual reading sessions in Statistics, with deletions preserved across sync and reading sessions split at the configured daily reset time so each day's reading counts toward its own totals and goals.
 - Replace BIZ UDPGothic with BIZ UDGothic in the recommended fonts.
 - Open Reader Contents on Gallery by default, retaining later tab selections
   and Gallery scroll position within the current reader session. Browse with
@@ -64,6 +70,10 @@ Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 
 ### Fixed
 
+- Prevent book styles from shrinking the reading area in paginated, continuous and visual novel modes.
+- Keep book assignments intact by correctly detecting duplicate shelf names during creation and renaming.
+- Reduce chapter loading delays by processing large publisher stylesheets faster, avoiding initial layout work before reader styles are ready, speeding up pagination in chapters with extensive ruby annotations, and avoiding repeated chapter scans in visual novel mode.
+- Recover bitmap covers from simple SVG wrappers when the declared cover is broken on import or opening existing books, and keep image-only pages visible and properly centered in the reader.
 - Keep word lookups and sentence context within the tapped dictionary list item instead of joining neighboring definitions.
 - Keep the full query visible and tappable in the Dictionary tab even when its beginning has no dictionary match.
 - Start reading statistics reliably when Sasayaki turns pages automatically, including after statistics finish loading or autostart settings change, without treating subpixel adjustments on the same page as page turns.
@@ -75,7 +85,7 @@ Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
 - Preserve lookup access to dictionaries excluded from aggregate Anki fields, and handle selected-definition fallbacks correctly.
 - Keep audio-source menus inside scaled lookup popups.
 - Show useful error details when operations fail, and improve update checks when download mirrors return invalid responses.
-- Improve Japanese audiobook transcription with Nakuru on 64-bit and 32-bit ARM, resumable component downloads and live cue updates; remove retired model files while preserving book data.
+- Improve Japanese audiobook transcription with Nakuru on 64-bit and 32-bit ARM, resumable component downloads and live cue updates, preserving earlier matches when opening text repeats later during transcription or realignment; remove retired model files while preserving book data.
 - Keep vertical pages free of font/ruby-dependent padding gaps with standard
   WebView line boxes. Retain selection preview and the dictionary JNI bridge.
 

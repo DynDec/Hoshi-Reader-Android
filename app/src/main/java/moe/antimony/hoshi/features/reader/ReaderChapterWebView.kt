@@ -49,6 +49,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.ScriptHandler
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import java.io.File
 import java.util.UUID
 import java.util.WeakHashMap
@@ -302,6 +305,7 @@ internal fun ChapterWebView(
         factory = { context ->
             HoshiReaderWebView(context).apply {
                 applyHoshiWebViewSecurityDefaults()
+                installDocumentPreparation(readerWebAssets.readerDocumentPreparationJs)
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
                 this.onHighlightChanged = { color, id, result ->
@@ -678,6 +682,18 @@ internal fun WebView.readerNativeSelectionState(): StateFlow<Boolean>? =
 internal class HoshiReaderWebView(context: Context) : HoshiWebView(context) {
     var isReleased = false
         private set
+
+    private var documentPreparationScript: ScriptHandler? = null
+
+    fun installDocumentPreparation(source: String) {
+        if (isReleased || documentPreparationScript != null) return
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return
+        documentPreparationScript = WebViewCompat.addDocumentStartJavaScript(
+            this,
+            source,
+            setOf("https://appassets.androidplatform.net"),
+        )
+    }
 
     override fun evaluateJavascript(script: String, resultCallback: ValueCallback<String?>?) {
         if (isReleased) return
@@ -1056,6 +1072,8 @@ internal class HoshiReaderWebView(context: Context) : HoshiWebView(context) {
 
     fun releaseForDestroy() {
         isReleased = true
+        documentPreparationScript?.remove()
+        documentPreparationScript = null
         removeJavascriptInterface("HoshiNativeSelection")
         removeJavascriptInterface("HoshiReaderScroll")
         onContinuousScroll = null
@@ -1239,7 +1257,7 @@ internal fun readerSetupScript(
         assets = assets,
     ).scriptTagBody()
     return """
-        (function() {
+        (async function() {
           document.documentElement.dataset.hoshiReaderEinkMode = $eInkMode;
           document.documentElement.lang = $contentLanguageTag;
           document.documentElement.dataset.hoshiContentLanguage = $contentLanguageTag;
@@ -1268,6 +1286,12 @@ internal fun readerSetupScript(
           window.hoshiSelection.setupFurigana(${readerJavaScriptStringLiteral(settings.furiganaMode.name)});
           window.__hoshiContinuousSources = ${continuousSourcesJson ?: "null"};
           window.__hoshiContinuousInitialSourceIndex = ${continuousInitialSourceIndex ?: "null"};
+          try {
+            var imageReferences = await fetch('https://appassets.androidplatform.net/reader-media/image-references.json');
+            if (imageReferences.ok) window.hoshiReaderImageReferenceCounts = await imageReferences.json();
+          } catch (_error) {
+            // Unknown counts preserve ordinary image holds.
+          }
           $paginationScript
         })();
     """.trimIndent()

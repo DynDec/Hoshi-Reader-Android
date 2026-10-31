@@ -442,6 +442,7 @@ fun ReaderWebView(
             statisticsLoadFailure = error
         }
     }
+    val currentOnSaveStatistics = rememberUpdatedState(onSaveStatistics)
     val statisticsTracker = remember(
         bookRoot,
         book.title,
@@ -451,6 +452,7 @@ fun ReaderWebView(
             ReaderStatisticsTracker(
                 initialStatistics = statistics,
                 resetMinutes = effectiveSettings.statisticsResetMinutes,
+                onSaveSessions = { currentOnSaveStatistics.value(it) },
             )
         }
     }
@@ -1753,7 +1755,8 @@ fun ReaderWebView(
     }
     val currentSyncMatch = rememberUpdatedState<suspend (String) -> Unit> { key ->
         if (bookRoot?.name?.syncKey() == key) withContext(Dispatchers.Main.immediate) {
-            val match = bookRepository.loadSasayakiMatch(bookRoot)
+            val savedMatch = bookRepository.loadSasayakiMatch(bookRoot)
+            val match = sasayakiTranscriptionViewModel.matchForReader(bookRoot, savedMatch)
             sasayakiSheetMatchData = match
             pendingSasayakiMatchUpdate = PendingSasayakiMatchUpdate(match, preserveLayout = true)
         }
@@ -2289,6 +2292,7 @@ fun ReaderWebView(
             onSasayakiSkipBackward = { if (ttsAvailable) { if (sasayakiBottomSkipButtonActions.left == ReaderSasayakiBottomSkipButtonAction.Backward) ttsViewModel.playback.previous() else ttsViewModel.playback.next() } else performSasayakiBottomSkipAction(sasayakiBottomSkipButtonActions.left) },
             onSasayakiTogglePlayback = { if (ttsAvailable) ttsViewModel.playback.toggle() else sasayakiPlayer?.togglePlayback() },
             onSasayakiSkipForward = { if (ttsAvailable) { if (sasayakiBottomSkipButtonActions.right == ReaderSasayakiBottomSkipButtonAction.Backward) ttsViewModel.playback.previous() else ttsViewModel.playback.next() } else performSasayakiBottomSkipAction(sasayakiBottomSkipButtonActions.right) },
+            onRestartSentence = { if (ttsAvailable) ttsViewModel.playback.restartCurrentSentence() else sasayakiPlayer?.restartCurrentCue() },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
         if (chromeVisibility.showBottomChrome) ReaderBottomChrome(

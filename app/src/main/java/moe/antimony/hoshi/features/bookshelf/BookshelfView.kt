@@ -1,5 +1,6 @@
 package moe.antimony.hoshi.features.bookshelf
 
+import moe.antimony.hoshi.features.sync.syncKey
 import moe.antimony.hoshi.ui.theme.hoshiSurfaces
 import moe.antimony.hoshi.ui.theme.hoshiContainerBorder
 import android.content.Intent
@@ -142,6 +143,7 @@ import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.BookShelf
+import moe.antimony.hoshi.epub.BookReadingState
 import moe.antimony.hoshi.epub.BookSortOption
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.sync.DriveAuthStatus
@@ -198,6 +200,7 @@ fun BookshelfView(
     var remoteDeleteCandidate by remember { mutableStateOf<RemoteBookEntry?>(null) }
     var exportCandidate by remember { mutableStateOf<BookEntry?>(null) }
     var markReadCandidate by remember { mutableStateOf<BookEntry?>(null) }
+    var markUnreadCandidate by remember { mutableStateOf<BookEntry?>(null) }
     var renameCandidate by remember { mutableStateOf<BookEntry?>(null) }
     val folderScanner = remember(context) { SafImportDirectoryScanner(context.contentResolver) }
     val renameTextState = rememberTextFieldState()
@@ -307,6 +310,7 @@ fun BookshelfView(
         remoteBookEntries = uiState.remoteBookEntries,
         sections = uiState.sections,
         bookProgressById = uiState.bookProgressById,
+        bookReadingStateById = uiState.bookReadingStateById,
         remoteProgressById = uiState.remoteProgressById,
         remoteImportProgressById = uiState.remoteImportProgressById,
         remoteBusyBookIds = uiState.remoteBusyBookIds,
@@ -383,6 +387,7 @@ fun BookshelfView(
             epubExporter.launch("${entry.displayTitle.sanitizeExportFileName()}.epub")
         },
         onMarkReadCandidate = { markReadCandidate = it },
+        onMarkUnreadCandidate = { markUnreadCandidate = it },
         onRenameCandidate = {
             renameCandidate = it
             renameTextState.replaceTextAndSelectStart(it.displayTitle)
@@ -517,6 +522,17 @@ fun BookshelfView(
                     Text(stringResource(R.string.action_cancel))
                 }
             },
+        )
+    }
+
+    markUnreadCandidate?.let { candidate ->
+        MarkUnreadConfirmationDialog(
+            entry = candidate,
+            onConfirm = {
+                booksViewModel.markUnread(candidate)
+                markUnreadCandidate = null
+            },
+            onDismiss = { markUnreadCandidate = null },
         )
     }
 
@@ -900,12 +916,13 @@ private fun LazyGridScope.googleDriveSection(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun BooksTab(
+internal fun BooksTab(
     layoutSpec: MainShellLayoutSpec,
     bookEntries: List<BookEntry>,
     remoteBookEntries: List<RemoteBookEntry>,
     sections: List<BookshelfSectionModel>,
     bookProgressById: Map<String, Double>,
+    bookReadingStateById: Map<String, BookReadingState>,
     remoteProgressById: Map<String, Double>,
     remoteImportProgressById: Map<String, Double>,
     remoteBusyBookIds: Set<String>,
@@ -948,6 +965,7 @@ private fun BooksTab(
     onDeleteCandidate: (BookEntry) -> Unit,
     onExportCandidate: (BookEntry) -> Unit,
     onMarkReadCandidate: (BookEntry) -> Unit,
+    onMarkUnreadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onMoveBook: (BookEntry, String?) -> Unit,
     onCreateShelfForBook: (BookEntry) -> Unit,
@@ -1147,6 +1165,7 @@ private fun BooksTab(
                                         )
                                         BookContextMenu(
                                             entry = entry,
+                                            readingState = bookReadingStateById[entry.metadata.id] ?: BookReadingState(),
                                             shelves = shelves,
                                             currentShelfName = section.shelfName,
                                             hideMove = section.isReading,
@@ -1155,6 +1174,7 @@ private fun BooksTab(
                                             onMoveBook = onMoveBook,
                                             onCreateShelfForBook = onCreateShelfForBook,
                                             onMarkReadCandidate = onMarkReadCandidate,
+                                            onMarkUnreadCandidate = onMarkUnreadCandidate,
                                             onRenameCandidate = onRenameCandidate,
                                             onDeleteCandidate = onDeleteCandidate,
                                             onExportCandidate = onExportCandidate,
@@ -1654,14 +1674,6 @@ private fun RemoteBookGridCell(
     }
 }
 
-internal suspend fun loadBookProgressById(
-    entries: List<BookEntry>,
-    bookRepository: BookRepository,
-): Map<String, Double> =
-    entries.associate { entry ->
-        entry.metadata.id to bookRepository.loadReadingProgress(entry.root)
-    }
-
 @Composable
 private fun ReadingProgressPill(progress: Double, modifier: Modifier = Modifier) {
     val clamped = progress.coerceIn(0.0, 1.0).toFloat()
@@ -1704,8 +1716,9 @@ private fun ReadingProgressPill(progress: Double, modifier: Modifier = Modifier)
 }
 
 @Composable
-private fun BookContextMenu(
+internal fun BookContextMenu(
     entry: BookEntry,
+    readingState: BookReadingState,
     shelves: List<BookShelf>,
     currentShelfName: String?,
     hideMove: Boolean,
@@ -1714,6 +1727,7 @@ private fun BookContextMenu(
     onMoveBook: (BookEntry, String?) -> Unit,
     onCreateShelfForBook: (BookEntry) -> Unit,
     onMarkReadCandidate: (BookEntry) -> Unit,
+    onMarkUnreadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onDeleteCandidate: (BookEntry) -> Unit,
     onExportCandidate: (BookEntry) -> Unit,
@@ -1726,6 +1740,7 @@ private fun BookContextMenu(
     var moveMenuExpanded by remember { mutableStateOf(false) }
     var syncMenuExpanded by remember { mutableStateOf(false) }
     var profileMenuExpanded by remember { mutableStateOf(false) }
+    var markMenuExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(expanded, hideMove) {
         if (!expanded || hideMove) {
             moveMenuExpanded = false
@@ -1733,10 +1748,11 @@ private fun BookContextMenu(
         if (!expanded) {
             syncMenuExpanded = false
             profileMenuExpanded = false
+            markMenuExpanded = false
         }
     }
     DropdownMenu(
-        expanded = expanded && !moveMenuExpanded && !syncMenuExpanded && !profileMenuExpanded,
+        expanded = expanded && !moveMenuExpanded && !syncMenuExpanded && !profileMenuExpanded && !markMenuExpanded,
         onDismissRequest = onDismiss,
     ) {
         if (syncSettings.enabled && (syncSettings.provider == SyncProvider.Ttu || entry.metadata.epub == null)) {
@@ -1803,12 +1819,11 @@ private fun BookContextMenu(
             },
         )
         DropdownMenuItem(
-            text = { Text(stringResource(R.string.bookshelf_mark_read)) },
-            enabled = entry.metadata.epub != null,
-            onClick = {
-                onMarkReadCandidate(entry)
-                onDismiss()
+            text = { Text(stringResource(R.string.bookshelf_mark)) },
+            trailingIcon = {
+                Icon(Icons.Rounded.ChevronRight, contentDescription = null)
             },
+            onClick = { markMenuExpanded = true },
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.bookshelf_export_epub)) },
@@ -1848,6 +1863,45 @@ private fun BookContextMenu(
         onDismiss = onDismiss,
         onSyncBook = onSyncBook,
     )
+    ReadingStateMenu(
+        entry = entry,
+        readingState = readingState,
+        expanded = expanded && markMenuExpanded,
+        onDismiss = onDismiss,
+        onMarkReadCandidate = onMarkReadCandidate,
+        onMarkUnreadCandidate = onMarkUnreadCandidate,
+    )
+}
+
+@Composable
+private fun ReadingStateMenu(
+    entry: BookEntry,
+    readingState: BookReadingState,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onMarkReadCandidate: (BookEntry) -> Unit,
+    onMarkUnreadCandidate: (BookEntry) -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        SortMenuHeader(text = stringResource(R.string.bookshelf_mark))
+        HorizontalDivider()
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.bookshelf_read)) },
+            enabled = readingState.canMarkRead,
+            onClick = {
+                onMarkReadCandidate(entry)
+                onDismiss()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.bookshelf_unread)) },
+            enabled = readingState.canMarkUnread,
+            onClick = {
+                onMarkUnreadCandidate(entry)
+                onDismiss()
+            },
+        )
+    }
 }
 
 @Composable
@@ -2044,8 +2098,9 @@ internal fun ShelfManagementDialog(
         onValueChange = { newShelfName = it },
         scrollState = newShelfNameScrollState,
     )
-    val trimmedName = newShelfName.trim()
-    val shelfNames = remember(shelves) { shelves.mapTo(mutableSetOf()) { it.name } }
+    val trimmedName = newShelfName.trim().syncKey()
+    val shelfNames = remember(shelves) { shelves.mapTo(mutableSetOf()) { it.name.syncKey() } }
+    val isDuplicateName = trimmedName in shelfNames
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.bookshelf_manage_shelves)) },
@@ -2194,6 +2249,10 @@ internal fun ShelfManagementDialog(
                             label = { Text(stringResource(R.string.bookshelf_shelf_name)) },
                             lineLimits = hoshiSingleLineTextFieldLineLimits(),
                             scrollState = newShelfNameScrollState,
+                            isError = isDuplicateName,
+                            supportingText = if (isDuplicateName) {
+                                { Text(stringResource(R.string.bookshelf_shelf_name_exists)) }
+                            } else null,
                             colors = hoshiOutlinedTextFieldColors(),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             modifier = Modifier.weight(1f),
@@ -2203,7 +2262,7 @@ internal fun ShelfManagementDialog(
                                 onCreateShelf(trimmedName)
                                 newShelfName = ""
                             },
-                            enabled = trimmedName.isNotEmpty(),
+                            enabled = trimmedName.isNotEmpty() && !isDuplicateName,
                         ) {
                             Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.bookshelf_add_shelf))
                         }
@@ -2238,8 +2297,8 @@ private fun ShelfManagementShelfRow(
             onValueChange = { draftName = it },
             scrollState = draftScrollState,
         )
-        val trimmedName = draftName.trim()
-        val isDuplicateName = trimmedName != shelf.name && trimmedName in shelfNames
+        val trimmedName = draftName.trim().syncKey()
+        val isDuplicateName = trimmedName != shelf.name.syncKey() && trimmedName in shelfNames
         val canSaveName = trimmedName.isNotEmpty() && !isDuplicateName
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2266,7 +2325,7 @@ private fun ShelfManagementShelfRow(
             }
             IconButton(
                 onClick = {
-                    if (trimmedName != shelf.name) {
+                    if (trimmedName != shelf.name.syncKey()) {
                         onRenameShelf(shelf.name, trimmedName)
                     }
                     isRenaming = false

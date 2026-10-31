@@ -2,8 +2,10 @@ package moe.antimony.hoshi.epub
 
 import uniffi.hoshiepub.EpubBook as NativeEpubBook
 import uniffi.hoshiepub.TocNode as NativeTocNode
+import uniffi.hoshiepub.ManifestItem
 import uniffi.hoshiepub.parseExtractedEpub
 import java.io.File
+import java.net.URI
 import javax.inject.Inject
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlinx.serialization.json.Json
@@ -21,6 +23,8 @@ data class EpubBook(
     val author: String? = null,
     val navigationDocumentHref: String? = null,
 ) {
+    internal val imageReferenceCounts: Map<String, Int> by lazy { countImageReferences() }
+
     fun readResource(path: String): ByteArray? {
         val normalized = path.normalizeResourceHref()
         return resources[normalized]?.readBytes()
@@ -50,6 +54,7 @@ data class EpubChapter(
     val linear: Boolean = true,
     val properties: String? = null,
     val isGuideToc: Boolean = false,
+    val originalHref: String? = null,
 )
 
 data class EpubTocItem(
@@ -71,9 +76,12 @@ data class EpubResource(
     }
 }
 
-class EpubBookParser @Inject constructor(
-    @param:CacheDir private val cacheDir: File,
+class EpubBookParser internal constructor(
+    private val cacheDir: File,
+    private val rasterDimensions: (File) -> Pair<Int, Int>?,
 ) {
+    @Inject constructor(@CacheDir cacheDir: File) : this(cacheDir, ::readEpubRasterDimensions)
+
     constructor() : this(File(System.getProperty("java.io.tmpdir"), "hoshi-epub-parser-cache"))
 
     fun parse(root: File, fallbackTitle: String? = null, cachedBookInfo: BookInfo? = null): EpubBook {
@@ -130,19 +138,21 @@ class EpubBookParser @Inject constructor(
 
     private fun NativeEpubBook.toReaderBook(root: File, fallbackTitle: String?, cachedBookInfo: BookInfo?): EpubBook {
         val manifest = manifest().associateBy { it.id }
-        val declaredCoverHref = coverHref()
-            ?: manifest.values.firstOrNull { item ->
+        val coverCandidates = listOfNotNull(coverHref()).ifEmpty {
+            listOfNotNull(manifest.values.firstOrNull { item ->
                 item.id.contains("cover", ignoreCase = true) && item.mediaType.isCoverFallbackImageType()
-            }?.href
+            }?.href)
+        }
         val contentDirectory = File(contentDir())
         val contentDirectoryPrefix = contentDirectory.relativeDirectoryHref(root)
         val guideTocHrefs = root.readGuideTocHrefs()
         val chapterShells = spine().mapIndexedNotNull { index, spineItem ->
-            val manifestItem = manifest[spineItem.idref] ?: return@mapIndexedNotNull null
-            if (!manifestItem.mediaType.isHtmlMediaType()) return@mapIndexedNotNull null
+            val originalItem = manifest[spineItem.idref] ?: return@mapIndexedNotNull null
+            val manifestItem = originalItem.readerFallback() ?: return@mapIndexedNotNull null
             val href = contentDirectoryPrefix.resolveManifestHref(manifestItem.href)
+            val originalHref = contentDirectoryPrefix.resolveManifestHref(originalItem.href)
             EpubChapter(
-                id = manifestItem.id,
+                id = originalItem.id,
                 href = href,
                 mediaType = manifestItem.mediaType,
                 html = "",
@@ -150,19 +160,22 @@ class EpubBookParser @Inject constructor(
                 linear = spineItem.linear,
                 properties = manifestItem.properties,
                 isGuideToc = guideTocHrefs.contains(manifestItem.href.normalizeResourceHref()) ||
-                    guideTocHrefs.contains(href.normalizeResourceHref()),
+                    guideTocHrefs.contains(href.normalizeResourceHref()) ||
+                    guideTocHrefs.contains(originalHref.normalizeResourceHref()),
+                originalHref = originalHref.takeIf { it != href },
             )
         }
 
         require(chapterShells.isNotEmpty()) { "EPUB spine contains no readable chapters" }
-        val tocItems = toc().children.map { it.toReaderTocItem() }
+        val hrefAliases = chapterShells.mapNotNull { chapter -> chapter.originalHref?.let { it to chapter.href } }.toMap()
+        val tocItems = toc().children.map { it.toReaderTocItem(hrefAliases) }
         val reusableBookInfo = cachedBookInfo?.takeIf { it.matchesReaderFacts(chapterShells, tocItems) }
         val chapters = if (reusableBookInfo != null) {
             chapterShells
         } else {
             chapterShells.map { chapter ->
-                val spineIndex = chapter.spineIndex ?: return@map chapter
-                chapter.copy(html = readSpineItemText(spineIndex.toUInt()))
+                val source = requireNotNull(root.canonicalFile.safeChildFile(chapter.href)) { "Chapter path escapes EPUB root: ${chapter.href}" }
+                chapter.copy(html = source.readText())
             }
         }
 
@@ -175,7 +188,7 @@ class EpubBookParser @Inject constructor(
         return EpubBook(
             title = title()?.ifBlank { null } ?: fallbackTitle?.takeIf { it.isNotBlank() } ?: root.nameWithoutExtension,
             language = language()?.ifBlank { null },
-            coverHref = declaredCoverHref?.let { contentDirectoryPrefix.resolveManifestHref(it) },
+            coverHref = selectCover(root, contentDirectoryPrefix, coverCandidates, manifest.values),
             toc = tocItems,
             chapters = chapters,
             resources = resources,
@@ -190,7 +203,33 @@ class EpubBookParser @Inject constructor(
             },
         )
     }
+
+    private fun selectCover(root: File, contentPrefix: String, candidates: List<String>, manifest: Collection<ManifestItem>): String? {
+        var unsupportedSvg: String? = null
+        for (candidate in candidates) {
+            val uri = runCatching { URI(candidate.trim().replace(" ", "%20")) }.getOrNull() ?: continue
+            if (uri.isAbsolute || uri.rawAuthority != null || uri.path.orEmpty().startsWith('/') ||
+                uri.rawQuery != null || uri.rawFragment != null) continue
+            val href = contentPrefix.resolveManifestHref(candidate)
+            val file = root.canonicalFile.safeChildFile(href)?.takeIf { it.isFile && it.length() > 0 } ?: continue
+            val mediaType = manifest.firstOrNull { it.href == candidate }?.mediaType?.lowercase()
+            if (mediaType == "image/svg+xml") {
+                unwrapEpubSvgCover(root, href, rasterDimensions)?.let { return it }
+                // Preserve complex SVGs when no explicitly declared bitmap is usable.
+                if (unsupportedSvg == null) unsupportedSvg = href
+            } else {
+                val dimensions = runCatching { rasterDimensions(file) }.getOrNull() ?: continue
+                if (dimensions.first > 0 && dimensions.second > 0) return href
+            }
+        }
+        return unsupportedSvg
+    }
 }
+
+// The fork's native library does not expose manifest fallback IDs, so only
+// HTML spine items are readable.
+private fun ManifestItem.readerFallback(): ManifestItem? =
+    takeIf { it.mediaType.isHtmlMediaType() }
 
 private fun String.isCoverFallbackImageType(): Boolean =
     lowercase() in setOf("image/jpeg", "image/png", "image/gif", "image/svg+xml")
@@ -258,11 +297,14 @@ internal fun BookInfo.matchesChapterShells(chapters: List<EpubChapter>): Boolean
     return total == characterCount
 }
 
-private fun NativeTocNode.toReaderTocItem(): EpubTocItem =
+private fun NativeTocNode.toReaderTocItem(hrefAliases: Map<String, String>): EpubTocItem =
     EpubTocItem(
         label = label,
-        href = href?.normalizeTocHref(),
-        children = children.map { it.toReaderTocItem() },
+        href = href?.normalizeTocHref()?.let { original ->
+            val base = original.substringBefore('#')
+            (hrefAliases[base] ?: base) + original.removePrefix(base)
+        },
+        children = children.map { it.toReaderTocItem(hrefAliases) },
     )
 
 private fun String.normalizeTocHref(): String {

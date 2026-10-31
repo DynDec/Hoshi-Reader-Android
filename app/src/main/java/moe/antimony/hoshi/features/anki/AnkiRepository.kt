@@ -37,7 +37,7 @@ import kotlin.coroutines.coroutineContext
 @Singleton
 internal class AnkiRepository(
     private val context: Context,
-    private val backend: AnkiBackend,
+    private val ankiDroidBackendFactory: (AnkiDroidClient) -> AnkiBackend,
     private val settingsRepository: AnkiSettingsRepository,
     private val localAudioRepository: LocalAudioRepository,
     private val coverReuseStore: AnkiBookCoverReuseStore,
@@ -49,7 +49,7 @@ internal class AnkiRepository(
     @Inject
     constructor(
         @ApplicationContext context: Context,
-        backend: AnkiBackend,
+        ankiDroidBackendFactory: AnkiDroidBackendFactory,
         settingsRepository: AnkiSettingsRepository,
         localAudioRepository: LocalAudioRepository,
         dictionaryRepository: DictionaryRepository,
@@ -57,7 +57,7 @@ internal class AnkiRepository(
         coverReuseStore: AnkiBookCoverReuseStore,
     ) : this(
         context = context,
-        backend = backend,
+        ankiDroidBackendFactory = ankiDroidBackendFactory::create,
         settingsRepository = settingsRepository,
         localAudioRepository = localAudioRepository,
         coverReuseStore = coverReuseStore,
@@ -87,9 +87,10 @@ internal class AnkiRepository(
         },
         loadTermDictionaries: () -> List<AnkiTermDictionary> = { emptyList() },
         dictionaryChangeVersions: Flow<Long> = flowOf(0L),
+        ankiDroidBackendFactory: (AnkiDroidClient) -> AnkiBackend = { backend },
     ) : this(
         context = context,
-        backend = backend,
+        ankiDroidBackendFactory = ankiDroidBackendFactory,
         settingsRepository = settingsRepository,
         localAudioRepository = localAudioRepository,
         coverReuseStore = coverReuseStore,
@@ -110,10 +111,18 @@ internal class AnkiRepository(
         settingsRepository.update(transform)
     }
 
-    fun isAnkiDroidAvailable(): Boolean = backend.isAvailable()
+    fun isAnkiDroidAvailable(client: AnkiDroidClient = AnkiDroidClient.AnkiDroid): Boolean =
+        ankiDroidBackendFactory(client).isAvailable()
 
-    suspend fun fetchConfiguration(): AnkiFetchResult = withContext(Dispatchers.IO) {
+    suspend fun fetchConfiguration(
+        expectedProfileId: String? = null,
+        expectedIdentity: AnkiConnectionIdentity? = null,
+    ): AnkiFetchResult = withContext(Dispatchers.IO) {
+        val profileId = expectedProfileId ?: profileIds.first()
         val currentSettings = settings.first()
+        if (profileIds.first() != profileId || expectedIdentity != null && currentSettings.connectionIdentity != expectedIdentity) {
+            throw CancellationException("Anki configuration target changed")
+        }
         val activeBackend = activeBackendOrError(currentSettings).getOrElse { error ->
             return@withContext AnkiFetchResult.Error(
                 UiText.Resource(R.string.anki_fetch_configure_failed).withErrorDetails(error),
@@ -123,7 +132,7 @@ internal class AnkiRepository(
             if (!activeBackend.checkAvailability()) {
                 return@withContext AnkiFetchResult.Error(
                     message = if (currentSettings.backendKind == AnkiBackendKind.AnkiDroid) {
-                        UiText.Resource(AnkiFetchFailure.ApiUnavailable.userMessageRes)
+                        UiText.Resource(AnkiFetchFailure.ApiUnavailable.userMessageRes, currentSettings.ankiDroidClient.displayName)
                     } else {
                         UiText.Resource(R.string.anki_fetch_connect_ankiconnect_failed)
                     },
@@ -140,7 +149,7 @@ internal class AnkiRepository(
             if (error is AnkiFetchException) {
                 logAnkiFetchFailure("Unable to fetch Anki configuration: ${error.failure}", error)
                 return@withContext AnkiFetchResult.Error(
-                    message = UiText.Resource(error.failure.userMessageRes).let { summary ->
+                    message = UiText.Resource(error.failure.userMessageRes, currentSettings.ankiDroidClient.displayName).let { summary ->
                         if (error.message == error.failure.userMessage && error.cause == null) summary
                         else summary.withErrorDetails(if (error.message == error.failure.userMessage) error.cause!! else error)
                     },
@@ -150,7 +159,7 @@ internal class AnkiRepository(
             logAnkiFetchFailure("Unable to fetch Anki configuration.", error)
             return@withContext AnkiFetchResult.Error(
                 (if (currentSettings.backendKind == AnkiBackendKind.AnkiDroid) {
-                    UiText.Resource(AnkiFetchFailure.ProviderFailure.userMessageRes)
+                    UiText.Resource(AnkiFetchFailure.ProviderFailure.userMessageRes, currentSettings.ankiDroidClient.displayName)
                 } else {
                     UiText.Resource(R.string.anki_fetch_ankiconnect_provider_failure)
                 }).withErrorDetails(error),
@@ -160,7 +169,7 @@ internal class AnkiRepository(
         if (decks.isEmpty()) {
             return@withContext AnkiFetchResult.Error(
                 if (currentSettings.backendKind == AnkiBackendKind.AnkiDroid) {
-                    UiText.Resource(R.string.anki_fetch_no_ankidroid_decks)
+                    UiText.Resource(R.string.anki_fetch_no_ankidroid_decks, currentSettings.ankiDroidClient.displayName)
                 } else {
                     UiText.Resource(R.string.anki_fetch_no_ankiconnect_decks)
                 },
@@ -169,14 +178,17 @@ internal class AnkiRepository(
         if (noteTypes.isEmpty()) {
             return@withContext AnkiFetchResult.Error(
                 if (currentSettings.backendKind == AnkiBackendKind.AnkiDroid) {
-                    UiText.Resource(R.string.anki_fetch_no_ankidroid_note_types)
+                    UiText.Resource(R.string.anki_fetch_no_ankidroid_note_types, currentSettings.ankiDroidClient.displayName)
                 } else {
                     UiText.Resource(R.string.anki_fetch_no_ankiconnect_note_types)
                 },
             )
         }
         coroutineContext.ensureActive()
-        settingsRepository.update { current ->
+        var applied = false
+        settingsRepository.updateIfCurrent(profileId) { current ->
+            if (current.connectionIdentity != currentSettings.connectionIdentity) return@updateIfCurrent current
+            applied = true
             val selectedDeck = decks.firstOrNull { !it.name.equals("Default", ignoreCase = true) }
                 ?: decks.first()
             val selectedNoteType = noteTypes.first()
@@ -202,6 +214,7 @@ internal class AnkiRepository(
                 fieldMappings = formats.first().fieldMappings,
             )
         }
+        if (!applied) throw CancellationException("Anki configuration target changed")
         AnkiFetchResult.Success(decks, noteTypes)
     }
 
@@ -506,7 +519,6 @@ internal class AnkiRepository(
             return activeBackend.addMediaFromBytes(file.readBytes(), preferredName, mimeType)
         }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        context.grantUriPermission("com.ichi2.anki", uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         return activeBackend.addMediaFromUri(uri.toString(), preferredName, mimeType)
     }
 
@@ -517,7 +529,7 @@ internal class AnkiRepository(
 
     private fun activeBackendOrError(settings: AnkiSettings): Result<AnkiBackend> =
         when (settings.backendKind) {
-            AnkiBackendKind.AnkiDroid -> Result.success(backend)
+            AnkiBackendKind.AnkiDroid -> Result.success(ankiDroidBackendFactory(settings.ankiDroidClient))
             AnkiBackendKind.AnkiConnect -> runCatching {
                 val endpoint = AnkiConnectUrlValidator.requireValidEndpoint(settings.ankiConnectUrl).toString()
                 ankiConnectBackendFactory(endpoint, settings.ankiConnectApiKey)

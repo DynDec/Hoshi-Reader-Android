@@ -38,6 +38,7 @@ class ContinuousReaderBrowserTest {
             readerVnSelectionProjectionJs = asset("reader/reader-vn-selection-projection.js"), readerSasayakiJs = asset("reader/reader-sasayaki.js"),
             highlightsJs = asset("reader/highlights.js"), readerCss = asset("reader/reader.css"),
             readerContinuousGroupJs = asset("reader/reader-continuous-group.js"),
+            readerDocumentPreparationJs = asset("reader/reader-document-preparation.js"),
         )
     }
     private fun fixture(): EpubBook {
