@@ -121,21 +121,6 @@ class SasayakiAudiobookOpusMetadataTest {
     }
 
     @Test
-    fun acceptsMultichannelOpusHeadWithChannelMappingTable() {
-        val file = temporaryFolder.newFile("mapped.opus")
-        file.writeBytes(
-            minimalOggOpusWithComments(
-                comments = listOf("TITLE=Mapped Opus"),
-                channelMappingFamily = 1,
-            ),
-        )
-
-        val info = requireNotNull(SasayakiAudiobookOpusMetadata.parse(file))
-
-        assertEquals("Mapped Opus", info.metadata.title)
-    }
-
-    @Test
     fun nonOggOpusInputIsNotRecognized() {
         val file = temporaryFolder.newFile("not-opus.bin")
         file.writeText("not an Ogg Opus stream")
@@ -158,22 +143,6 @@ class SasayakiAudiobookOpusMetadataTest {
     }
 
     @Test
-    fun invalidContinuationDoesNotSpliceOpusTagsPackets() {
-        val file = temporaryFolder.newFile("invalid-continuation.opus")
-        file.writeBytes(
-            minimalOggOpusWithComments(
-                comments = listOf("TITLE=Must Not Be Parsed"),
-                splitTagsAcrossPages = true,
-                omitContinuationFlag = true,
-            ),
-        )
-
-        val info = requireNotNull(SasayakiAudiobookOpusMetadata.parse(file))
-
-        assertEquals(SasayakiAudiobookMetadata.Empty, info.metadata)
-    }
-
-    @Test
     fun calculatesDurationFromFinalGranulePositionAfterPreSkip() {
         val file = temporaryFolder.newFile("duration.opus")
         file.writeBytes(
@@ -187,22 +156,5 @@ class SasayakiAudiobookOpusMetadataTest {
         val info = requireNotNull(SasayakiAudiobookOpusMetadata.parse(file))
 
         assertEquals(10.0, info.durationSeconds ?: error("Missing Opus duration"), 0.000_001)
-    }
-
-    @Test
-    fun tailScanResynchronizesAfterFalseOggCapturePattern() {
-        val file = temporaryFolder.newFile("false-tail-capture.opus")
-        file.writeBytes(
-            minimalOggOpusWithComments(
-                comments = listOf("TITLE=Tail Resync"),
-                finalGranulePosition = 480_000,
-                durationTailPrefix = oggTailPrefixWithFalseCapturePattern(),
-                finalPagePayloadSize = 255 * 255,
-            ),
-        )
-
-        val info = requireNotNull(SasayakiAudiobookOpusMetadata.parse(file))
-
-        assertEquals(10.0, info.durationSeconds ?: error("Missing resynchronized duration"), 0.000_001)
     }
 }

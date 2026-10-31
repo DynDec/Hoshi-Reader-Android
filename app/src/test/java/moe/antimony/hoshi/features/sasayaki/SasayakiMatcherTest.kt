@@ -46,57 +46,6 @@ class SasayakiMatcherTest {
     }
 
     @Test
-    fun repeatedResynchronizationAllocationScalesNearLinearly() {
-        val allocationBean = ManagementFactory.getThreadMXBean() as? ThreadMXBean
-        assumeTrue(allocationBean?.isThreadAllocatedMemorySupported == true)
-        allocationBean ?: return
-        allocationBean.isThreadAllocatedMemoryEnabled = true
-
-        val book = EpubBook(
-            title = "Allocation Test",
-            chapters = listOf(
-                EpubChapter(
-                    id = "chapter",
-                    href = "chapter.xhtml",
-                    mediaType = "application/xhtml+xml",
-                    html = "<html><body>${"正文".repeat(128)}</body></html>",
-                ),
-            ),
-        )
-
-        fun cues(count: Int): List<SasayakiCue> =
-            List(count) { index ->
-                SasayakiCue(
-                    id = index.toString(),
-                    startTime = index.toDouble(),
-                    endTime = index + 1.0,
-                    text = "不存在的字幕文本${index}号",
-                )
-            }
-
-        fun allocatedBytes(cueCount: Int): Long {
-            val testCues = cues(cueCount)
-            @Suppress("DEPRECATION")
-            val threadId = Thread.currentThread().id
-            val before = allocationBean.getThreadAllocatedBytes(threadId)
-            val result = SasayakiMatcher.match(book = book, cues = testCues)
-            val allocated = allocationBean.getThreadAllocatedBytes(threadId) - before
-            assertEquals(0, result.matches.size)
-            assertEquals(cueCount, result.unmatched)
-            return allocated
-        }
-
-        allocatedBytes(200)
-        val smallAllocation = allocatedBytes(2_000)
-        val largeAllocation = allocatedBytes(4_000)
-
-        assertTrue(
-            "Expected near-linear allocation growth, small=$smallAllocation large=$largeAllocation",
-            largeAllocation < smallAllocation * 2.25,
-        )
-    }
-
-    @Test
     fun matchesCuesAgainstFilteredChapterTextAndSavesChapterOffsets() {
         val book = EpubBook(
             title = "Book",

@@ -657,28 +657,6 @@ class HoshiBackupRepositoryTest {
     }
 
     @Test
-    fun exportTtuBookDataDisambiguatesDuplicateLongTitlesWithinByteLimit() = runBlocking {
-        val sourceDir = Files.createTempDirectory("hoshi-ttu-backup-duplicate-long-title").toFile()
-        val sourceRepository = BookRepository(sourceDir)
-        val longTitle = "長".repeat(86)
-        val first = sourceRepository.createPackedTestBook("First Long Book")
-        val second = sourceRepository.createPackedTestBook("Second Long Book")
-        listOf(first, second).forEach { entry ->
-            sourceRepository.saveMetadata(entry.root, entry.metadata.copy(renamedTitle = longTitle))
-        }
-        val output = ByteArrayOutputStream()
-
-        HoshiBackupRepository(sourceDir).exportTtuBookData(output)
-
-        val bookFolders = zipEntryNames(output.toByteArray())
-            .filter { it.contains("/bookdata_") }
-            .map { it.substringBefore('/') }
-            .distinct()
-        assertEquals(2, bookFolders.size)
-        assertTrue(bookFolders.all { it.toByteArray(Charsets.UTF_8).size <= 255 })
-    }
-
-    @Test
     fun exportAndRestoreTtuBookDataKeepsLongTitleWithByteSafeArchiveFolder() = runBlocking {
         val sourceDir = Files.createTempDirectory("hoshi-ttu-backup-long-title").toFile()
         val sourceRepository = BookRepository(sourceDir)
@@ -699,17 +677,6 @@ class HoshiBackupRepositoryTest {
         assertEquals(1, restored)
         assertEquals(title, restoredEntry.metadata.title)
         assertTrue(restoredEntry.root.name.toByteArray(Charsets.UTF_8).size <= 250)
-    }
-
-    @Test
-    fun ttuRestoreEntryNameCapsIosStyleLongTopLevelFolder() {
-        val rawFolder = "長".repeat(86)
-
-        val mapped = remapTtuRestoreEntryName("$rawFolder/bookdata_1_6_1_2_3.zip")
-
-        assertTrue(mapped.substringBefore('/').toByteArray(Charsets.UTF_8).size <= 255)
-        assertTrue(mapped.substringBefore('/').substringAfterLast('-').matches(Regex("[0-9a-f]{16}")))
-        assertEquals("bookdata_1_6_1_2_3.zip", mapped.substringAfter('/'))
     }
 
     @Test

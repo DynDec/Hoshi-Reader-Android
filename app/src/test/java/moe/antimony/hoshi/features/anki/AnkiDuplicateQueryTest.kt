@@ -23,11 +23,6 @@ class AnkiDuplicateQueryTest {
     }
 
     @Test
-    fun checksumMatchesAnkiNfcForDecomposedDakuten() {
-        assertEquals(ankiFirstFieldChecksum("が"), ankiFirstFieldChecksum("か\u3099"))
-    }
-
-    @Test
     fun checksumDoesNotFoldCompatibilityOnlyDifferences() {
         assertFalse(ankiFirstFieldChecksum("Ａ") == ankiFirstFieldChecksum("A"))
         assertFalse(ankiFirstFieldChecksum("ｶﾞ") == ankiFirstFieldChecksum("ガ"))

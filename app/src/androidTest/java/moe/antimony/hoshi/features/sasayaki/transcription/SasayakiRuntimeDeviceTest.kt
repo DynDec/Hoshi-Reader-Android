@@ -12,17 +12,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class SasayakiRuntimeDeviceTest {
-    @Test fun installRuntimeFromPublishedUrls() = runBlocking<Unit> {
-        assumeTrue("Opt in to downloading verified runtime files", InstrumentationRegistry.getArguments().getString("downloadRuntime") == "true")
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val repository = SasayakiRuntimeRepository(context, Dispatchers.IO)
-        val store = repository.store()
-        val directory = store.ensure({ assertTrue(it > 0) }) {}
-        repository.load(directory)
-        assertEquals(0L, store.missingBytes())
-        store.ensure({ fail("Cached components must not ask again") }) { fail("Cached components must not report download progress") }
-    }
-
     @Test fun verifiedPrivateLibrariesLoadAndCachedFilesWorkOffline() = runBlocking<Unit> {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

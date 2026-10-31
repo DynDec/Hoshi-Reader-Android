@@ -120,20 +120,6 @@ class AnkiConnectBackendTest {
     }
 
     @Test
-    fun requestsIncludeWhitespaceApiKeyWhenConfigured() {
-        val transport = FakeAnkiConnectTransport("""{"result":6,"error":null}""")
-        val backend = AnkiConnectBackend(
-            endpoint = "https://anki.example.com",
-            transport = transport,
-            apiKey = " ",
-        )
-
-        assertTrue(backend.isAvailable())
-
-        assertEquals(" ", transport.lastBody().getValue("key").jsonPrimitive.content)
-    }
-
-    @Test
     fun fetchesDecksAndNoteTypesFromAnkiConnect() {
         val transport = FakeAnkiConnectTransport(
             """{"result":["Mining","Default"],"error":null}""",

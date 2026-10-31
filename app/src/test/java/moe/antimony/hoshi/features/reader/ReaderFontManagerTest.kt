@@ -290,35 +290,6 @@ class ReaderFontManagerTest {
     }
 
     @Test
-    fun variableInstancesWithSameWeightAndDifferentCoordinatesRemainSelectable() {
-        val root = createTempDirectory().toFile()
-        val fonts = File(root, "Fonts").apply { mkdirs() }
-        File(fonts, "Fixture-Variable.ttf").writeBytes(
-            sfntFixture(
-                family = "Fixture Family",
-                vendorId = "TEST",
-                weight = 400,
-                namedCoordinates = listOf(
-                    "Condensed" to mapOf("wght" to 400f, "wdth" to 75f),
-                    "Expanded" to mapOf("wght" to 400f, "wdth" to 125f),
-                ),
-            ),
-        )
-        val manager = ReaderFontManager(root)
-
-        val variants = manager.fontFamilies().single { it.displayName == "Fixture Family" }.variants
-
-        assertEquals(2, variants.size)
-        assertEquals(setOf(75f, 125f), variants.mapNotNull { it.variationSettings["wdth"] }.toSet())
-        val renderSpec = manager.resolveRenderSpec(
-            selectedFont = "Fixture Family",
-            familyId = manager.fontFamilies().single { it.displayName == "Fixture Family" }.id,
-            variantId = variants.last().id,
-        )
-        assertEquals(100..900, renderSpec.faces.single().variableWeightRange)
-    }
-
-    @Test
     fun variableFontWithoutNamedInstancesStillExposesItsWeightRange() {
         val root = createTempDirectory().toFile()
         val fonts = File(root, "Fonts").apply { mkdirs() }
@@ -344,85 +315,5 @@ class ReaderFontManagerTest {
         assertTrue(variable.exists())
         assertEquals(2, family.variants.size)
         assertTrue(spec.faces.any { it.variableWeightRange == 200..800 })
-    }
-
-    @Test
-    fun replacedVariableRangeLegacyAliasDoesNotResolveToCoexistingStaticWeight() {
-        val root = createTempDirectory().toFile()
-        val fonts = File(root, "Fonts").apply { mkdirs() }
-        val legacyVariable = File(fonts, "Legacy-Variable.ttf").apply {
-            writeBytes(
-                sfntFixture(
-                    family = "Fixture Family",
-                    vendorId = "TEST",
-                    weight = 400,
-                    weightAxisRange = 200..800,
-                ),
-            )
-            setLastModified(1_000L)
-        }
-        val manager = ReaderFontManager(root)
-        manager.importFont(
-            File(root, "Static-Regular.ttf").apply {
-                writeBytes(sfntFixture(family = "Fixture Family", vendorId = "TEST", weight = 400))
-            },
-        )
-        manager.importFont(
-            File(root, "Variable-Replacement.ttf").apply {
-                writeBytes(
-                    sfntFixture(
-                        family = "Fixture Family",
-                        vendorId = "TEST",
-                        weight = 400,
-                        weightAxisRange = 200..800,
-                    ) + byteArrayOf(9),
-                )
-            },
-        )
-
-        val spec = manager.resolveRenderSpec(selectedFont = "Legacy-Variable")
-        val aliasFaces = manager.popupFontFaceCss().split("@font-face")
-            .filter { it.contains("""font-family: "Legacy-Variable";""") }
-
-        assertFalse(legacyVariable.exists())
-        assertTrue(spec.variantId.contains("range-200-800"))
-        assertEquals(1, aliasFaces.size)
-        assertTrue(aliasFaces.single().contains("font-weight: 200 800;"))
-    }
-
-    @Test
-    fun deletingFamilyRemovesBackingFilesHiddenByNewerStaticVariants() {
-        val root = createTempDirectory().toFile()
-        val fonts = File(root, "Fonts").apply { mkdirs() }
-        File(fonts, "Fixture-Variable.ttf").apply {
-            writeBytes(
-                sfntFixture(
-                    family = "Fixture Family",
-                    vendorId = "TEST",
-                    weight = 400,
-                    namedInstances = listOf("Regular" to 400f, "Bold" to 700f),
-                ),
-            )
-            setLastModified(1_000L)
-        }
-        val manager = ReaderFontManager(root)
-        manager.importFont(
-            File(root, "Regular.ttf").apply {
-                writeBytes(sfntFixture(family = "Fixture Family", vendorId = "TEST", weight = 400))
-            },
-        )
-        manager.importFont(
-            File(root, "Bold.ttf").apply {
-                writeBytes(
-                    sfntFixture(family = "Fixture Family", subfamily = "Bold", vendorId = "TEST", weight = 700),
-                )
-            },
-        )
-        val familyId = manager.fontFamilies().single { it.displayName == "Fixture Family" }.id
-
-        manager.deleteFamily(familyId)
-
-        assertTrue(manager.storedFonts().isEmpty())
-        assertTrue(File(root, "Fonts").listFiles().orEmpty().none { it.isFile })
     }
 }

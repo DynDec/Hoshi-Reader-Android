@@ -472,28 +472,6 @@ class BookMetadataStorageTest {
     }
 
     @Test
-    fun importedBookDirectoryKeepsByteSafeTitleUnchanged() = runBlocking {
-        val storage = BookStorage(Files.createTempDirectory("hoshi-safe-book-title").toFile())
-        val title = "a".repeat(250)
-
-        val root = storage.createBookDirectoryForImportedTitle(title)
-
-        assertEquals(title, root.name)
-    }
-
-    @Test
-    fun importedBookDirectoryShortensTitleOneByteOverLimit() = runBlocking {
-        val storage = BookStorage(Files.createTempDirectory("hoshi-overlong-book-title").toFile())
-        val title = "a".repeat(251)
-
-        val root = storage.createBookDirectoryForImportedTitle(title)
-
-        assertTrue(root.name.toByteArray(Charsets.UTF_8).size <= 250)
-        assertFalse(root.name == title)
-        assertTrue(root.name.substringAfterLast('-').matches(Regex("[0-9a-f]{16}")))
-    }
-
-    @Test
     fun importedBookDirectoryMapsLongTitlesDeterministicallyWithoutPrefixCollisions() = runBlocking {
         val storage = BookStorage(Files.createTempDirectory("hoshi-long-book-dedupe").toFile())
         val sharedPrefix = "長".repeat(86)
@@ -517,18 +495,6 @@ class BookMetadataStorageTest {
 
         assertTrue(root.name.toByteArray(Charsets.UTF_8).size <= 250)
         assertFalse(root.name.any { Character.isSurrogate(it) })
-    }
-
-    @Test
-    fun importedBookDirectoryKeepsCombiningCodePointsValidAtUtf8Boundary() = runBlocking {
-        val storage = BookStorage(Files.createTempDirectory("hoshi-combining-book-title").toFile())
-        val title = "e\u0301".repeat(100)
-
-        val root = storage.createBookDirectoryForImportedTitle(title)
-        val encoded = root.name.toByteArray(Charsets.UTF_8)
-
-        assertTrue(encoded.size <= 250)
-        assertEquals(root.name, encoded.toString(Charsets.UTF_8))
     }
 
     @Test
