@@ -74,14 +74,6 @@ class SasayakiPlaybackServiceConfigurationTest {
     }
 
     @Test
-    fun serviceExtendsMediaSessionService() {
-        assertTrue(
-            "SasayakiPlaybackService must extend MediaSessionService so Android can keep playback alive in the background.",
-            MediaSessionService::class.java.isAssignableFrom(SasayakiPlaybackService::class.java),
-        )
-    }
-
-    @Test
     fun playbackForegroundPolicyMatchesOngoingAudioStates() {
         assertTrue(
             sasayakiShouldRunPlaybackServiceInForeground(

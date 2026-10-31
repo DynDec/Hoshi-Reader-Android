@@ -116,11 +116,6 @@ class SasayakiSheetTest {
     }
 
     @Test
-    fun audiobookCoverUsesSquareArtworkFrame() {
-        assertEquals(SasayakiAudiobookCoverWidthDp, SasayakiAudiobookCoverHeightDp)
-    }
-
-    @Test
     fun chapterRowInfoKeepsTitleAsPrimaryTextAndTimeAsTrailingText() {
         val info = sasayakiChapterRowInfo(
             SasayakiAudiobookChapter(

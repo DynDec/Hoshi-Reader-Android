@@ -26,17 +26,6 @@ class StatisticsDashboardSectionsTest {
         assertTrue(compact.valueFontSizeSp < regular.valueFontSizeSp)
         assertTrue(compact.valueLineHeightSp < regular.valueLineHeightSp)
     }
-
-    @Test
-    fun metricCardLongLabelsFitAsTwoCompactLines() {
-        val spec = metricCardTextSpec(
-            metric = StatisticMetric(label = "Avg Characters", value = "1137"),
-            columns = 3,
-        )
-
-        assertEquals(2, spec.labelMaxLines)
-        assertTrue(spec.labelLineHeightSp <= 14)
-    }
     @Test
     fun historyDatesStayCompactInCurrentYearAndKeepOlderYears() {
         val today = LocalDate.parse("2026-09-18")

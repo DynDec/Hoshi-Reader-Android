@@ -15,6 +15,7 @@ import moe.antimony.hoshi.features.sasayaki.SasayakiSheetTab
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -672,261 +673,109 @@ class ReaderWebViewStateHolderTest {
     }
 
     @Test
-    fun syncedChromeOnlySettingsDoNotReloadWebView() {
-        val holder = stateHolder(initialIndex = 1)
-        holder.markWebViewRestored()
-        val previousEpoch = holder.webViewRestoreEpoch
-
-        holder.syncSettings(ReaderSettings(showTitle = false, alwaysShowProgress = false, showProgressTop = false))
-
-        assertFalse(holder.isWebViewRestoring)
-        assertEquals(previousEpoch, holder.webViewRestoreEpoch)
-    }
-
-    @Test
-    fun syncedEInkModeDoesNotReloadWebView() {
-        val holder = stateHolder(initialIndex = 1)
-        holder.markWebViewRestored()
-        val previousEpoch = holder.webViewRestoreEpoch
-
-        holder.syncSettings(ReaderSettings(eInkMode = true))
-
-        assertFalse(holder.isWebViewRestoring)
-        assertEquals(previousEpoch, holder.webViewRestoreEpoch)
-    }
-
-    @Test
-    fun appliedPopupSettingsDoNotReloadWebView() {
-        val holder = stateHolder(initialIndex = 1)
-        holder.markWebViewRestored()
-        val previousEpoch = holder.webViewRestoreEpoch
-
-        holder.applySettings(
-            ReaderSettings(
-                popupWidth = 420,
-                popupHeight = 360,
-                popupActionBar = true,
-                popupFullWidth = true,
-                popupSwipeToDismiss = false,
-                popupSwipeThreshold = 45,
-            ),
+    fun nonContentSettingChangesDoNotReloadWebView() {
+        val changes: List<Pair<String, (ReaderWebViewStateHolder) -> Unit>> = listOf(
+            "chrome" to { it.syncSettings(ReaderSettings(showTitle = false, alwaysShowProgress = false, showProgressTop = false)) },
+            "e-ink" to { it.syncSettings(ReaderSettings(eInkMode = true)) },
+            "reveal speed" to { it.syncSettings(ReaderSettings(visualNovelRevealSpeed = 80)) },
+            "popup" to {
+                it.applySettings(
+                    ReaderSettings(
+                        popupWidth = 420,
+                        popupHeight = 360,
+                        popupActionBar = true,
+                        popupFullWidth = true,
+                        popupSwipeToDismiss = false,
+                        popupSwipeThreshold = 45,
+                    ),
+                )
+            },
         )
 
-        assertFalse(holder.isWebViewRestoring)
-        assertEquals(previousEpoch, holder.webViewRestoreEpoch)
+        changes.forEach { (name, change) ->
+            val holder = stateHolder(initialIndex = 1)
+            holder.markWebViewRestored()
+            val previousEpoch = holder.webViewRestoreEpoch
+
+            change(holder)
+
+            assertFalse(name, holder.isWebViewRestoring)
+            assertEquals(name, previousEpoch, holder.webViewRestoreEpoch)
+        }
     }
 
     @Test
-    fun readerContentReloadKeyIgnoresPopupSettings() {
-        val base = ReaderSettings(viewMode = ReaderViewMode.Continuous)
-        val popupOnly = base.copy(
-            popupWidth = 420,
-            popupHeight = 360,
-            popupActionBar = true,
-            popupFullWidth = true,
-            popupSwipeToDismiss = false,
-            popupSwipeThreshold = 45,
-        )
-
-        assertEquals(base.readerContentReloadKey(), popupOnly.readerContentReloadKey())
-    }
-
-    @Test
-    fun readerContentReloadKeyIgnoresChromeSafeAreaSettings() {
-        val base = ReaderSettings(viewMode = ReaderViewMode.Continuous)
-
-        assertEquals(base.readerContentReloadKey(), base.copy(topSafeAreaDp = 72).readerContentReloadKey())
-        assertEquals(base.readerContentReloadKey(), base.copy(bottomSafeAreaDp = 72).readerContentReloadKey())
-    }
-
-    @Test
-    fun readerContentReloadKeyChangesForContentSettings() {
-        val base = ReaderSettings()
-
-        assertFalse(base.readerContentReloadKey() == base.copy(fontSize = 28).readerContentReloadKey())
-        val furiganaKeys = FuriganaMode.entries.map { base.copy(furiganaMode = it).readerContentReloadKey() }
-        assertEquals(4, furiganaKeys.toSet().size)
-        assertFalse(base.readerContentReloadKey() == base.copy(verticalWriting = false).readerContentReloadKey())
-        assertFalse(base.readerContentReloadKey() == base.copy(paragraphSpacing = 1.2).readerContentReloadKey())
-    }
-
-    @Test
-    fun readerContentReloadKeyChangesForVisualNovelModeAndSplitSettings() {
+    fun readerContentReloadKeyChangesOnlyForContentSettings() {
         val base = ReaderSettings()
         val visualNovel = base.copy(viewMode = ReaderViewMode.VisualNovel)
+        val ignored = listOf(
+            base.copy(popupWidth = 420, popupHeight = 360, popupActionBar = true, popupFullWidth = true),
+            base.copy(popupSwipeToDismiss = false, popupSwipeThreshold = 45),
+            base.copy(topSafeAreaDp = 72),
+            base.copy(bottomSafeAreaDp = 72),
+            base.copy(theme = ReaderTheme.Dark),
+            base.copy(systemLightSepia = true),
+            base.copy(sepiaInvertInDark = true),
+            base.copy(eInkMode = true),
+            base.copy(theme = ReaderTheme.Custom, customBackgroundColor = 0xFF778899, customTextColor = 0xFFABCDEF),
+        )
+        ignored.forEach { assertEquals(it.toString(), base.readerContentReloadKey(), it.readerContentReloadKey()) }
+        listOf(visualNovel.copy(visualNovelRevealSpeed = 0), visualNovel.copy(visualNovelClickAdvance = false)).forEach {
+            assertEquals(it.toString(), visualNovel.readerContentReloadKey(), it.readerContentReloadKey())
+        }
 
-        assertFalse(base.readerContentReloadKey() == visualNovel.readerContentReloadKey())
-        assertFalse(
-            visualNovel.readerContentReloadKey() ==
-                visualNovel.copy(visualNovelScreenMode = VisualNovelScreenMode.Sentences).readerContentReloadKey(),
-        )
-        assertFalse(
-            visualNovel.readerContentReloadKey() ==
-                visualNovel.copy(visualNovelSentencesPerScreen = 4).readerContentReloadKey(),
-        )
-        assertFalse(
-            visualNovel.readerContentReloadKey() ==
-                visualNovel.copy(visualNovelPreserveDialogueBubbles = true).readerContentReloadKey(),
-        )
-        assertFalse(
-            visualNovel.readerContentReloadKey() ==
-                visualNovel.copy(visualNovelMergeCrossScreenSasayakiCues = true).readerContentReloadKey(),
-        )
+        val furiganaKeys = FuriganaMode.entries.map { base.copy(furiganaMode = it).readerContentReloadKey() }
+        assertEquals(FuriganaMode.entries.size, furiganaKeys.toSet().size)
+        listOf(
+            base.copy(fontSize = 28),
+            base.copy(verticalWriting = false),
+            base.copy(paragraphSpacing = 1.2),
+            visualNovel,
+        ).forEach { assertNotEquals(it.toString(), base.readerContentReloadKey(), it.readerContentReloadKey()) }
+        listOf(
+            visualNovel.copy(visualNovelScreenMode = VisualNovelScreenMode.Sentences),
+            visualNovel.copy(visualNovelSentencesPerScreen = 4),
+            visualNovel.copy(visualNovelPreserveDialogueBubbles = true),
+            visualNovel.copy(visualNovelMergeCrossScreenSasayakiCues = true),
+        ).forEach { assertNotEquals(it.toString(), visualNovel.readerContentReloadKey(), it.readerContentReloadKey()) }
     }
 
     @Test
-    fun readerContentReloadKeyIgnoresVisualNovelRevealSpeed() {
-        val base = ReaderSettings(viewMode = ReaderViewMode.VisualNovel)
-        val changedSpeed = base.copy(visualNovelRevealSpeed = 0)
+    fun readerAppearanceUpdateKeyTracksColorsDarkModeAndRevealSpeed() {
+        fun key(settings: ReaderSettings, systemDark: Boolean = false) =
+            readerAppearanceUpdateKey(settings, systemDark, sasayakiTextColor = 0xFF111111, sasayakiBackgroundColor = 0xFFFFFFFF)
+        val custom = ReaderSettings(theme = ReaderTheme.Custom, customBackgroundColor = 0xFF112233, customTextColor = 0xFF5F8FFF)
+        val visualNovel = ReaderSettings(viewMode = ReaderViewMode.VisualNovel, visualNovelRevealSpeed = 45)
 
-        assertEquals(base.readerContentReloadKey(), changedSpeed.readerContentReloadKey())
+        assertNotEquals(key(custom), key(custom.copy(customBackgroundColor = 0xFF778899)))
+        assertEquals("#5f8fff", key(custom).textColorCss)
+        assertEquals("#ff0000", key(custom.copy(customTextColor = 0xFFFF0000)).textColorCss)
+        assertNotEquals(key(visualNovel), key(visualNovel.copy(visualNovelRevealSpeed = 90)))
+        assertFalse(key(ReaderSettings(theme = ReaderTheme.Light), systemDark = true).darkMode)
+        assertTrue(key(ReaderSettings(theme = ReaderTheme.Dark)).darkMode)
     }
 
     @Test
-    fun syncedVisualNovelRevealSpeedDoesNotReloadWebView() {
-        val holder = stateHolder(initialIndex = 1)
-        holder.markWebViewRestored()
-        val previousEpoch = holder.webViewRestoreEpoch
-
-        holder.syncSettings(ReaderSettings(visualNovelRevealSpeed = 80))
-
-        assertFalse(holder.isWebViewRestoring)
-        assertEquals(previousEpoch, holder.webViewRestoreEpoch)
-        assertEquals(80, holder.effectiveSettings.visualNovelRevealSpeed)
-    }
-
-    @Test
-    fun readerContentReloadKeyIgnoresVisualNovelClickAdvanceSetting() {
-        val base = ReaderSettings(viewMode = ReaderViewMode.VisualNovel)
-
-        assertEquals(base.readerContentReloadKey(), base.copy(visualNovelClickAdvance = false).readerContentReloadKey())
-    }
-
-    @Test
-    fun readerContentReloadKeyIgnoresAppearanceColors() {
-        val base = ReaderSettings()
-
-        assertEquals(base.readerContentReloadKey(), base.copy(theme = ReaderTheme.Dark).readerContentReloadKey())
-        assertEquals(base.readerContentReloadKey(), base.copy(systemLightSepia = true).readerContentReloadKey())
-        assertEquals(base.readerContentReloadKey(), base.copy(sepiaInvertInDark = true).readerContentReloadKey())
-        assertEquals(base.readerContentReloadKey(), base.copy(eInkMode = true).readerContentReloadKey())
-    }
-
-    @Test
-    fun readerAppearanceUpdateKeyTracksCustomContentColorsWithoutReloadingContent() {
-        val base = ReaderSettings(
-            theme = ReaderTheme.Custom,
-            customBackgroundColor = 0xFF112233,
-            customTextColor = 0xFF445566,
-        )
-        val backgroundChanged = base.copy(customBackgroundColor = 0xFF778899)
-        val textChanged = base.copy(customTextColor = 0xFFABCDEF)
-
-        assertEquals(base.readerContentReloadKey(), backgroundChanged.readerContentReloadKey())
-        assertEquals(base.readerContentReloadKey(), textChanged.readerContentReloadKey())
-        assertFalse(
-            readerAppearanceUpdateKey(base, systemDark = false, sasayakiTextColor = 0xFF111111, sasayakiBackgroundColor = 0xFFFFFFFF) ==
-                readerAppearanceUpdateKey(backgroundChanged, systemDark = false, sasayakiTextColor = 0xFF111111, sasayakiBackgroundColor = 0xFFFFFFFF),
-        )
-        assertFalse(
-            readerAppearanceUpdateKey(base, systemDark = false, sasayakiTextColor = 0xFF111111, sasayakiBackgroundColor = 0xFFFFFFFF) ==
-                readerAppearanceUpdateKey(textChanged, systemDark = false, sasayakiTextColor = 0xFF111111, sasayakiBackgroundColor = 0xFFFFFFFF),
-        )
-    }
-
-    @Test
-    fun readerAppearanceUpdateKeyTracksCustomTextColorWithoutReloadingContent() {
-        val blue = ReaderSettings(theme = ReaderTheme.Custom, customTextColor = 0xFF5F8FFF)
-        val red = blue.copy(customTextColor = 0xFFFF0000)
-        val blueKey = readerAppearanceUpdateKey(blue, false, 0xFF111111, 0xFFFFFFFF)
-        val redKey = readerAppearanceUpdateKey(red, false, 0xFF111111, 0xFFFFFFFF)
-
-        assertEquals(blue.readerContentReloadKey(), red.readerContentReloadKey())
-        assertEquals("#5f8fff", blueKey.textColorCss)
-        assertEquals("#ff0000", redKey.textColorCss)
-    }
-
-    @Test
-    fun readerAppearanceUpdateKeyTracksDarkInterfaceForSelectionPreview() {
-        val lightKey = readerAppearanceUpdateKey(
-            ReaderSettings(theme = ReaderTheme.Light),
-            systemDark = true,
-            sasayakiTextColor = 0xFF111111,
-            sasayakiBackgroundColor = 0xFFFFFFFF,
-        )
-        val darkKey = readerAppearanceUpdateKey(
-            ReaderSettings(theme = ReaderTheme.Dark),
-            systemDark = false,
-            sasayakiTextColor = 0xFF111111,
-            sasayakiBackgroundColor = 0xFFFFFFFF,
-        )
-
-        assertFalse(lightKey.darkMode)
-        assertTrue(darkKey.darkMode)
-    }
-
-    @Test
-    fun readerAppearanceUpdateKeyTracksVisualNovelRevealSpeedWithoutReloadingContent() {
-        val base = ReaderSettings(
-            viewMode = ReaderViewMode.VisualNovel,
-            visualNovelRevealSpeed = 45,
-        )
-        val changedSpeed = base.copy(visualNovelRevealSpeed = 90)
-
-        assertEquals(base.readerContentReloadKey(), changedSpeed.readerContentReloadKey())
-        assertFalse(
-            readerAppearanceUpdateKey(base, systemDark = false, sasayakiTextColor = 0xFF111111, sasayakiBackgroundColor = 0xFFFFFFFF) ==
-                readerAppearanceUpdateKey(changedSpeed, systemDark = false, sasayakiTextColor = 0xFF111111, sasayakiBackgroundColor = 0xFFFFFFFF),
-        )
-    }
-
-    @Test
-    fun focusModeTogglesWithoutReloadingTheReaderContent() {
+    fun focusModeChangesWithoutReloadingTheReaderContent() {
         val holder = stateHolder(initialIndex = 1)
         holder.markWebViewRestored()
         val previousEpoch = holder.webViewRestoreEpoch
 
         holder.toggleFocusMode()
-
         assertTrue(holder.focusMode)
-        assertFalse(holder.isWebViewRestoring)
-        assertEquals(previousEpoch, holder.webViewRestoreEpoch)
-
         holder.toggleFocusMode()
-
         assertFalse(holder.focusMode)
-        assertEquals(previousEpoch, holder.webViewRestoreEpoch)
-    }
-
-    @Test
-    fun readerInteractionsEnterFocusModeWithoutReloadingTheReaderContent() {
-        val holder = stateHolder(initialIndex = 1)
-        holder.markWebViewRestored()
-        val previousEpoch = holder.webViewRestoreEpoch
 
         holder.enterFocusModeForReaderInteraction()
-
-        assertTrue(holder.focusMode)
-        assertFalse(holder.isWebViewRestoring)
-        assertEquals(previousEpoch, holder.webViewRestoreEpoch)
-
         holder.enterFocusModeForReaderInteraction()
-
         assertTrue(holder.focusMode)
-        assertEquals(previousEpoch, holder.webViewRestoreEpoch)
-    }
 
-    @Test
-    fun acceptedReaderNavigationInputEntersFocusModeWithoutReloadingTheReaderContent() {
-        val holder = stateHolder(initialIndex = 1)
-        holder.markWebViewRestored()
+        holder.toggleFocusMode()
         holder.showReaderMenu()
-        val previousEpoch = holder.webViewRestoreEpoch
-
         assertTrue(holder.beginReaderNavigationInput())
-
         assertTrue(holder.focusMode)
         assertFalse(holder.showReaderMenu)
+
         assertFalse(holder.isWebViewRestoring)
         assertEquals(previousEpoch, holder.webViewRestoreEpoch)
     }

@@ -4,211 +4,54 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class DictionaryDragReorderTest {
-    @Test
-    fun draggedCenterPastNextRowTargetsNextDictionary() {
-        val target = DictionaryDragReorder.targetIndex(
-            startIndex = 0,
-            draggedCenterY = 150f,
-            visibleRows = listOf(
-                DictionaryDragReorder.RowBounds(index = 0, top = 0f, bottom = 100f),
-                DictionaryDragReorder.RowBounds(index = 1, top = 100f, bottom = 200f),
-            ),
-        )
+    private fun row(index: Int) = DictionaryDragReorder.RowBounds(index = index, top = index * 100f, bottom = (index + 1) * 100f)
 
-        assertEquals(1, target)
+    @Test
+    fun targetIndexFollowsTheDraggedCenterAndClampsToVisibleRows() {
+        fun target(startIndex: Int, centerY: Float, vararg rows: Int) =
+            DictionaryDragReorder.targetIndex(startIndex, centerY, rows.map(::row))
+
+        assertEquals(1, target(startIndex = 0, centerY = 150f, 0, 1))
+        assertEquals(0, target(startIndex = 1, centerY = 50f, 0, 1))
+        assertEquals(1, target(startIndex = 2, centerY = -200f, 1, 2))
+        assertEquals(1, target(startIndex = 0, centerY = 700f, 0, 1))
+        assertEquals(1, target(startIndex = 1, centerY = 500f))
     }
 
     @Test
-    fun draggedCenterBeforePreviousRowTargetsPreviousDictionary() {
-        val target = DictionaryDragReorder.targetIndex(
-            startIndex = 1,
-            draggedCenterY = 50f,
-            visibleRows = listOf(
-                DictionaryDragReorder.RowBounds(index = 0, top = 0f, bottom = 100f),
-                DictionaryDragReorder.RowBounds(index = 1, top = 100f, bottom = 200f),
-            ),
-        )
+    fun previewOrderMovesTheDraggedItemAndIgnoresInvalidIndexes() {
+        val items = listOf("a", "b", "c", "d")
 
-        assertEquals(0, target)
+        assertEquals(listOf("b", "c", "a", "d"), DictionaryDragReorder.previewOrder(items, fromIndex = 0, toIndex = 2))
+        assertEquals(listOf("a", "d", "b", "c"), DictionaryDragReorder.previewOrder(items, fromIndex = 3, toIndex = 1))
+        assertEquals(items, DictionaryDragReorder.previewOrder(items, fromIndex = 5, toIndex = 1))
     }
 
     @Test
-    fun missingVisibleRowsKeepOriginalIndex() {
-        val target = DictionaryDragReorder.targetIndex(
-            startIndex = 1,
-            draggedCenterY = 500f,
-            visibleRows = emptyList(),
-        )
-
-        assertEquals(1, target)
-    }
-
-    @Test
-    fun draggedCenterAboveVisibleRowsTargetsFirstVisibleDictionary() {
-        val target = DictionaryDragReorder.targetIndex(
-            startIndex = 2,
-            draggedCenterY = -200f,
-            visibleRows = listOf(
-                DictionaryDragReorder.RowBounds(index = 1, top = 100f, bottom = 200f),
-                DictionaryDragReorder.RowBounds(index = 2, top = 200f, bottom = 300f),
-            ),
-        )
-
-        assertEquals(1, target)
-    }
-
-    @Test
-    fun draggedCenterBelowVisibleRowsTargetsLastVisibleDictionary() {
-        val target = DictionaryDragReorder.targetIndex(
-            startIndex = 0,
-            draggedCenterY = 700f,
-            visibleRows = listOf(
-                DictionaryDragReorder.RowBounds(index = 0, top = 0f, bottom = 100f),
-                DictionaryDragReorder.RowBounds(index = 1, top = 100f, bottom = 200f),
-            ),
-        )
-
-        assertEquals(1, target)
-    }
-
-    @Test
-    fun previewOrderMovesDraggedItemDown() {
-        val order = DictionaryDragReorder.previewOrder(
-            items = listOf("a", "b", "c", "d"),
-            fromIndex = 0,
-            toIndex = 2,
-        )
-
-        assertEquals(listOf("b", "c", "a", "d"), order)
-    }
-
-    @Test
-    fun previewOrderMovesDraggedItemUp() {
-        val order = DictionaryDragReorder.previewOrder(
-            items = listOf("a", "b", "c", "d"),
-            fromIndex = 3,
-            toIndex = 1,
-        )
-
-        assertEquals(listOf("a", "d", "b", "c"), order)
-    }
-
-    @Test
-    fun previewOrderKeepsOriginalOrderForInvalidIndexes() {
-        val order = DictionaryDragReorder.previewOrder(
-            items = listOf("a", "b"),
-            fromIndex = 5,
-            toIndex = 1,
-        )
-
-        assertEquals(listOf("a", "b"), order)
-    }
-
-    @Test
-    fun itemOffsetKeepsDraggedItemUnderPointerWhenMovingDown() {
-        val offsets = List(4) { index ->
-            DictionaryDragReorder.itemOffset(
-                index = index,
-                startIndex = 0,
-                targetIndex = 2,
-                dragOffset = 140f,
-                draggedItemSize = 72f,
-            )
+    fun itemOffsetsKeepTheDraggedItemUnderThePointerAndShiftOnlyCrossedNeighbors() {
+        fun offsets(count: Int, startIndex: Int, targetIndex: Int, dragOffset: Float) = List(count) { index ->
+            DictionaryDragReorder.itemOffset(index, startIndex, targetIndex, dragOffset, draggedItemSize = 72f)
         }
 
-        assertEquals(listOf(140f, -72f, -72f, 0f), offsets)
+        assertEquals(listOf(140f, -72f, -72f, 0f), offsets(4, startIndex = 0, targetIndex = 2, dragOffset = 140f))
+        assertEquals(listOf(0f, 72f, 72f, -140f), offsets(4, startIndex = 3, targetIndex = 1, dragOffset = -140f))
+        assertEquals(listOf(0f, 20f, 0f), offsets(3, startIndex = 1, targetIndex = 1, dragOffset = 20f))
+        assertEquals(88f, DictionaryDragReorder.adjustedDragOffsetAfterMove(160f, fromIndex = 0, toIndex = 1, itemSize = 72f), 0.001f)
+        assertEquals(-16f, DictionaryDragReorder.adjustedDragOffsetAfterMove(-160f, fromIndex = 3, toIndex = 1, itemSize = 72f), 0.001f)
     }
 
     @Test
-    fun itemOffsetKeepsDraggedItemUnderPointerWhenMovingUp() {
-        val offsets = List(4) { index ->
-            DictionaryDragReorder.itemOffset(
-                index = index,
-                startIndex = 3,
-                targetIndex = 1,
-                dragOffset = -140f,
-                draggedItemSize = 72f,
-            )
-        }
-
-        assertEquals(listOf(0f, 72f, 72f, -140f), offsets)
-    }
-
-    @Test
-    fun itemOffsetDoesNotMoveNeighborsWhenTargetIsStart() {
-        val offsets = List(3) { index ->
-            DictionaryDragReorder.itemOffset(
-                index = index,
-                startIndex = 1,
-                targetIndex = 1,
-                dragOffset = 20f,
-                draggedItemSize = 72f,
-            )
-        }
-
-        assertEquals(listOf(0f, 20f, 0f), offsets)
-    }
-
-    @Test
-    fun adjustedDragOffsetCompensatesWhenWorkingOrderMovesDown() {
-        val adjusted = DictionaryDragReorder.adjustedDragOffsetAfterMove(
-            dragOffset = 160f,
-            fromIndex = 0,
-            toIndex = 1,
-            itemSize = 72f,
-        )
-
-        assertEquals(88f, adjusted, 0.001f)
-    }
-
-    @Test
-    fun adjustedDragOffsetCompensatesWhenWorkingOrderMovesUp() {
-        val adjusted = DictionaryDragReorder.adjustedDragOffsetAfterMove(
-            dragOffset = -160f,
-            fromIndex = 3,
-            toIndex = 1,
-            itemSize = 72f,
-        )
-
-        assertEquals(-16f, adjusted, 0.001f)
-    }
-
-    @Test
-    fun autoScrollDeltaIsNegativeNearTopEdge() {
-        val delta = DictionaryDragReorder.autoScrollDelta(
-            pointerY = 12f,
-            viewportStart = 0f,
-            viewportEnd = 600f,
-            edgeThreshold = 64f,
-            maxDelta = 24f,
-        )
-
-        assertEquals(-19.5f, delta, 0.001f)
-    }
-
-    @Test
-    fun autoScrollDeltaIsPositiveNearBottomEdge() {
-        val delta = DictionaryDragReorder.autoScrollDelta(
-            pointerY = 580f,
+    fun autoScrollSpeedsUpTowardEitherEdgeAndStopsAwayFromThem() {
+        fun delta(pointerY: Float) = DictionaryDragReorder.autoScrollDelta(
+            pointerY = pointerY,
             viewportStart = 0f,
             viewportEnd = 600f,
             edgeThreshold = 80f,
             maxDelta = 20f,
         )
 
-        assertEquals(15f, delta, 0.001f)
-    }
-
-    @Test
-    fun autoScrollDeltaIsZeroAwayFromEdges() {
-        val delta = DictionaryDragReorder.autoScrollDelta(
-            pointerY = 300f,
-            viewportStart = 0f,
-            viewportEnd = 600f,
-            edgeThreshold = 80f,
-            maxDelta = 20f,
-        )
-
-        assertEquals(0f, delta, 0.001f)
+        assertEquals(-17f, delta(12f), 0.001f)
+        assertEquals(15f, delta(580f), 0.001f)
+        assertEquals(0f, delta(300f), 0.001f)
     }
 }

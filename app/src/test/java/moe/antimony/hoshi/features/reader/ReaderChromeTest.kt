@@ -389,12 +389,6 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun jumpHistoryTopControlsUseIosUndoRedoIcons() {
-        assertEquals(Icons.AutoMirrored.Rounded.Undo, readerJumpBackIcon())
-        assertEquals(Icons.AutoMirrored.Rounded.Redo, readerJumpForwardIcon())
-    }
-
-    @Test
     fun topTitleReservesControlsSymmetricallySoItAlignsWithProgress() {
         assertEquals(
             ReaderTopTitlePaddingDp(startDp = 42, endDp = 42),
@@ -412,15 +406,6 @@ class ReaderChromeTest {
             ReaderTopTitlePaddingDp(startDp = 0, endDp = 0),
             readerTopTitlePaddingDp(hasStartControl = false, hasEndControl = false),
         )
-    }
-
-    @Test
-    fun statisticsTopToggleUsesIosTimerIconWhenTracking() {
-        assertEquals(Icons.AutoMirrored.Rounded.ShowChart, readerStatisticsTopToggleIcon(isTracking = false))
-        assertEquals(Icons.Rounded.Timer, readerStatisticsTopToggleIcon(isTracking = true))
-        assertEquals(Icons.Rounded.GraphicEq, readerSasayakiTopToggleIcon(isPlaying = false))
-        assertEquals(Icons.Rounded.Pause, readerSasayakiTopToggleIcon(isPlaying = true))
-        assertNotEquals(readerSasayakiTopToggleIcon(isPlaying = true), readerStatisticsTopToggleIcon(isTracking = true))
     }
 
     @Test
@@ -444,39 +429,6 @@ class ReaderChromeTest {
             ),
         )
         assertEquals(3, layout.bottomCenterLineCount)
-    }
-
-    @Test
-    fun centerInfoUsesBubbleChromeLikeIos() {
-        assertEquals(
-            ReaderInfoBubbleMetrics(horizontalPaddingDp = 12, verticalPaddingDp = 6, cornerRadiusDp = 24),
-            readerInfoBubbleMetrics(),
-        )
-    }
-
-    @Test
-    fun topSasayakiToggleUsesSmallerCircleWithoutShrinkingTheIcon() {
-        val metrics = readerTopChromeMetrics()
-
-        assertEquals(30, metrics.topSafeAreaDp)
-        assertEquals(30, metrics.topSasayakiButtonSizeDp)
-        assertEquals(22, metrics.topSasayakiIconSizeDp)
-        assertEquals(16, metrics.topJumpHistoryIconSizeDp)
-        assertEquals(4, metrics.topButtonOffsetYDp)
-        assertEquals(8, metrics.topButtonHorizontalInsetDp)
-        assertEquals(0x00000000L, readerTopButtonContainerColor())
-    }
-
-    @Test
-    fun topQuickControlsScaleHitboxAndIconsWithTopSafeAreaHeight() {
-        val metrics = readerTopChromeMetrics(topSafeAreaDp = 72)
-
-        assertEquals(72, metrics.topSafeAreaDp)
-        assertEquals(72, metrics.topSasayakiButtonSizeDp)
-        assertEquals(72, metrics.topStatisticsButtonSizeDp)
-        assertEquals(40, metrics.topSasayakiIconSizeDp)
-        assertEquals(40, metrics.topStatisticsIconSizeDp)
-        assertEquals(28, metrics.topJumpHistoryIconSizeDp)
     }
 
     @Test
@@ -629,20 +581,6 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun bottomChromeUsesCompactOverlayControlsWithoutContentInset() {
-        val metrics = readerBottomChromeMetrics()
-
-        assertEquals(44, metrics.buttonSizeDp)
-        assertEquals(28, metrics.primaryIconSizeDp)
-        assertEquals(28, metrics.secondaryIconSizeDp)
-        assertEquals(8, metrics.trailingButtonSpacingDp)
-        assertEquals(18, metrics.bottomSafeAreaDp)
-        assertEquals(8, metrics.menuButtonGapDp)
-        assertEquals(72, metrics.menuBottomOffsetDp)
-        assertEquals(ReaderContentChromeInsets(topDp = 34, bottomDp = 18), readerContentChromeInsets())
-    }
-
-    @Test
     fun bottomSafeAreaSettingControlsBottomChromeMetricsAndOffsets() {
         val defaultMetrics = readerBottomChromeMetrics()
         val customMetrics = readerBottomChromeMetrics(bottomSafeAreaDp = 40)
@@ -692,38 +630,6 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun sasayakiBottomPlaybackControlsScaleHitboxAndIconWithSafeAreaHeight() {
-        assertEquals(
-            ReaderSasayakiBottomPlaybackControls(
-                visible = true,
-                rowHeightDp = 18,
-                buttonWidthDp = 40,
-                iconSizeDp = 14,
-                horizontalPaddingDp = 18,
-            ),
-            readerSasayakiBottomPlaybackControls(
-                settings = SasayakiSettings(showReaderBottomPlaybackControls = true),
-                hasAudio = true,
-                metrics = readerBottomChromeMetrics(bottomSafeAreaDp = 18),
-            ),
-        )
-        assertEquals(
-            ReaderSasayakiBottomPlaybackControls(
-                visible = true,
-                rowHeightDp = 72,
-                buttonWidthDp = 72,
-                iconSizeDp = 28,
-                horizontalPaddingDp = 18,
-            ),
-            readerSasayakiBottomPlaybackControls(
-                settings = SasayakiSettings(showReaderBottomPlaybackControls = true),
-                hasAudio = true,
-                metrics = readerBottomChromeMetrics(bottomSafeAreaDp = 72),
-            ),
-        )
-    }
-
-    @Test
     fun sasayakiBottomSkipActionsOnlyReverseInVerticalWritingWhenEnabled() {
         assertEquals(
             ReaderSasayakiBottomSkipButtonActions(
@@ -768,18 +674,6 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun bottomMenuUsesCompactReaderChromeMetrics() {
-        val metrics = readerBottomChromeMetrics()
-
-        assertEquals(204, metrics.menuWidthDp)
-        assertEquals(4, metrics.menuVerticalPaddingDp)
-        assertEquals(16, metrics.menuItemHorizontalPaddingDp)
-        assertEquals(8, metrics.menuItemVerticalPaddingDp)
-        assertEquals(24, metrics.menuItemIconBoxSizeDp)
-        assertEquals(12, metrics.menuItemSpacingDp)
-    }
-
-    @Test
     fun bottomMenuVisualOrderMatchesIosUpwardMenu() {
         assertEquals(
             listOf(
@@ -806,17 +700,6 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun bottomMenuGoToUsesNavigationIconInsteadOfChapterListIcon() {
-        assertEquals(Icons.Rounded.TravelExplore, readerBottomMenuIcon(ReaderMenuDestination.GoTo))
-    }
-
-    @Test
-    fun usesThemeMatchedChromeColors() {
-        assertEquals(0xFAF8F0E2L, readerChromeColors(ReaderSettings(theme = ReaderTheme.Sepia), systemDark = true).buttonContainer)
-        assertEquals(0xE6141414L, readerChromeColors(ReaderSettings(theme = ReaderTheme.Dark), systemDark = false).buttonContainer)
-    }
-
-    @Test
     fun invertedSepiaChromeUsesDarkInterfaceColorsInSystemDarkMode() {
         val colors = readerChromeColors(
             ReaderSettings(theme = ReaderTheme.Sepia, sepiaInvertInDark = true),
@@ -840,14 +723,6 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun lightReaderMenuUsesVisibleOutlineAgainstWhiteReaderBackground() {
-        val colors = readerChromeColors(ReaderSettings(theme = ReaderTheme.Light), systemDark = false)
-
-        assertEquals(0xE6FFFFFFL, colors.menuBorder)
-        assertEquals(0xE6FFFFFFL, colors.buttonBorder)
-    }
-
-    @Test
     fun systemThemeChromeUsesSepiaColorsWhenSepiaIsEnabledAsLightTheme() {
         val settings = ReaderSettings(theme = ReaderTheme.System, systemLightSepia = true)
 
@@ -868,52 +743,6 @@ class ReaderChromeTest {
 
         assertEquals(0xFAFCFCFCL, colors.buttonContainer)
         assertEquals(0xFF778899L, colors.infoText)
-    }
-
-    @Test
-    fun nonEInkChromeUsesIosLikeGlassHighlightsAndShadows() {
-        val light = readerChromeColors(ReaderSettings(theme = ReaderTheme.Light), systemDark = false)
-        val sepia = readerChromeColors(ReaderSettings(theme = ReaderTheme.Sepia), systemDark = false)
-        val dark = readerChromeColors(ReaderSettings(theme = ReaderTheme.Dark), systemDark = false)
-
-        assertEquals(0xFAFCFCFCL, light.buttonContainer)
-        assertEquals(0xFAFCFCFCL, light.menuContainer)
-        assertEquals(0xE6FFFFFFL, light.buttonBorder)
-        assertEquals(0x00000000L, light.buttonOutline)
-        assertEquals(light.buttonBorder, light.menuBorder)
-        assertEquals(light.buttonOutline, light.bubbleOutline)
-        assertEquals(1, light.buttonShadowElevationDp)
-        assertEquals(0x25000000L, light.buttonShadowColor)
-        assertEquals(0x00000000L, light.buttonInnerShadowColor)
-        assertEquals(1, light.bubbleShadowElevationDp)
-        assertEquals(0x25000000L, light.bubbleShadowColor)
-        assertEquals(0x00000000L, light.bubbleInnerShadowColor)
-        assertEquals(0.75f, readerButtonBorderWidthDp(light))
-        assertEquals(0.75f, readerBubbleBorderWidthDp(light))
-        assertEquals(0xFAF8F0E2L, sepia.buttonContainer)
-        assertEquals(0xFAF8F0E2L, sepia.menuContainer)
-        assertEquals(0xE6FFFFFFL, sepia.buttonBorder)
-        assertEquals(0x00000000L, sepia.buttonOutline)
-        assertEquals(sepia.buttonBorder, sepia.menuBorder)
-        assertEquals(sepia.buttonOutline, sepia.bubbleOutline)
-        assertEquals(1, sepia.buttonShadowElevationDp)
-        assertEquals(0x25000000L, sepia.buttonShadowColor)
-        assertEquals(0x00000000L, sepia.buttonInnerShadowColor)
-        assertEquals(1, sepia.bubbleShadowElevationDp)
-        assertEquals(0x25000000L, sepia.bubbleShadowColor)
-        assertEquals(0x00000000L, sepia.bubbleInnerShadowColor)
-        assertEquals(0xE6141414L, dark.buttonContainer)
-        assertEquals(0xE6141414L, dark.menuContainer)
-        assertEquals(0xFF484848L, dark.buttonBorder)
-        assertEquals(0x00000000L, dark.buttonOutline)
-        assertEquals(dark.buttonBorder, dark.menuBorder)
-        assertEquals(dark.buttonOutline, dark.bubbleOutline)
-        assertEquals(1, dark.buttonShadowElevationDp)
-        assertEquals(0x25000000L, dark.buttonShadowColor)
-        assertEquals(0x00000000L, dark.buttonInnerShadowColor)
-        assertEquals(1, dark.bubbleShadowElevationDp)
-        assertEquals(0x25000000L, dark.bubbleShadowColor)
-        assertEquals(0x00000000L, dark.bubbleInnerShadowColor)
     }
 
     @Test

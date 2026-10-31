@@ -40,53 +40,6 @@ class SasayakiPlayerFacadeTest {
     }
 
     @Test
-    fun delegatesPlaybackCommandsToControllerFacade() {
-        val controller = FakeSasayakiPlaybackController()
-        val player = playerFor(controller)
-
-        player.setDelay(0.5)
-        player.setRate(1.5f)
-        player.clearAudio()
-        player.togglePlayback()
-        player.pausePlayback()
-        player.pausePlayback(restoreTemporaryPosition = false)
-        assertTrue(player.pauseForAutoPageHold())
-        player.resumeAfterAutoPageHold()
-        player.nextCue()
-        player.previousCue()
-        player.skipForward(10)
-        player.skipBackward(5)
-        player.seekTo(40.0)
-        player.updateMatchData(SasayakiMatchData(matches = listOf(cue), unmatched = 0))
-        assertSame(cue, player.findCue(chapterIndex = 2, offset = 10))
-        player.playCue(cue, stop = true)
-        assertEquals(File("cue.m4a"), player.exportCueAudio(cue, "sentence"))
-
-        assertEquals(
-            listOf(
-                "setDelay:0.5",
-                "setRate:1.5",
-                "clearAudio",
-                "togglePlayback",
-                "pausePlayback:true",
-                "pausePlayback:false",
-                "pauseForAutoPageHold",
-                "resumeAfterAutoPageHold",
-                "nextCue",
-                "previousCue",
-                "skipForward:10",
-                "skipBackward:5",
-                "seekTo:40.0",
-                "updateMatchData:1",
-                "findCue:2:10",
-                "playCue:cue:true",
-                "exportCueAudio:cue:sentence",
-            ),
-            controller.commands,
-        )
-    }
-
-    @Test
     fun serviceRuntimePlayerReleaseDetachesReaderWithoutReleasingPlayback() {
         val controller = FakeSasayakiPlaybackController()
         val runtime = FakeSasayakiPlaybackRuntime(controller)

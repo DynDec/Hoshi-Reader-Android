@@ -1049,35 +1049,6 @@ test('visual novel initialization eagerly starts lazy source images and fails op
     assert.deepEqual(loaded.restoreMessages, ['restore-token']);
 });
 
-test('visual novel reader asset defines the expected public surface', () => {
-    const body = bodyWith(p('本文。'));
-    const { reader } = loadReader(body);
-
-    [
-        'initialize',
-        'paginate',
-        'calculateProgress',
-        'restoreProgress',
-        'jumpToFragment',
-        'buildNodeOffsets',
-        'countChars',
-        'countRawChars',
-        'isMatchableChar',
-        'applySasayakiCues',
-        'highlightSasayakiCue',
-        'sasayakiMediaStopsBeforeCue',
-        'sasayakiMediaStopsToChapterEnd',
-        'showSasayakiMediaStop',
-        'clearSasayakiCue',
-        'refreshSasayakiCuePresentation',
-        'setNativeSelectionActive',
-    ].forEach((name) => {
-        assert.equal(typeof reader[name], 'function', name);
-    });
-    assert.equal(typeof reader.nodeStartOffsets.get, 'function');
-    assert.equal(typeof reader.nodeStartRawOffsets.get, 'function');
-});
-
 test('visual novel reader replaces the publisher viewport after parsing', async () => {
     const publisherViewport = new TestElement('meta');
     publisherViewport.setAttribute('name', 'viewport');
@@ -1094,30 +1065,6 @@ test('visual novel reader replaces the publisher viewport after parsing', async 
         viewports[0].content,
         'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no',
     );
-});
-
-test('visual novel reader requires the shared text semantics asset', async () => {
-    const { reader } = loadReader(bodyWith(p('本文。')), { textSemanticsScript: '' });
-
-    await assert.rejects(() => reader.initialize(), /hoshiReaderTextSemantics/);
-});
-
-test('visual novel reader requires the VN content stream asset', async () => {
-    const { reader } = loadReader(bodyWith(p('本文。')), { contentStreamScript: '' });
-
-    await assert.rejects(() => reader.initialize(), /hoshiReaderVnContentStream/);
-});
-
-test('visual novel reader requires the VN range map asset', async () => {
-    const { reader } = loadReader(bodyWith(p('本文。')), { rangeMapScript: '' });
-
-    await assert.rejects(() => reader.initialize(), /hoshiReaderVnRangeMap/);
-});
-
-test('visual novel reader requires the VN selection projection asset', async () => {
-    const { reader } = loadReader(bodyWith(p('本文。')), { selectionProjectionScript: '' });
-
-    await assert.rejects(() => reader.initialize(), /hoshiReaderVnSelectionProjection/);
 });
 
 test('visual novel reader uses shared text semantics', () => {

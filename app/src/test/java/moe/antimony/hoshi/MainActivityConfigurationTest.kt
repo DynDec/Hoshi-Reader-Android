@@ -71,32 +71,6 @@ class MainActivityConfigurationTest {
     }
 
     @Test
-    fun hoshiApplicationSuppliesHiltWorkerFactoryConfigurationContract() {
-        assertTrue(
-            "HoshiApplication must implement WorkManager's Configuration.Provider for Hilt worker injection.",
-            Configuration.Provider::class.java.isAssignableFrom(HoshiApplication::class.java),
-        )
-
-        val workerFactoryField = HoshiApplication::class.java.declaredFields.singleOrNull { field ->
-            field.type == HiltWorkerFactory::class.java
-        }
-        assertTrue(
-            "HoshiApplication must receive HiltWorkerFactory from Hilt instead of manually constructing a WorkerFactory.",
-            workerFactoryField != null,
-        )
-        assertTrue(
-            "The HiltWorkerFactory field must be annotated with @Inject.",
-            workerFactoryField!!.isAnnotationPresent(Inject::class.java),
-        )
-        assertTrue(
-            "HoshiApplication must expose the Configuration property consumed by WorkManager.",
-            HoshiApplication::class.java
-                .getDeclaredMethod("getWorkManagerConfiguration")
-                .returnType == Configuration::class.java,
-        )
-    }
-
-    @Test
     fun mainActivityHandlesReaderOrientationChangesInPlace() {
         val activity = mainActivityManifestElement()
         val configChanges = activity

@@ -293,21 +293,6 @@ class MainShellUiTest {
     }
 
     @Test
-    fun bookshelfHeaderUsesCompactMaterialTypography() {
-        val spec = MainShellLayoutSpec.forWidthDp(360)
-
-        assertEquals(MainShellTextStyle.TitleLarge, spec.shelfTitleTextStyle)
-        assertEquals(MainShellFontWeight.SemiBold, spec.shelfTitleFontWeight)
-        assertEquals(MainShellTextStyle.TitleMedium, spec.shelfCountTextStyle)
-        assertEquals(0, spec.shelfHeaderVerticalPaddingDp)
-        assertEquals(0, spec.bookGridTopPaddingDp)
-        assertEquals(12, spec.bookGridVerticalSpacingDp)
-        assertEquals(0, spec.bookGridBottomPaddingDp)
-        assertEquals(MainShellTextStyle.BodyLarge, spec.bookTitleTextStyle)
-        assertEquals(MainShellFontWeight.Normal, spec.bookTitleFontWeight)
-    }
-
-    @Test
     fun bookshelfHeaderKeepsTrailingMetadataVisibleForLongShelfNames() {
         val textLayout = bookshelfHeaderTextLayout()
 

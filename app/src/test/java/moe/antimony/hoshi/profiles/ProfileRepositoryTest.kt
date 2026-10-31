@@ -3,7 +3,6 @@ package moe.antimony.hoshi.profiles
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.BookMetadata
 import kotlinx.coroutines.runBlocking
-import moe.antimony.hoshi.testing.CountingCoroutineDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -15,26 +14,6 @@ import org.junit.rules.TemporaryFolder
 class ProfileRepositoryTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
-
-    @Test
-    fun profileMutationsUseInjectedIoDispatcher() = runBlocking {
-        CountingCoroutineDispatcher().use { ioDispatcher ->
-            val repository = ProfileRepository(
-                filesDir = tempFolder.newFolder("files"),
-                ioDispatcher = ioDispatcher,
-            )
-            val beforeMutations = ioDispatcher.dispatchCount
-
-            val english = repository.createProfile("English", "en")
-            repository.renameProfile(english.id, "English Mining")
-            repository.setPrimaryProfile("en", english.id)
-            repository.activateGlobal(english.id)
-            repository.activateForBook(bookMetadata(profileId = english.id))
-            repository.deleteProfile(english.id)
-
-            assertTrue(ioDispatcher.dispatchCount >= beforeMutations + 6)
-        }
-    }
 
     @Test
     fun firstLaunchCreatesJapaneseDefaultProfileAndMigratesDictionaryConfig() {

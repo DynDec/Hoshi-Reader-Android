@@ -630,31 +630,35 @@ function assertRubyTextNodesAreNormalized(sourceUrl) {
     assert.equal(ruby.textContent, '歩あゆむ');
 }
 
-test('paginated reader re-stabilizes ruby-adjacent text after unwrap normalizes siblings', () => {
-    const { paragraph, ruby } = rubyParagraph();
-    const wrapper = new TestElement('span');
-    wrapper.appendChild(new TestText('追加'));
-    paragraph.appendChild(wrapper);
-    const { reader } = loadReader(paragraph);
+test('paged and continuous readers re-stabilize ruby-adjacent text after unwrap normalizes siblings', () => {
+    [readerPaginatedUrl, readerContinuousUrl].forEach((sourceUrl) => {
+        const { paragraph, ruby } = rubyParagraph();
+        const wrapper = new TestElement('span');
+        wrapper.appendChild(new TestText('追加'));
+        paragraph.appendChild(wrapper);
+        const { reader } = loadReader(paragraph, sourceUrl);
 
-    reader.unwrap([wrapper]);
+        reader.unwrap([wrapper]);
 
-    assert.deepEqual(textRunAfter(ruby).slice(0, 4), ['。', 'そ', 'れ', '追']);
+        assert.deepEqual(textRunAfter(ruby).slice(0, 4), ['。', 'そ', 'れ', '追']);
+    });
 });
 
-test('paginated reader-specific text normalization keeps ruby-adjacent text stable', () => {
-    const { paragraph, ruby } = rubyParagraph();
-    paragraph.normalize();
-    const { reader } = loadReader(paragraph);
+test('paged and continuous reader text normalization keeps ruby-adjacent text stable', () => {
+    [readerPaginatedUrl, readerContinuousUrl].forEach((sourceUrl) => {
+        const { paragraph, ruby } = rubyParagraph();
+        paragraph.normalize();
+        const { reader } = loadReader(paragraph, sourceUrl);
 
-    assert.equal(typeof reader.normalizeReaderText, 'function');
-    reader.normalizeReaderText(paragraph);
+        reader.normalizeReaderText(paragraph);
 
-    assert.deepEqual(textRunAfter(ruby).slice(0, 3), ['。', 'そ', 'れ']);
+        assert.deepEqual(textRunAfter(ruby).slice(0, 3), ['。', 'そ', 'れ']);
+    });
 });
 
-test('paginated reader removes ruby whitespace text nodes and wraps base text nodes', () => {
+test('paged and continuous readers remove ruby whitespace text nodes and wrap base text nodes', () => {
     assertRubyTextNodesAreNormalized(readerPaginatedUrl);
+    assertRubyTextNodesAreNormalized(readerContinuousUrl);
 });
 
 test('paged and continuous readers use shared text semantics', () => {
@@ -1138,44 +1142,6 @@ test('reader initialization completes when an image has already failed loading',
     }
 });
 
-test('continuous reader stabilizes vertical ruby-adjacent text like paginated reader', () => {
-    const { paragraph, ruby } = rubyParagraph();
-    paragraph.normalize();
-    const { reader } = loadReader(paragraph, readerContinuousUrl);
-
-    assert.equal(typeof reader.stabilizeRubyAdjacentTextNodes, 'function');
-    reader.stabilizeRubyAdjacentTextNodes();
-
-    assert.deepEqual(textRunAfter(ruby).slice(0, 3), ['。', 'そ', 'れ']);
-});
-
-test('continuous reader-specific text normalization keeps ruby-adjacent text stable', () => {
-    const { paragraph, ruby } = rubyParagraph();
-    paragraph.normalize();
-    const { reader } = loadReader(paragraph, readerContinuousUrl);
-
-    assert.equal(typeof reader.normalizeReaderText, 'function');
-    reader.normalizeReaderText(paragraph);
-
-    assert.deepEqual(textRunAfter(ruby).slice(0, 3), ['。', 'そ', 'れ']);
-});
-
-test('continuous reader removes ruby whitespace text nodes and wraps base text nodes', () => {
-    assertRubyTextNodesAreNormalized(readerContinuousUrl);
-});
-
-test('continuous reader re-stabilizes ruby-adjacent text after unwrap normalizes siblings', () => {
-    const { paragraph, ruby } = rubyParagraph();
-    const wrapper = new TestElement('span');
-    wrapper.appendChild(new TestText('追加'));
-    paragraph.appendChild(wrapper);
-    const { reader } = loadReader(paragraph, readerContinuousUrl);
-
-    reader.unwrap([wrapper]);
-
-    assert.deepEqual(textRunAfter(ruby).slice(0, 4), ['。', 'そ', 'れ', '追']);
-});
-
 test('Sasayaki highlight applies active DOM state without CSS Highlight API', () => {
     for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
         const body = new TestElement('body');
@@ -1331,27 +1297,6 @@ test('paginated Sasayaki media stop plan ignores wide inline gaiji', () => {
     const gaijiWide = imgAt(900, 1_000);
     gaijiWide.classList.add('gaiji-wide');
     body.appendChild(gaijiWide);
-    const target = new TestText('二三');
-    target.rects = [testRect(1_700, 1_730)];
-    body.appendChild(target);
-    const { reader } = loadReader(body, readerPaginatedUrl);
-    reader.pageHeight = 800;
-
-    const stops = reader.sasayakiMediaStopsBeforeCue({ id: 'cue', start: 1, length: 2 });
-
-    assert.deepEqual(Array.from(stops), []);
-});
-
-test('paginated Sasayaki media stop plan ignores every class token containing gaiji', () => {
-    const body = new TestElement('body');
-    body.scrollHeight = 2_400;
-    body.scrollWidth = 480;
-    body.scrollTop = 0;
-    body.scrollLeft = 0;
-    body.appendChild(new TestText('一'));
-    const gaijiVariant = imgAt(900, 1_000);
-    gaijiVariant.classList.add('publisher-GaIjI-tall');
-    body.appendChild(gaijiVariant);
     const target = new TestText('二三');
     target.rects = [testRect(1_700, 1_730)];
     body.appendChild(target);

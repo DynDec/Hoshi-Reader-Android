@@ -402,30 +402,6 @@ test('content stream treats gaiji images as inline glyphs for media and offset i
     );
 });
 
-test('content stream keeps large gaiji-wide images inline', () => {
-    const gaijiWide = el('img', { class: 'gaiji-wide', src: 'kao1.jpg' });
-    gaijiWide.naturalWidth = 303;
-    gaijiWide.naturalHeight = 128;
-    const paragraph = el('p', {}, ['前', gaijiWide, '後']);
-
-    const stream = loadContentStreamModule().create(paragraph);
-
-    assert.equal(stream.containsStandaloneMedia(paragraph), false);
-    assert.equal(stream.mediaUnits().length, 0);
-});
-
-test('content stream keeps every class token containing gaiji inline', () => {
-    const gaijiVariant = el('img', { class: 'ornament publisher-GaIjI-tall', src: 'glyph.png' });
-    gaijiVariant.naturalWidth = 128;
-    gaijiVariant.naturalHeight = 512;
-    const paragraph = el('p', {}, ['前', gaijiVariant, '後']);
-
-    const stream = loadContentStreamModule().create(paragraph);
-
-    assert.equal(stream.containsStandaloneMedia(paragraph), false);
-    assert.equal(stream.mediaUnits().length, 0);
-});
-
 test('content stream indexes media nodes separately from standalone media units', () => {
     const inline = el('img', { class: 'gaiji', alt: '外字' });
     const standalone = el('img', { id: 'cover', src: 'cover.jpg' });

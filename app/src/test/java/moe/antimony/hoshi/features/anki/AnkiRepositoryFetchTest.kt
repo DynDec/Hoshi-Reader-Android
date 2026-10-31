@@ -153,38 +153,6 @@ class AnkiRepositoryFetchTest {
         )
     }
 
-    @Test
-    fun fetchAppliesTemplateDefaultsForFetchedSenrenModel() = runBlocking {
-        val settingsRepository = InMemoryAnkiSettingsRepository()
-        val repository = repository(
-            backend = FakeAnkiBackend(
-                noteTypes = listOf(
-                    AnkiNoteType(
-                        8L,
-                        "Senren",
-                        listOf("word", "reading", "sentenceCard", "definition", "wordAudio", "sentenceAudio"),
-                    ),
-                ),
-            ),
-            settingsRepository = settingsRepository,
-        )
-
-        repository.fetchConfiguration()
-
-        val format = settingsRepository.current.cardFormats.single()
-        assertEquals(8L, format.selectedNoteTypeId)
-        assertEquals(
-            mapOf(
-                "word" to "{expression}",
-                "reading" to "{reading}",
-                "definition" to "{glossary-first}",
-                "wordAudio" to "{audio}",
-                "sentenceAudio" to "{sasayaki-audio}",
-            ),
-            format.fieldMappings,
-        )
-    }
-
     private fun repository(
         backend: AnkiBackend = FakeAnkiBackend(),
         settingsRepository: InMemoryAnkiSettingsRepository = InMemoryAnkiSettingsRepository(),

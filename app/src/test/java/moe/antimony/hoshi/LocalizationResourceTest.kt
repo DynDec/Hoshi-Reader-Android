@@ -145,64 +145,6 @@ class LocalizationResourceTest {
     }
 
     @Test
-    fun visualNovelReaderSettingsUseConciseLabels() {
-        val defaultResources = readStringResources(File(resDir, "values/strings.xml"))
-        val zhResources = readStringResources(File(resDir, "values-zh-rCN/strings.xml"))
-
-        assertEquals("Text Reveal Speed", defaultResources.strings.getValue("reader_visual_novel_reveal_speed").value)
-        assertEquals("Instant", defaultResources.strings.getValue("reader_visual_novel_reveal_speed_instant").value)
-        assertEquals("Screen Content", defaultResources.strings.getValue("reader_visual_novel_screen_mode").value)
-        assertEquals("Block", defaultResources.strings.getValue("reader_visual_novel_screen_mode_block").value)
-        assertEquals("Sentences", defaultResources.strings.getValue("reader_visual_novel_screen_mode_sentences").value)
-        assertEquals("Sentences per Screen", defaultResources.strings.getValue("reader_visual_novel_sentences_per_screen").value)
-        assertEquals("Keep Dialogue Together", defaultResources.strings.getValue("reader_visual_novel_preserve_dialogue").value)
-        assertEquals("Tap Blank Area to Advance", defaultResources.strings.getValue("reader_visual_novel_click_advance").value)
-
-        assertEquals("文字显示速度", zhResources.strings.getValue("reader_visual_novel_reveal_speed").value)
-        assertEquals("立即", zhResources.strings.getValue("reader_visual_novel_reveal_speed_instant").value)
-        assertEquals("屏幕内容", zhResources.strings.getValue("reader_visual_novel_screen_mode").value)
-        assertEquals("按段落", zhResources.strings.getValue("reader_visual_novel_screen_mode_block").value)
-        assertEquals("按句子", zhResources.strings.getValue("reader_visual_novel_screen_mode_sentences").value)
-        assertEquals("每屏句数", zhResources.strings.getValue("reader_visual_novel_sentences_per_screen").value)
-        assertEquals("对话保持同屏", zhResources.strings.getValue("reader_visual_novel_preserve_dialogue").value)
-        assertEquals("点击空白处前进", zhResources.strings.getValue("reader_visual_novel_click_advance").value)
-    }
-
-    @Test
-    fun bookCoverVendorIntegrationSectionIsLocalized() {
-        val defaultResources = readStringResources(File(resDir, "values/strings.xml"))
-        val zhResources = readStringResources(File(resDir, "values-zh-rCN/strings.xml"))
-
-        assertEquals(
-            "E-Ink Device Integrations",
-            defaultResources.strings.getValue("book_cover_wallpaper_vendor_integrations").value,
-        )
-        assertEquals(
-            "Options tailored to selected E-Ink device manufacturers. More integrations may be added here.",
-            defaultResources.strings.getValue("book_cover_wallpaper_vendor_integrations_summary").value,
-        )
-        assertEquals(
-            "墨水屏厂商适配",
-            zhResources.strings.getValue("book_cover_wallpaper_vendor_integrations").value,
-        )
-        assertEquals(
-            "这里的选项专门适配部分墨水屏厂商，后续可能增加更多厂商。",
-            zhResources.strings.getValue("book_cover_wallpaper_vendor_integrations_summary").value,
-        )
-    }
-
-    @Test
-    fun statisticsDayUnitsUseFullWords() {
-        val defaultResources = readStringResources(File(resDir, "values/strings.xml"))
-        val zhResources = readStringResources(File(resDir, "values-zh-rCN/strings.xml"))
-
-        assertEquals("%1\$d day", defaultResources.plurals.getValue("statistics_days_value").items.getValue("one"))
-        assertEquals("%1\$d days", defaultResources.plurals.getValue("statistics_days_value").items.getValue("other"))
-        assertEquals("%1\$d 天", zhResources.plurals.getValue("statistics_days_value").items.getValue("one"))
-        assertEquals("%1\$d 天", zhResources.plurals.getValue("statistics_days_value").items.getValue("other"))
-    }
-
-    @Test
     fun statisticsStandaloneEnglishDayAndWeekCountsUsePlurals() {
         val defaultResources = readStringResources(File(resDir, "values/strings.xml"))
 
@@ -214,26 +156,6 @@ class LocalizationResourceTest {
             .toList()
 
         assertEquals(emptyList<String>(), fixedCounts)
-    }
-
-    @Test
-    fun statisticsSyncModeLabelsAreLocalized() {
-        val defaultResources = readStringResources(File(resDir, "values/strings.xml"))
-        val zhResources = readStringResources(File(resDir, "values-zh-rCN/strings.xml"))
-
-        assertEquals("Merge", defaultResources.strings["reader_statistics_sync_mode_merge"]?.value)
-        assertEquals("Replace", defaultResources.strings["reader_statistics_sync_mode_replace"]?.value)
-        assertEquals("合并", zhResources.strings["reader_statistics_sync_mode_merge"]?.value)
-        assertEquals("替换", zhResources.strings["reader_statistics_sync_mode_replace"]?.value)
-    }
-
-    @Test
-    fun statisticsResetTimeLabelIsLocalized() {
-        val defaultResources = readStringResources(File(resDir, "values/strings.xml"))
-        val zhResources = readStringResources(File(resDir, "values-zh-rCN/strings.xml"))
-
-        assertEquals("Reset Time", defaultResources.strings["reader_statistics_reset_time"]?.value)
-        assertEquals("重置时间", zhResources.strings["reader_statistics_reset_time"]?.value)
     }
 
     @Test

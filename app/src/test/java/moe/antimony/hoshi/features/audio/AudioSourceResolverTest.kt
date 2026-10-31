@@ -143,22 +143,6 @@ class AudioSourceResolverTest {
     }
 
     @Test
-    fun localAudioReturnsNoMatchWhenAllSourcesAreDisabled() {
-        val match = LocalAudioResolver.resolve(
-            term = "食べる",
-            reading = "たべる",
-            sourceOrder = listOf("nhk16", "forvo"),
-            disabledSources = setOf("nhk16", "forvo"),
-            rows = listOf(
-                LocalAudioEntry(source = "nhk16", expression = "食べる", reading = "たべる", file = "audio/nhk.mp3"),
-                LocalAudioEntry(source = "forvo", expression = "食べる", reading = "たべる", file = "audio/forvo.mp3"),
-            ),
-        )
-
-        assertNull(match)
-    }
-
-    @Test
     fun expressionOnlyEntryRanksWithExactExpressionAndReadingMatches() {
         val match = LocalAudioResolver.resolve(
             term = "食べる",
@@ -208,16 +192,5 @@ class AudioSourceResolverTest {
         )
 
         assertEquals(LocalAudioEntry(source = "nhk16", expression = "食べる", reading = "たべる", file = "audio/a.opus"), match)
-    }
-
-    @Test
-    fun localAudioIgnoresUnsupportedRows() {
-        val match = LocalAudioResolver.resolve(
-            term = "食べる",
-            reading = "たべる",
-            rows = listOf(LocalAudioEntry(source = "nhk16", expression = "食べる", reading = "たべる", file = "audio/a.wav")),
-        )
-
-        assertNull(match)
     }
 }

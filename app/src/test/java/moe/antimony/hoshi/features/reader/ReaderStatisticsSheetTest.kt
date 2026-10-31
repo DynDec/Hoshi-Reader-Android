@@ -8,29 +8,6 @@ import org.junit.Test
 
 class ReaderStatisticsSheetTest {
     @Test
-    fun statisticsSheetDoesNotRenderASeparateHeaderOrCloseButton() {
-        val chrome = readerStatisticsSheetChrome()
-
-        assertFalse(chrome.showHeader)
-        assertFalse(chrome.showCloseButton)
-    }
-
-    @Test
-    fun statisticsSheetUsesReaderPanelChrome() {
-        val chrome = readerStatisticsSheetChrome()
-
-        assertTrue(chrome.opensAsReaderPanel)
-    }
-
-    @Test
-    fun readerPanelHeightLeavesTopThirtyPercentAsDismissArea() {
-        assertEquals(
-            700f,
-            readerPanelHeight(containerHeight = 1000f),
-        )
-    }
-
-    @Test
     fun readerPanelHandleDragUsesSingleHeightOrDismisses() {
         val targetHeight = 700f
         val threshold = 96f

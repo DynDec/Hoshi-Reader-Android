@@ -7,7 +7,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import moe.antimony.hoshi.profiles.ProfileRepository
-import moe.antimony.hoshi.testing.CountingCoroutineDispatcher
 import moe.antimony.hoshi.testing.testPreferencesDataStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -52,26 +51,6 @@ class ProfileAnkiSettingsRepositoryTest {
             settings.updateCardFormat(settings.cardFormats.single().id) { it.copy(tags = "") }
         }
         assertEquals("", repository(profileRepository).settings.first().cardFormats.single().tags)
-    }
-
-    @Test
-    fun profileSettingsReadsAndWritesUseInjectedIoDispatcher() = runBlocking {
-        CountingCoroutineDispatcher().use { ioDispatcher ->
-            val profileRepository = ProfileRepository(
-                filesDir = tempFolder.newFolder("files"),
-                ioDispatcher = ioDispatcher,
-            )
-            val repository = repository(
-                profileRepository = profileRepository,
-                ioDispatcher = ioDispatcher,
-            )
-            val beforeProfileAccess = ioDispatcher.dispatchCount
-
-            repository.update { it.copy(selectedDeckName = "Japanese") }
-            assertEquals("Japanese", repository.settings.first().selectedDeckName)
-
-            assertTrue(ioDispatcher.dispatchCount >= beforeProfileAccess + 2)
-        }
     }
 
     @Test

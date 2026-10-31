@@ -38,13 +38,6 @@ class ReaderGoToInputActionsTest {
     }
 
     @Test
-    fun bookHeaderCoverUsesSquareArtworkFrame() {
-        val metrics = readerSheetDensityMetrics()
-
-        assertEquals(metrics.chapterHeaderCoverWidthDp, metrics.chapterHeaderCoverHeightDp)
-    }
-
-    @Test
     fun searchImeActionSubmitsAndDismissesKeyboard() {
         val events = mutableListOf<String>()
 

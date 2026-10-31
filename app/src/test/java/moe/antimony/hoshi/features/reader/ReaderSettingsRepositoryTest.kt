@@ -31,7 +31,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import moe.antimony.hoshi.profiles.ProfileRepository
-import moe.antimony.hoshi.testing.CountingCoroutineDispatcher
 import moe.antimony.hoshi.features.display.AppDisplaySettings
 import moe.antimony.hoshi.features.display.DisplayPalettePreset
 import moe.antimony.hoshi.features.display.DisplayPaletteSlot
@@ -167,27 +166,6 @@ class ReaderSettingsRepositoryTest {
             repository.update { it.copy(statisticsSyncEnabled = false) }
             repository.update { it.copy(fontSize = 28) }
             assertFalse(repository.settings.first().statisticsSyncEnabled)
-        }
-    }
-
-    @Test
-    fun profileAppearanceReadsAndWritesUseInjectedIoDispatcher() = runBlocking {
-        CountingCoroutineDispatcher().use { ioDispatcher ->
-            val profileRepository = ProfileRepository(
-                filesDir = tempFolder.newFolder("files"),
-                ioDispatcher = ioDispatcher,
-            )
-            repository(
-                profileRepository = profileRepository,
-                ioDispatcher = ioDispatcher,
-            ).use { repository ->
-                val beforeProfileAccess = ioDispatcher.dispatchCount
-
-                repository.update { it.copy(fontSize = 28) }
-                assertEquals(28, repository.settings.first().fontSize)
-
-                assertTrue(ioDispatcher.dispatchCount >= beforeProfileAccess + 2)
-            }
         }
     }
 

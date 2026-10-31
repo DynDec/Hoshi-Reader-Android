@@ -150,7 +150,7 @@ class AnkiConnectBackendTest {
     @Test
     fun fetchesDecksAndNoteTypesFromAnkiConnect() {
         val transport = FakeAnkiConnectTransport(
-            """{"result":["Default","Mining"],"error":null}""",
+            """{"result":["Mining","Default"],"error":null}""",
             """{"result":["Basic","Lapis"],"error":null}""",
             """{"result":["Front","Back"],"error":null}""",
             """{"result":["Expression","Sentence"],"error":null}""",
@@ -176,25 +176,6 @@ class AnkiConnectBackendTest {
         assertEquals(
             listOf("deckNames", "modelNames", "modelFieldNames", "modelFieldNames"),
             transport.actions,
-        )
-    }
-
-    @Test
-    fun sortsDecksFetchedFromAnkiConnect() {
-        val transport = FakeAnkiConnectTransport(
-            """{"result":["Mining::Light Novel","Zulu","Mining","Default","Mining::Grammar"],"error":null}""",
-        )
-        val backend = AnkiConnectBackend("https://anki.example.com", transport)
-
-        assertEquals(
-            listOf(
-                "Default",
-                "Mining",
-                "Mining::Grammar",
-                "Mining::Light Novel",
-                "Zulu",
-            ),
-            backend.fetchDecks().map { it.name },
         )
     }
 

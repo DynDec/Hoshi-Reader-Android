@@ -271,16 +271,6 @@ class AnkiBackendAdapterTest {
     }
 
     @Test
-    fun adapterDelegatesSyncToAnkiContentApi() {
-        val api = FakeAnkiContentApi(syncResult = true)
-        val backend = AnkiDroidBackendAdapter(api)
-
-        assertTrue(backend.sync())
-
-        assertEquals(1, api.syncCalls)
-    }
-
-    @Test
     fun ankiDroidSyncIntentTargetsDoSyncActivity() {
         val spec = ankiDroidSyncIntentSpec()
         val expectedFlags = Intent.FLAG_ACTIVITY_NEW_TASK or

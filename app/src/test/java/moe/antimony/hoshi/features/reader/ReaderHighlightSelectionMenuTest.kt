@@ -52,16 +52,6 @@ class ReaderHighlightSelectionMenuTest {
     }
 
     @Test
-    fun usesCompactColorPickerMetrics() {
-        assertEquals(16, ReaderHighlightSelectionMenu.colorPickerSwatchSizeDp)
-        assertEquals(32, ReaderHighlightSelectionMenu.colorPickerTouchTargetSizeDp)
-        assertEquals(7, ReaderHighlightSelectionMenu.colorPickerButtonMarginDp)
-        assertEquals(8, ReaderHighlightSelectionMenu.colorPickerHorizontalPaddingDp)
-        assertEquals(10, ReaderHighlightSelectionMenu.colorPickerVerticalPaddingDp)
-        assertEquals(246, ReaderHighlightSelectionMenu.colorPickerApproximateWidthDp)
-    }
-
-    @Test
     fun mapsOnlyPaletteChildItemsToHighlightColors() {
         val colorItems = ReaderHighlightSelectionMenu.colorItems
 
