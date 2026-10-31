@@ -288,8 +288,8 @@ upstream. Keep them in this section to limit upstream merge conflicts.
   initial section. Only adjacent image-only files and text in one unambiguous
   section join. `ContinuousGroupDocument` composes groups on the existing HTTPS
   resource bridge, namespacing fragment IDs and source styles, and marks each
-  image-only source wrapper followed by another image-only source; the
-  generated reader CSS gives marked wrappers 1.0em reader-font end padding, and
+  image-only source wrapper whose next source shows an image before any text;
+  the generated reader CSS gives marked wrappers 1.0em reader-font end padding, and
   `reader-continuous-group.js` adds one 15em reader-font buffer after groups
   with text, without changing character counts.
   `reader-continuous-group.js` maps scroll progress, selection, search,

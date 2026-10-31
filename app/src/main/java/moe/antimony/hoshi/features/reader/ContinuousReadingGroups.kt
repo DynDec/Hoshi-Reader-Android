@@ -8,7 +8,8 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
 
-internal data class ReaderChapterContent(val imageOnly: Boolean, val hasText: Boolean) {
+/** [startsWithImage] means an image precedes any text, including in image-only content. */
+internal data class ReaderChapterContent(val imageOnly: Boolean, val hasText: Boolean, val startsWithImage: Boolean) {
     companion object {
         fun classify(html: String): ReaderChapterContent = classify(Jsoup.parse(html))
 
@@ -31,7 +32,8 @@ internal data class ReaderChapterContent(val imageOnly: Boolean, val hasText: Bo
                 }
             }
             visit(document.body(), inSvg = false)
-            return ReaderChapterContent(!hasText && hasImage, hasText)
+            // Traversal stops at the first text, so any recorded image precedes it.
+            return ReaderChapterContent(!hasText && hasImage, hasText, hasImage)
         }
 
         private fun Element.isReaderImage(name: String, inSvg: Boolean): Boolean = when {

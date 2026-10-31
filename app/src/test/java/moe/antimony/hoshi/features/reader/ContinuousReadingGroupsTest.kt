@@ -110,6 +110,10 @@ class ContinuousReadingGroupsTest {
             assertTrue(ReaderChapterContent.classify(image + text).hasText)
         }
         assertFalse(ReaderChapterContent.classify("<p> \n&nbsp;</p>").hasText)
+        assertTrue(ReaderChapterContent.classify("<p> </p><div>$image</div><p>Alpha</p>").startsWithImage)
+        assertTrue(ReaderChapterContent.classify(image).startsWithImage)
+        assertFalse(ReaderChapterContent.classify("<p>Alpha</p>$image").startsWithImage)
+        assertFalse(ReaderChapterContent.classify("<p>Alpha</p>").startsWithImage)
         assertEquals(listOf(listOf(0), listOf(1), listOf(2)), groups(book(listOf("Alpha", image + "<figcaption>Caption</figcaption>", "Beta"))))
     }
 
@@ -155,10 +159,10 @@ class ContinuousReadingGroupsTest {
         assertTrue(dom.select("[data-hoshi-merged-image-gap]").isEmpty())
     }
 
-    @Test fun imageGapMarkersOnlyFollowImageOnlySourcesBeforeAnotherImageOnlySource() {
-        val fixture = book(listOf("<p>Alpha</p>$image", image, image, image, "<p>Beta</p>$image"))
+    @Test fun imageGapMarkersOnlyFollowImageOnlySourcesBeforeAnotherImage() {
+        val fixture = book(listOf("<p>Alpha</p>$image", image, image, image, "<p>Beta</p>$image", image, "<div>$image</div><p>Gamma</p>"))
         val merged = ContinuousGroupDocument.compose(fixture, ContinuousReadingGroups.build(fixture, true).single())
-        assertEquals(listOf("hoshi-source-1", "hoshi-source-2"),
+        assertEquals(listOf("hoshi-source-1", "hoshi-source-2", "hoshi-source-5"),
             Jsoup.parse(merged.html!!).select("[data-hoshi-merged-image-gap]").map { it.id() })
         for (merge in listOf(false, true)) {
             val separate = book(listOf("Alpha", image), listOf("0.xhtml", "1.xhtml"))

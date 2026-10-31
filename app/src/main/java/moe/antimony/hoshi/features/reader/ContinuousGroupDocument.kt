@@ -110,8 +110,8 @@ internal data class ContinuousGroupDocument(val html: String?, val sources: List
                 }
                 val wrapper = document.body().appendElement("section").attr("id", scope)
                     .attr("data-hoshi-source-index", index.toString())
-                // Separate consecutive image-only sources so their images are not stitched together.
-                if (content.imageOnly && contents.getOrNull(at + 1)?.imageOnly == true) {
+                // Separate an image-only source from a following image so they are not stitched together.
+                if (content.imageOnly && contents.getOrNull(at + 1)?.startsWithImage == true) {
                     wrapper.attr("data-hoshi-merged-image-gap", "")
                 }
                 source.selectFirst("html")?.attributes()?.forEach { attribute ->

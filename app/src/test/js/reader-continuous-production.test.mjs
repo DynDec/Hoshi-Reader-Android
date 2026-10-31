@@ -32,12 +32,19 @@ test('Production navigation/setup keeps the buffer scrollable and SVG illustrati
         }));
         const svg=illustrations.map(s=>{const r=s.getBoundingClientRect(),source=s.closest('[data-hoshi-source-index]')||d.body,owner=source.getBoundingClientRect();return {width:r.width,height:r.height,visible:w.getComputedStyle(s).visibility,sourceWidth:owner.width,sourceHeight:owner.height,sourceBlockLength:fixture.vertical?owner.width:owner.height}});
         const sources=w.hoshiContinuousGroup&&w.hoshiContinuousGroup.sources;
-        const imageOnly=source=>!source.hasText&&!!source.element.querySelector('img,svg,image');
+        const firstImage=source=>source.element.querySelector('img,svg');
+        const imageOnly=source=>!source.hasText&&!!firstImage(source);
+        const startsWithImage=source=>{
+          const image=firstImage(source);if(!image)return false;if(!source.hasText)return true;
+          const walker=d.createTreeWalker(source.element,w.NodeFilter.SHOW_TEXT);let text;
+          while((text=walker.nextNode())&&!text.data.trim());
+          return !text||!!(image.compareDocumentPosition(text)&w.Node.DOCUMENT_POSITION_FOLLOWING);
+        };
         const imageSpacing=(sources||[]).map((source,at)=>{
           const owner=source.element,body=owner.querySelector('[data-hoshi-source-body]');
           if(!body)return {expected:0,before:0,after:0};
           const outer=owner.getBoundingClientRect(),inner=body.getBoundingClientRect(),next=sources[at+1];
-          return {expected:0,expectedAfter:sources.length>1&&imageOnly(source)&&next&&imageOnly(next)?24:0,
+          return {expected:0,expectedAfter:sources.length>1&&imageOnly(source)&&next&&startsWithImage(next)?24:0,
             before:fixture.vertical?outer.right-inner.right:inner.top-outer.top,
             after:fixture.vertical?inner.left-outer.left:outer.bottom-inner.bottom};
         });

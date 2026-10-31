@@ -37,9 +37,10 @@ Release notes before v1.3.0 are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
   same table-of-contents section, including front matter before the first TOC
   entry and books whose table of contents links to missing anchors, retaining
   original reading positions and keeping SVG illustrations
-  visible when switching or opening chapters. Consecutive merged image-only
-  files are separated by a 1.0em gap; ordinary images and unmerged chapters
-  retain their original spacing.
+  visible when switching or opening chapters. A merged image-only file is
+  separated by a 1.0em gap from a following image, including one at the start
+  of the next chapter; ordinary images and unmerged chapters retain their
+  original spacing.
 - Add a Reader Appearance Layout toggle to remove vertical borders, preserving
   the saved padding while using the fork's safe areas and hiding border shortcuts
   and bottom progress.
